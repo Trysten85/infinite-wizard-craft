@@ -1,0 +1,13 @@
+[
+  { "inputs": ["fire", "air"], "result": "light", "logic": "Flame in open air" },
+  { "inputs": ["water", "earth"], "result": "mud", "logic": "Wet ground" },
+  { "inputs": ["mud", "light"], "result": "life", "logic": "Warmth and light on wet ground" },
+  { "inputs": ["light", "earth"], "result": "shadow", "logic": "Light blocked by something solid" },
+  { "inputs": ["life", "shadow"], "result": "death", "logic": "Life taken into the dark" },
+  { "inputs": ["earth", "life"], "result": "tree", "logic": "Growth rooted in soil" },
+  { "inputs": ["tree", "light"], "result": "spellbook", "logic": "Wood made to hold truth" },
+  { "inputs": ["fire", "water"], "result": "steam", "logic": "Heat driving water" },
+  { "inputs": ["earth", "fire"], "result": "metal", "logic": "Ore smelted from stone" },
+  { "inputs": ["tree", "fire"], "result": "smoke", "logic": "Burning wood" },
+  { "inputs": ["life", "air"], "result": "mind", "logic": "Breath that thinks" }
+]

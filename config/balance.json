@@ -1,0 +1,9 @@
+{
+  "startingEntries": ["fire", "water", "earth", "air"],
+  "depthPerTier": 2,
+  "discoveryXpByTier": [10, 25, 50, 100],
+  "generation": {
+    "maxAttempts": 3,
+    "temperature": 0.8
+  }
+}
