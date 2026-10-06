@@ -224,6 +224,7 @@ describe("the routes", () => {
     await play("ann", TO_FIRE_BOLT);
     const learned = (await (await app.request("/api/players/ann/learn", post({ spell: "spell-fire-bolt" }))).json()) as Record<string, any>;
     expect(learned.progress.learned).toEqual(["spell-fire-bolt"]);
+    expect(learned).toMatchObject({ cost: 10, spell: { id: "spell-fire-bolt", name: "Fire Bolt" } });
     const again = await app.request("/api/players/ann/learn", post({ spell: "spell-fire-bolt" }));
     expect(again.status).toBe(400);
   });

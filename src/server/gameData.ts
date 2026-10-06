@@ -60,6 +60,11 @@ export function tierForDepth(depth: number, balance: Balance): number {
   return Math.floor(depth / balance.depthPerTier);
 }
 
+// Learning a spell costs gold by tier, counting a cantrip as one tier.
+export function learnCostForTier(tier: number, balance: Balance): number {
+  return (tier + 1) * balance.learnCostPerTier;
+}
+
 export function xpForTier(tier: number, balance: Balance): number {
   const table = balance.discoveryXpByTier;
   return table[Math.min(tier, table.length - 1)]!;
@@ -321,7 +326,8 @@ export function buildGameData(raw: {
   for (const entry of entries) {
     const depth = depths.get(entry.id)!;
     const tier = derivedTier.has(entry.id) ? tierForDepth(depth, balance) : entry.tier;
-    entryMap.set(entry.id, { ...entry, tier, depth, xp: xpForTier(tier, balance) });
+    const learnCost = entry.kind === "spell" ? { learnCost: learnCostForTier(tier, balance) } : {};
+    entryMap.set(entry.id, { ...entry, tier, depth, xp: xpForTier(tier, balance), ...learnCost });
   }
   return {
     balance,

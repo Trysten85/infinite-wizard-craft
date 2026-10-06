@@ -66,8 +66,8 @@ export function createApp(combiner: Combiner, services?: { progress: ProgressSer
       const request = await read(c, learnBodySchema);
       if (!request) return invalid(c);
       try {
-        const rewards = progress.learn(request.player, request.body.spell);
-        return c.json({ rewards, progress: progress.getProgress(request.player) });
+        const learned = progress.learn(request.player, request.body.spell);
+        return c.json({ ...learned, progress: progress.getProgress(request.player) });
       } catch (err) {
         return refuse(c, err);
       }

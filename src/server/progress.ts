@@ -1,6 +1,6 @@
 import type { Balance, GameEntry, Progress, Quest, Rewards } from "../shared/schema";
 import { RuleError } from "./combiner";
-import type { GameData } from "./gameData";
+import { learnCostForTier, type GameData } from "./gameData";
 import type { Store } from "./store";
 
 export type ProgressService = ReturnType<typeof createProgress>;
@@ -20,10 +20,6 @@ export function levelFor(xp: number, balance: Balance): { level: number; into: n
 export function discoveryGold(entry: GameEntry, balance: Balance): number {
   const table = balance.discoveryGoldByTier;
   return table[Math.min(entry.tier, table.length - 1)]!;
-}
-
-export function learnCost(spell: GameEntry, balance: Balance): number {
-  return (spell.tier + 1) * balance.learnCostPerTier;
 }
 
 // Gold, XP, level, quests, and learned spells for each player. All of it is worked out from what
@@ -102,19 +98,19 @@ export function createProgress(deps: { data: GameData; store: Store; listDiscove
   }
 
   // Learning costs gold and needs a focus. Casting a learned spell still waits on the player's level.
-  function learn(player: string, spellId: string): Rewards {
+  function learn(player: string, spellId: string): { spell: GameEntry; cost: number; rewards: Rewards } {
     const entries = listDiscovered(player);
     const spell = entries.find((entry) => entry.id === spellId && entry.kind === "spell");
     if (!spell) throw new RuleError("You can only learn a spell you have discovered.");
     if (!entries.some((entry) => entry.kind === "focus")) throw new RuleError("You need a focus to learn a spell.", "no-focus");
     if (store.getLearned(player).includes(spell.id)) throw new RuleError(`You already know ${spell.name}.`);
     settle(player);
-    const cost = learnCost(spell, data.balance);
+    const cost = spell.learnCost ?? learnCostForTier(spell.tier, data.balance);
     const gold = store.getGold(player);
     if (cost > gold) throw new RuleError(`Learning ${spell.name} costs ${cost} gold. You have ${gold}.`, "not-enough-gold");
     store.addLedger(player, -cost, "learn", spell.id);
     store.addLearned(player, spell.id);
-    return settle(player);
+    return { spell, cost, rewards: settle(player) };
   }
 
   return { getProgress, settle, learn };

@@ -63,9 +63,21 @@ describe("learning a spell", () => {
     const { progress, play } = newGame();
     await play("ann", TO_FIRE_BOLT);
     const before = progress.getProgress("ann").gold;
-    const rewards = progress.learn("ann", "spell-fire-bolt");
+    const { spell, cost, rewards } = progress.learn("ann", "spell-fire-bolt");
+    expect(spell.name).toBe("Fire Bolt");
+    expect(cost).toBe(10);
     expect(rewards.quests.map((quest) => quest.id)).toEqual(["first-learned"]);
-    expect(progress.getProgress("ann")).toMatchObject({ gold: before - 10 + 20, learned: ["spell-fire-bolt"] });
+    expect(progress.getProgress("ann")).toMatchObject({ gold: before - cost + 20, learned: ["spell-fire-bolt"] });
+  });
+
+  it("puts the price on every spell entry, so it can be shown before learning", async () => {
+    const { combiner, play } = newGame();
+    expect(data.entries.get("spell-fire-bolt")!.learnCost).toBe(10);
+    expect(data.entries.get("spell-fireball")!.learnCost).toBe(40);
+    expect(data.entries.get("mud")!.learnCost).toBeUndefined();
+    await play("ann", TO_FIRE_BOLT.slice(0, 6));
+    expect((await combiner.combine("ann", "evocation", "fire")).entry).toMatchObject({ id: "spell-fire-bolt", learnCost: 10 });
+    expect(combiner.listDiscovered("ann").find((entry) => entry.kind === "spell")!.learnCost).toBe(10);
   });
 
   it("is refused for an unknown spell, a spell already known, or too little gold", async () => {

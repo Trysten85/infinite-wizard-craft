@@ -30,7 +30,8 @@ export const entrySchema = z.strictObject({
 export type Entry = z.infer<typeof entrySchema>;
 
 // An entry at runtime. Depth and XP are computed by code, never written by hand or by the model.
-export type GameEntry = Entry & { depth: number; xp: number };
+// A spell also carries what it costs to learn, so the page can show the price before asking.
+export type GameEntry = Entry & { depth: number; xp: number; learnCost?: number };
 
 export const schoolSchema = z.strictObject({
   id: idSchema,

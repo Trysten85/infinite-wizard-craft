@@ -64,13 +64,15 @@ The server owns gold, XP, level, quests, and learned spells. They are saved per 
 |---|---|
 | `GET /api/players/:player` | also `progress` |
 | `POST /api/players/:player/combine` | also `progress` and `rewards` |
-| `POST /api/players/:player/learn` with `{ spell }` | `{ rewards, progress }` |
+| `POST /api/players/:player/learn` with `{ spell }` | `{ spell, cost, rewards, progress }` |
 | `GET /api/players/:player/shop` | `{ slots, restockIn }` |
 | `POST /api/players/:player/shop/buy` with `{ slot }` | `{ entry, rewards, progress, shop }` |
 
 - `progress` is `{ xp, level, levelInto, levelSpan, gold, learned, quests }`. Each quest has a
   `state` of `done`, `active`, or `upcoming`.
 - `rewards` is `{ gold, quests }`: what the player earned by that action, for toasts.
+- Every spell entry has `learnCost`, the gold it takes to learn, wherever the entry appears
+  (the player's entries, a combine result, a shop slot). The learn route also returns the `cost` paid.
 - Each shop slot is `{ slot, type, reason, entry, price, sold }`. `type` is `random` or `tailored`,
   and `reason` says why a tailored item was picked. `restockIn` counts new discoveries to go.
 - The types are exported from `src/shared/schema.ts`: `Progress`, `Rewards`, `ShopSlot`, `ShopView`.
