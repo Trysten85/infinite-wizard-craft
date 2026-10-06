@@ -54,6 +54,8 @@ export function createCombiner(deps: {
   async function generateEntry(key: string, a: GameEntry, b: GameEntry): Promise<GameEntry> {
     const reject = (draft: ComboDraft): string | null => {
       if (!NAME_PATTERN.test(draft.name)) return "The name must use only letters, spaces, hyphens and apostrophes.";
+      // Plain things have short names. Long ones are where the invented fantasy compounds creep in.
+      if (draft.name.trim().split(/\s+/).length > 2) return "Use a plainer name: one everyday word, two at most.";
       const id = slugify(draft.name);
       if (id === a.id || id === b.id) return `The result cannot be one of the inputs ("${draft.name}").`;
       // Hand-written entries are progression. The model may not hand them out through other combos.

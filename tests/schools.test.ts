@@ -163,6 +163,13 @@ describe("checks on generated text", () => {
     expect(reasons).toHaveLength(2);
   });
 
+  it("rerolls a name of more than two words", async () => {
+    const { generate, reasons } = generatorOffering(draft("Quicksilver Sand Slurry"), draft("Wet Sand"));
+    const combiner = createCombiner({ data, store, generate });
+    expect((await combiner.combine("ann", "fire", "fire")).entry.name).toBe("Wet Sand");
+    expect(reasons).toEqual(["Use a plainer name: one everyday word, two at most."]);
+  });
+
   it("capitalises the first letter of a generated name", async () => {
     const combiner = createCombiner({ data, store, ...generatorOffering(draft("slag")) });
     expect((await combiner.combine("ann", "fire", "fire")).entry).toMatchObject({ id: "slag", name: "Slag" });
