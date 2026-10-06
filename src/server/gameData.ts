@@ -6,13 +6,16 @@ import {
   comboKey,
   comboSchema,
   entrySchema,
+  ladderSchema,
   schoolSchema,
+  spellEntryId,
   spellSchema,
   tagSchema,
   type Balance,
   type Combo,
   type Entry,
   type GameEntry,
+  type Ladder,
   type School,
   type Spell,
   type Tag,
@@ -24,9 +27,11 @@ export type GameData = {
   schools: Map<string, School>;
   entries: Map<string, GameEntry>;
   spells: Map<string, Spell>;
-  // comboKey -> result entry id
-  combos: Map<string, string>;
+  // comboKey -> what the pair makes, and anything else the player must have discovered first
+  combos: Map<string, Recipe>;
 };
+
+export type Recipe = { inputs: [string, string]; result: string; needs: string[] };
 
 function readJson<T>(path: string, schema: z.ZodType<T>): T {
   const parsed = schema.safeParse(JSON.parse(readFileSync(path, "utf8")));
@@ -44,16 +49,20 @@ export function xpForTier(tier: number, balance: Balance): number {
 }
 
 // Depth is how many combos an entry sits from the starting entries, by its shortest recipe.
-export function computeDepths(entries: Entry[], combos: Combo[], starting: string[]): Map<string, number> {
+// A recipe's needs count too, so a spell is at least one step deeper than its components.
+export function computeDepths(
+  entries: Entry[],
+  combos: (Combo & { needs?: string[] })[],
+  starting: string[],
+): Map<string, number> {
   const depths = new Map<string, number>(starting.map((id) => [id, 0]));
   let changed = true;
   while (changed) {
     changed = false;
     for (const combo of combos) {
-      const a = depths.get(combo.inputs[0]);
-      const b = depths.get(combo.inputs[1]);
-      if (a === undefined || b === undefined) continue;
-      const depth = Math.max(a, b) + 1;
+      const required = [...combo.inputs, ...(combo.needs ?? [])].map((id) => depths.get(id));
+      if (required.some((depth) => depth === undefined)) continue;
+      const depth = Math.max(...(required as number[])) + 1;
       if (depth < (depths.get(combo.result) ?? Infinity)) {
         depths.set(combo.result, depth);
         changed = true;
@@ -74,9 +83,52 @@ export function buildGameData(raw: {
   entries: Entry[];
   combos: Combo[];
   spells?: Spell[];
+  ladders?: Ladder[];
 }): GameData {
-  const { balance, tags, schools, entries, combos, spells = [] } = raw;
+  const { balance, tags, schools, combos, spells = [], ladders = [] } = raw;
   const problems: string[] = [];
+  const spellsById = new Map(spells.map((spell) => [spell.id, spell]));
+
+  // Schools and the spells in play are discovered like anything else, so they become entries.
+  const schoolEntries: Entry[] = schools.map((school) => ({
+    id: school.id,
+    name: school.name,
+    kind: "school",
+    description: school.description,
+    tags: school.tags,
+    affinity: school.naturalElements,
+    tier: 0,
+    source: "authored",
+  }));
+  const prefix = spellEntryId("");
+  const spellIdsInPlay = new Set([
+    ...ladders.map((ladder) => ladder.spell),
+    ...combos
+      .flatMap((combo) => [...combo.inputs, combo.result])
+      .filter((id) => id.startsWith(prefix))
+      .map((id) => id.slice(prefix.length)),
+  ]);
+  const spellEntries: Entry[] = [];
+  for (const id of spellIdsInPlay) {
+    const spell = spellsById.get(id);
+    if (!spell) {
+      problems.push(`"${id}" is used as a spell but is not in data/spells.json`);
+      continue;
+    }
+    const school = schools.find((s) => s.id === spell.school)?.name ?? spell.school;
+    spellEntries.push({
+      id: spellEntryId(spell.id),
+      name: spell.name,
+      kind: "spell",
+      description: spell.tier === 0 ? `A cantrip of the ${school} school.` : `A tier ${spell.tier} spell of the ${school} school.`,
+      tags: spell.tags,
+      affinity: spell.elements,
+      school: spell.school,
+      tier: spell.tier,
+      source: spell.source,
+    });
+  }
+  const entries = [...raw.entries, ...schoolEntries, ...spellEntries];
   const tagMap = new Map(tags.map((tag) => [tag.id, tag]));
   if (tagMap.size !== tags.length) problems.push("the tag vocabulary lists a tag twice");
   const entryIds = new Set<string>();
@@ -116,18 +168,50 @@ export function buildGameData(raw: {
     if (!entryIds.has(id)) problems.push(`starting entry "${id}" does not exist`);
   }
 
-  const comboMap = new Map<string, string>();
+  const entryById = new Map(entries.map((entry) => [entry.id, entry]));
+  const recipes: Recipe[] = combos.map((combo) => ({ inputs: combo.inputs, result: combo.result, needs: [] }));
+
+  // A hand-written combo that makes a spell is a cantrip seed: one element plus that spell's school.
   for (const combo of combos) {
+    const result = entryById.get(combo.result);
+    if (result?.kind !== "spell") continue;
+    const kinds = combo.inputs.map((id) => entryById.get(id)?.kind).sort();
     const key = comboKey(...combo.inputs);
-    for (const id of [...combo.inputs, combo.result]) {
+    if (kinds.join("+") !== "element+school") problems.push(`combo ${key} makes a spell, so it must be an element and a school`);
+    else if (!combo.inputs.includes(result.school!)) problems.push(`combo ${key} makes ${result.name}, which belongs to ${result.school}`);
+    else if (result.tier !== 0) problems.push(`combo ${key} makes ${result.name}, which is tier ${result.tier}, not a cantrip`);
+  }
+
+  // Each ladder rung becomes: the school + any spell of that school one tier lower = the rung's spell.
+  for (const ladder of [...ladders].sort((a, b) => a.tier - b.tier)) {
+    const label = `ladder ${ladder.school} tier ${ladder.tier}`;
+    const spell = spellsById.get(ladder.spell);
+    if (!spell) continue;
+    if (!schoolIds.has(ladder.school)) problems.push(`${label} names an unknown school`);
+    if (spell.school !== ladder.school) problems.push(`${label}: ${spell.name} belongs to ${spell.school}`);
+    if (spell.tier !== ladder.tier) problems.push(`${label}: ${spell.name} is tier ${spell.tier}`);
+    for (const need of ladder.needs) {
+      if (!entryIds.has(need)) problems.push(`${label} needs unknown entry "${need}"`);
+    }
+    const lower = spellEntries.filter((entry) => entry.school === ladder.school && entry.tier === ladder.tier - 1);
+    if (lower.length === 0) problems.push(`${label} has no tier ${ladder.tier - 1} spell to climb from`);
+    for (const from of lower) {
+      recipes.push({ inputs: [ladder.school, from.id], result: spellEntryId(spell.id), needs: ladder.needs });
+    }
+  }
+
+  const comboMap = new Map<string, Recipe>();
+  for (const recipe of recipes) {
+    const key = comboKey(...recipe.inputs);
+    for (const id of [...recipe.inputs, recipe.result]) {
       if (!entryIds.has(id)) problems.push(`combo ${key} refers to unknown entry "${id}"`);
     }
     if (comboMap.has(key)) problems.push(`combo ${key} is defined twice`);
-    comboMap.set(key, combo.result);
+    comboMap.set(key, recipe);
   }
   if (problems.length > 0) throw new Error(`game data is invalid:\n- ${problems.join("\n- ")}`);
 
-  const depths = computeDepths(entries, combos, balance.startingEntries);
+  const depths = computeDepths(entries, recipes, balance.startingEntries);
   const entryMap = new Map<string, GameEntry>();
   for (const entry of entries) {
     entryMap.set(entry.id, { ...entry, depth: depths.get(entry.id)!, xp: xpForTier(entry.tier, balance) });
@@ -150,5 +234,6 @@ export function loadGameData(rootDir: string): GameData {
     entries: readJson(join(rootDir, "data/entries.json"), z.array(entrySchema)),
     combos: readJson(join(rootDir, "data/combos.json"), z.array(comboSchema)),
     spells: readJson(join(rootDir, "data/spells.json"), z.array(spellSchema)),
+    ladders: readJson(join(rootDir, "data/ladders.json"), z.array(ladderSchema)),
   });
 }

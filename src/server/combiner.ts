@@ -1,17 +1,37 @@
 import { comboKey, slugify, type CombineResult, type ComboDraft, type GameEntry } from "../shared/schema";
+import type { Blocklist } from "./blocklist";
 import type { ComboGenerator } from "./comboGenerator";
 import { tierForDepth, xpForTier, type GameData } from "./gameData";
 import type { Store } from "./store";
 
+export type RuleCode = "rule" | "no-focus" | "missing-needs" | "no-result";
+
 // Thrown when the player asks for something the rules don't allow.
-export class RuleError extends Error {}
+export class RuleError extends Error {
+  constructor(
+    message: string,
+    readonly code: RuleCode = "rule",
+  ) {
+    super(message);
+  }
+}
 
 const NAME_PATTERN = /^[A-Za-z][A-Za-z '’-]*$/;
 
 export type Combiner = ReturnType<typeof createCombiner>;
 
-export function createCombiner(deps: { data: GameData; store: Store; generate: ComboGenerator }) {
-  const { data, store, generate } = deps;
+// Schools and spells belong to the magic layer, which the material generator must not write for.
+function isMagic(entry: GameEntry): boolean {
+  return entry.kind === "school" || entry.kind === "spell";
+}
+
+export function createCombiner(deps: {
+  data: GameData;
+  store: Store;
+  generate: ComboGenerator;
+  blocklist?: Blocklist;
+}) {
+  const { data, store, generate, blocklist } = deps;
   // Two players making the same new combo at once share one model call and one result.
   const inFlight = new Map<string, Promise<GameEntry>>();
 
@@ -37,10 +57,18 @@ export function createCombiner(deps: { data: GameData; store: Store; generate: C
       if (id === a.id || id === b.id) return `The result cannot be one of the inputs ("${draft.name}").`;
       // Hand-written entries are progression. The model may not hand them out through other combos.
       if (data.entries.has(id)) return `"${draft.name}" already exists and is made another way.`;
+      // The reason never names the blocked term, so the list itself is never shown to the model.
+      if (blocklist && blocklist.find(draft.name).length > 0) return "That name is not available. Choose a different one.";
+      if (blocklist && blocklist.find(draft.description).length > 0) {
+        return "The description uses a proper name. Rewrite it without naming any person, place, or group.";
+      }
+      // From the voice guide's "never appears" list.
+      if (/[0-9!]/.test(draft.description)) return "The description must not contain digits or exclamation marks.";
       return null;
     };
     const draft = await generate(a, b, reject);
-    const id = slugify(draft.name);
+    const name = draft.name[0]!.toUpperCase() + draft.name.slice(1);
+    const id = slugify(name);
 
     // If an earlier combo already produced this thing, reuse it exactly as it was first written.
     let entry = store.getEntry(id);
@@ -49,7 +77,7 @@ export function createCombiner(deps: { data: GameData; store: Store; generate: C
       const tier = tierForDepth(depth, data.balance);
       entry = {
         id,
-        name: draft.name,
+        name,
         kind: "material",
         description: draft.description,
         tags: draft.tags,
@@ -74,11 +102,18 @@ export function createCombiner(deps: { data: GameData; store: Store; generate: C
     let entry: GameEntry;
     let origin: CombineResult["origin"];
 
-    const authoredId = data.combos.get(key);
-    const cachedId = authoredId ? undefined : store.getCombo(key);
-    if (authoredId) {
-      entry = data.entries.get(authoredId)!;
+    const recipe = data.combos.get(key);
+    const cachedId = recipe ? undefined : store.getCombo(key);
+    if (recipe) {
+      entry = data.entries.get(recipe.result)!;
+      if (entry.kind === "spell" && ![...known].some((id) => getEntry(id)?.kind === "focus")) {
+        throw new RuleError("You need a focus to shape a spell.", "no-focus");
+      }
+      const missing = recipe.needs.filter((id) => !known.has(id)).map((id) => getEntry(id)!.name);
+      if (missing.length > 0) throw new RuleError(`${entry.name} needs: ${missing.join(", ")}.`, "missing-needs");
       origin = "authored";
+    } else if (isMagic(a) || isMagic(b)) {
+      throw new RuleError("Nothing comes of it yet.", "no-result");
     } else if (cachedId) {
       entry = store.getEntry(cachedId)!;
       origin = "cached";

@@ -14,7 +14,8 @@ export type TagReview = {
 export function listTagReviews(data: GameData, store?: Store): TagReview[] {
   const reviews: TagReview[] = [];
   for (const entry of data.entries.values()) {
-    if (entry.tags.length === 0) reviews.push({ entry, retired: [] });
+    // Spells are tagged through the SRD import and have their own review list.
+    if (entry.tags.length === 0 && entry.kind !== "spell") reviews.push({ entry, retired: [] });
   }
   for (const entry of store?.listEntries() ?? []) {
     const retired = entry.tags.filter((tag) => !data.tags.has(tag));

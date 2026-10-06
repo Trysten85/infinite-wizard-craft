@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit",
     "cache": "tsx src/tools/cache.ts",
     "tags": "tsx src/tools/tags.ts",
-    "srd": "tsx src/tools/srd.ts"
+    "srd": "tsx src/tools/srd.ts",
+    "blocklist": "tsx src/tools/blocklist.ts"
   },
   "dependencies": {
     "@hono/node-server": "^2.1.3",

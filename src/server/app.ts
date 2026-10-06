@@ -23,7 +23,9 @@ export function createApp(combiner: Combiner) {
     try {
       return c.json(await combiner.combine(player.data, body.data.a, body.data.b));
     } catch (err) {
-      if (err instanceof RuleError) return c.json({ error: err.message }, 400);
+      if (err instanceof RuleError) {
+        return c.json({ error: err.message, code: err.code }, err.code === "no-result" ? 422 : 400);
+      }
       if (err instanceof GenerationError) {
         console.error(err.message);
         return c.json({ error: "The model could not produce a result. Try again." }, 502);

@@ -17,13 +17,15 @@ export type Tag = z.infer<typeof tagSchema>;
 export const entrySchema = z.strictObject({
   id: idSchema,
   name: z.string().min(1),
-  kind: z.enum(["element", "material", "focus"]),
+  kind: z.enum(["element", "material", "focus", "school", "spell"]),
   description: z.string().min(1),
   // An entry with no tags is allowed. It shows up in `npm run tags` for review.
   tags: z.array(z.string()).max(MAX_TAGS),
   affinity: z.array(idSchema),
+  // Spells only: the school the spell belongs to.
+  school: idSchema.optional(),
   tier: z.number().int().min(0),
-  source: z.enum(["start", "authored", "generated"]),
+  source: z.enum(["start", "authored", "generated", "srd"]),
 });
 export type Entry = z.infer<typeof entrySchema>;
 
@@ -35,8 +37,25 @@ export const schoolSchema = z.strictObject({
   name: z.string().min(1),
   description: z.string().min(1),
   tags: z.array(z.string()),
+  // The elements this school makes cantrips from. Not the same as the recipe that discovers it.
+  naturalElements: z.array(idSchema),
 });
 export type School = z.infer<typeof schoolSchema>;
+
+// One rung of a school's spell ladder: the signature spell for a tier and the materials it needs.
+export const ladderSchema = z.strictObject({
+  school: idSchema,
+  tier: z.number().int().min(1).max(9),
+  spell: idSchema,
+  needs: z.array(idSchema),
+});
+export type Ladder = z.infer<typeof ladderSchema>;
+
+// A spell appears among a player's discoveries as an entry. The prefix keeps the Light cantrip
+// apart from the Light element.
+export function spellEntryId(spellId: string): string {
+  return `spell-${spellId}`;
+}
 
 export const spellSchema = z.strictObject({
   id: idSchema,

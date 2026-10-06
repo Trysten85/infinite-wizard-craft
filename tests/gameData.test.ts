@@ -90,7 +90,7 @@ describe("buildGameData", () => {
   });
 
   it("rejects a school with a tag outside the vocabulary", () => {
-    const school = { id: "evocation", name: "Evocation", description: "x", tags: ["ward"] };
+    const school = { id: "evocation", name: "Evocation", description: "x", tags: ["ward"], naturalElements: [] };
     expect(() => buildGameData({ ...base, schools: [school] })).toThrow(/school "evocation" uses unknown tag "ward"/);
   });
 

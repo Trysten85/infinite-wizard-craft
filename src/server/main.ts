@@ -2,6 +2,7 @@ import { serve } from "@hono/node-server";
 import { mkdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { createApp } from "./app";
+import { loadBlocklist } from "./blocklist";
 import { createCombiner } from "./combiner";
 import { createComboGenerator } from "./comboGenerator";
 import { loadGameData } from "./gameData";
@@ -25,7 +26,9 @@ const generate = createComboGenerator({
   tags: data.tags.values(),
   balance: data.balance,
 });
-const app = createApp(createCombiner({ data, store, generate }));
+const blocklist = loadBlocklist(join(root, "Blocklist.md"));
+if (blocklist.size === 0) console.warn("Blocklist.md not found or empty: generated names are not being checked against it.");
+const app = createApp(createCombiner({ data, store, generate, blocklist }));
 
 serve({ fetch: app.fetch, port }, () => {
   console.log(`Game server on http://localhost:${port} (model ${ollamaModel} at ${ollamaUrl})`);

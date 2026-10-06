@@ -19,14 +19,51 @@ Override the model or address with `OLLAMA_MODEL` and `OLLAMA_URL`.
 
 | Path | What |
 |---|---|
-| `data/` | Game data: entries, combos, schools, tag vocabulary (design notes in `Tag Guide.md`) |
+| `data/` | Game data: entries, combos, schools, ladders, spells, tag vocabulary (design notes in `Tag Guide.md`) |
 | `config/balance.json` | Every balance number |
-| `prompts/voice.md` | Voice guide sent with every model call (placeholder until Phase 0) |
+| `prompts/voice.md` | Voice guide sent with every model call |
 | `src/shared/schema.ts` | Schemas for data files and model output |
 | `src/server/combiner.ts` | Combine rules |
 | `src/server/store.ts` | SQLite: combo cache, discoveries, model call log (`var/game.db`) |
 | `src/server/llm/` | The one model interface, the Ollama client, and a fake for tests |
 | `web/` | React page |
+
+## API (for the front end)
+
+| Route | Returns |
+|---|---|
+| `GET /api/players/:player` | `{ entries }`: everything the player has discovered |
+| `POST /api/players/:player/combine` with `{ a, b }` | `{ entry, origin, firstDiscovery }` |
+
+- Entries have a `kind`: `element`, `material`, `focus`, `school`, or `spell`.
+- Spell entries have ids prefixed `spell-` (the Light cantrip is `spell-light`, the element is `light`),
+  a `school` field, and their elements in `affinity`. A school's `affinity` is its natural elements.
+- Errors return `{ error, code }`. `error` is a sentence that can be shown to the player.
+
+| `code` | Status | Meaning |
+|---|---|---|
+| `no-result` | 422 | The pair makes nothing yet (a school or spell with no recipe) |
+| `no-focus` | 400 | The pair would make a spell, but the player has no focus |
+| `missing-needs` | 400 | The spell needs materials the player has not discovered; `error` names them |
+| `rule` | 400 | Anything else the rules refuse, such as an undiscovered input |
+
+## Schools and spells
+
+- A school is discovered by its recipe in `data/combos.json` (Fire + Light = Evocation).
+- School + element = cantrip, for the seeds in `data/combos.json`. The player needs a focus.
+- School + a spell of that school one tier lower = the next spell in `data/ladders.json`,
+  if the player has discovered every material in its `needs`.
+- Design notes are in `Magic School Patterns.md`.
+
+## Blocklist
+
+`Blocklist.md` lists proper nouns the model must never produce. It is not in git because it holds
+real names; the game runs without it but warns at startup. Generated names and descriptions that
+contain a term are rerolled.
+
+```
+npm run blocklist    # scan data/, prompts/, and cached entries for blocklisted terms
+```
 
 ## Tag review
 

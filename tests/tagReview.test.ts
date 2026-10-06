@@ -19,7 +19,7 @@ const reviewIds = () => listTagReviews(data, store).map((review) => review.entry
 
 describe("listTagReviews", () => {
   it("lists hand-written entries that have no tags", () => {
-    const untagged = [...data.entries.values()].filter((e) => e.tags.length === 0).map((e) => e.id);
+    const untagged = [...data.entries.values()].filter((e) => e.tags.length === 0 && e.kind !== "spell").map((e) => e.id);
     expect(untagged).toContain("shadow");
     expect(listTagReviews(data).map((review) => review.entry.id)).toEqual(untagged);
   });
