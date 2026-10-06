@@ -2,7 +2,7 @@ import type { GameEntry, Rewards, ShopSlot, ShopView } from "../shared/schema";
 import { RuleError } from "./combiner";
 import type { GameData } from "./gameData";
 import { buildPath } from "./paths";
-import type { ProgressService } from "./progress";
+import { repBandFor, type ProgressService } from "./progress";
 import type { Store } from "./store";
 
 export type ShopService = ReturnType<typeof createShop>;
@@ -37,15 +37,18 @@ export function createShop(deps: {
     );
   }
 
-  // The price is worked out the first time an item is shown to a player, and kept after that.
+  // The base price is worked out the first time an item is shown to a player, and kept after that.
+  // What the player pays is that base, shifted a little by their standing with the town.
   function priceFor(player: string, entry: GameEntry, have: Set<string>): number {
-    const known = store.getPrice(player, entry.id);
-    if (known !== undefined) return known;
-    const missingSteps = buildPath(data, entry.id, have).length;
-    const base = rules.basePrice + rules.pricePerDepth * entry.depth + rules.pricePerMissingStep * missingSteps;
-    const price = Math.round(entry.kind === "spell" ? base * rules.spellMarkup : base);
-    store.setPrice(player, entry.id, price);
-    return price;
+    let base = store.getPrice(player, entry.id);
+    if (base === undefined) {
+      const missingSteps = buildPath(data, entry.id, have).length;
+      const raw = rules.basePrice + rules.pricePerDepth * entry.depth + rules.pricePerMissingStep * missingSteps;
+      base = Math.round(entry.kind === "spell" ? raw * rules.spellMarkup : raw);
+      store.setPrice(player, entry.id, base);
+    }
+    const shift = repBandFor(store.getStats(player).rep, data.balance).shopPrice;
+    return Math.max(1, Math.round(base * (1 + shift)));
   }
 
   // True if the player already holds everything some recipe for this entry asks for. There is no

@@ -31,7 +31,44 @@ export type Entry = z.infer<typeof entrySchema>;
 
 // An entry at runtime. Depth and XP are computed by code, never written by hand or by the model.
 // A spell also carries what it costs to learn, so the page can show the price before asking.
-export type GameEntry = Entry & { depth: number; xp: number; learnCost?: number };
+// A model-made entry is marked `wonder` when it came from a storybook combination, so that what
+// is made from it stays in that register too.
+export type GameEntry = Entry & { depth: number; xp: number; learnCost?: number; wonder?: boolean };
+
+export const RESPONSE_TYPES = ["generous", "skilled", "fair", "sharp", "avoid"] as const;
+export const responseTypeSchema = z.enum(RESPONSE_TYPES);
+export type ResponseType = z.infer<typeof responseTypeSchema>;
+export const stakesSchema = z.enum(["S", "M", "L"]);
+export type Stakes = z.infer<typeof stakesSchema>;
+
+export const EVENT_KINDS = ["oopsy", "mishap", "opportunity", "conflict", "social", "bureaucracy", "community", "trade", "comic"] as const;
+export const MOODS = ["warm", "awkward", "silly", "tense", "proud", "mysterious", "bittersweet"] as const;
+
+// An event seed: a loose premise the writer expands. Code decides everything that has consequences.
+export const eventSeedSchema = z.strictObject({
+  id: z.string().regex(/^[a-z]+(_[a-z]+)*$/),
+  premise: z.string().min(1),
+  kind: z.enum(EVENT_KINDS),
+  mood: z.array(z.enum(MOODS)).min(1).max(2),
+  // Player tags that make the seed more likely.
+  tags: z.array(z.string()),
+  // Tags that unlock the Skilled response. With `skillFromJob`, the player's job supplies them.
+  skillTags: z.array(z.string()),
+  skillFromJob: z.boolean().optional(),
+  // "new" always introduces someone. "any" may bring back a person the player knows.
+  who: z.enum(["new", "any"]),
+  stakes: z.array(stakesSchema).min(1),
+  responseTypes: z.array(responseTypeSchema).min(2),
+  followUp: z.enum(["none", "possible", "likely"]),
+  minLevel: z.number().int().min(1).optional(),
+  needsSpell: z.boolean().optional(),
+  needsJob: z.boolean().optional(),
+  // Whether the person may ask the player to make something afterwards.
+  canRequest: z.boolean().optional(),
+  // Whether one of the player's spells may turn up as the Skilled way through.
+  spellSolvable: z.boolean().optional(),
+});
+export type EventSeed = z.infer<typeof eventSeedSchema>;
 
 export const schoolSchema = z.strictObject({
   id: idSchema,
@@ -93,6 +130,27 @@ export type Quest = z.infer<typeof questSchema>;
 // "active" is the quest to work on next: the first one not yet done.
 export type QuestProgress = { id: string; title: string; detail: string; gold: number; state: "done" | "active" | "upcoming" };
 
+// Something a person from an event has asked the player to make.
+export type RequestView = { id: number; from: string; ask: string; entry: { id: string; name: string }; gold: number; state: "open" | "done" };
+
+// An event waiting on the player. Outcomes and effects are only revealed by responding.
+export type EventView = {
+  id: number;
+  kind: (typeof EVENT_KINDS)[number];
+  mood: (typeof MOODS)[number][];
+  person: { name: string; role: string; returning: boolean };
+  scene: string;
+  // A Skilled response that uses one of the player's spells names it in `spell`.
+  responses: { type: ResponseType; text: string; spell?: { id: string; name: string } }[];
+};
+
+export type EventOutcome = {
+  outcome: string;
+  effects: { gold: number; rep: number; fondness: number };
+  // Set when the person goes on to ask for something.
+  request: RequestView | null;
+};
+
 export type Progress = {
   xp: number;
   level: number;
@@ -104,6 +162,19 @@ export type Progress = {
   learned: string[];
   quests: QuestProgress[];
 };
+
+// What events add to a player's progress. The server sends both together.
+export type Standing = {
+  // Standing with the town, and the name of the band it falls in.
+  rep: number;
+  repBand: string;
+  // Open requests first, then finished ones.
+  requests: RequestView[];
+  // An event is waiting, or will be once this many more points are earned.
+  eventReady: boolean;
+  eventIn: number;
+};
+export type PlayerProgress = Progress & Standing;
 
 // What a player just earned, for the page to announce.
 export type Rewards = { gold: number; quests: { id: string; title: string; gold: number }[] };
@@ -203,9 +274,45 @@ export const balanceSchema = z.strictObject({
     spellMarkup: z.number().min(1),
     neverSells: z.array(idSchema),
   }),
+  events: z.strictObject({
+    // An event arrives when the player has earned this many points.
+    every: z.number().int().min(1),
+    points: z.strictObject({ discovery: z.number().int(), quest: z.number().int(), spell: z.number().int(), level: z.number().int() }),
+    // How big an event is. `gold` is what a Generous or Sharp response moves; `scale` multiplies rep and fondness.
+    stakes: z.record(stakesSchema, z.strictObject({ gold: z.number().int().min(0), scale: z.number().min(0) })),
+    // What each response type does. `gold` is a multiple of the stakes' gold.
+    effects: z.record(responseTypeSchema, z.strictObject({ gold: z.number(), rep: z.number().int(), fondness: z.number().int() })),
+    // Lowest first. A band applies from its `from` value upward.
+    repBands: z
+      .array(z.strictObject({ name: z.string(), from: z.number().int(), shopPrice: z.number(), requestPay: z.number(), eventEvery: z.number().int() }))
+      .min(1),
+    // How often a known person comes back, once the player has met enough people.
+    repeatShare: z.number().min(0).max(1),
+    repeatMinPeople: z.number().int().min(1),
+    followUpChance: z.strictObject({ none: z.number(), possible: z.number(), likely: z.number() }),
+    request: z.strictObject({
+      chance: z.number().min(0).max(1),
+      goldPerLevel: z.number().int().min(0),
+      rep: z.number().int(),
+      fondness: z.number().int(),
+      // A request never asks for something further away than this many combos.
+      maxMissingSteps: z.number().int().min(1),
+    }),
+    // After an event is written, how often the writer is asked whether one of the player's spells
+    // would solve it. Spells carrying a blocked tag are never offered as a solution.
+    spellCheck: z.strictObject({ chance: z.number().min(0).max(1), blockedTags: z.array(z.string()) }),
+    maxActivePeople: z.number().int().min(1),
+    // How many past interactions the writer is shown.
+    memory: z.number().int().min(1),
+    // A person whose fondness reaches this far either way has had their story.
+    settledAt: z.number().int().min(1),
+  }),
   generation: z.strictObject({
     maxAttempts: z.number().int().min(1),
     temperature: z.number().min(0).max(2),
+    // Combining with one of these may make a storybook thing (a golem, a ghost). Anything else
+    // makes an ordinary real-world thing.
+    wonderInputs: z.array(idSchema),
   }),
 });
 export type Balance = z.infer<typeof balanceSchema>;
@@ -221,7 +328,8 @@ export function comboDraftSchema(tags: Iterable<Tag>) {
     missingTag: z.string().max(20).nullable(),
   });
 }
-export type ComboDraft = { name: string; description: string; tags: string[]; missingTag: string | null };
+// `storybook` is set by code, never by the model: the name was chosen from the storybook list.
+export type ComboDraft = { name: string; description: string; tags: string[]; missingTag: string | null; storybook?: boolean };
 
 export type CombineResult = {
   entry: GameEntry;

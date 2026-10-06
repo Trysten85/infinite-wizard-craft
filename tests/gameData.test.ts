@@ -1,17 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { buildGameData, loadGameData, tierForDepth, xpForTier } from "../src/server/gameData";
+import { buildGameData, loadGameData, readGameFiles, tierForDepth, xpForTier } from "../src/server/gameData";
 import { entrySchema, type Balance, type Entry, type Tag } from "../src/shared/schema";
 
+// The real balance file, with the few numbers these tests depend on pinned.
 const balance: Balance = {
+  ...readGameFiles(process.cwd()).balance,
   startingEntries: ["fire", "air"],
   depthPerTier: 2,
   discoveryXpByTier: [10, 25],
-  componentDepthByTier: {},
-  levels: { xpStep: 100, cap: 5 },
-  learnCostPerTier: 10,
-  discoveryGoldByTier: [1, 3],
-  shop: { restockEvery: 5, basePrice: 5, pricePerDepth: 3, pricePerMissingStep: 4, spellMarkup: 2, neverSells: [] },
-  generation: { maxAttempts: 3, temperature: 0.8 },
 };
 
 const energy: Tag = { id: "energy", group: "form", meaning: "x", assignedBy: "model" };

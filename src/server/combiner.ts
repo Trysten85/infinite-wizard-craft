@@ -89,6 +89,8 @@ export function createCombiner(deps: {
         source: "generated",
         depth,
         xp: xpForTier(tier, data.balance),
+        // What is made from a storybook thing may be a storybook thing too.
+        ...(draft.storybook ? { wonder: true } : {}),
       };
     }
     store.saveGenerated(key, a.id, b.id, entry, draft.missingTag);

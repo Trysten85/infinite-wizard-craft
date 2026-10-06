@@ -5,6 +5,8 @@ import { createApp } from "./app";
 import { loadBlocklist } from "./blocklist";
 import { createCombiner } from "./combiner";
 import { createComboGenerator } from "./comboGenerator";
+import { createEvents } from "./events/service";
+import { createModelEventWriter } from "./events/writer";
 import { loadGameData } from "./gameData";
 import { createOllamaClient } from "./llm/ollama";
 import { createProgress } from "./progress";
@@ -32,13 +34,17 @@ const generate = createComboGenerator({
   voice: readFileSync(join(root, "prompts/voice.md"), "utf8"),
   tags: data.tags.values(),
   balance: data.balance,
+  storybook: data.storybook,
+  reservedIds: new Set(data.entries.keys()),
 });
 const blocklist = loadBlocklist(join(root, "Blocklist.md"));
 if (blocklist.size === 0) console.warn("Blocklist.md not found or empty: generated names are not being checked against it.");
 const combiner = createCombiner({ data, store, generate, blocklist });
 const progress = createProgress({ data, store, listDiscovered: combiner.listDiscovered });
 const shop = createShop({ data, store, progress, listDiscovered: combiner.listDiscovered });
-const app = createApp(combiner, { progress, shop });
+const writer = createModelEventWriter({ client, log: store.logModelCall, voice: readFileSync(join(root, "prompts/voice.md"), "utf8"), blocklist });
+const events = createEvents({ data, store, progress, listDiscovered: combiner.listDiscovered, writer });
+const app = createApp(combiner, { progress, shop, events });
 
 serve({ fetch: app.fetch, port }, () => {
   console.log(`Game server on http://localhost:${port} (model ${ollamaModel} at ${ollamaUrl})`);

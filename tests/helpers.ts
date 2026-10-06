@@ -1,4 +1,6 @@
 import { createCombiner } from "../src/server/combiner";
+import { createEvents } from "../src/server/events/service";
+import { createCannedEventWriter, type EventWriter } from "../src/server/events/writer";
 import { loadGameData } from "../src/server/gameData";
 import { createProgress } from "../src/server/progress";
 import { createShop } from "../src/server/shop";
@@ -16,7 +18,7 @@ export function seeded(seed = 1): () => number {
 }
 
 // A whole game on an empty in-memory database. The model is never called.
-export function newGame(seed = 1) {
+export function newGame(seed = 1, writer: EventWriter = createCannedEventWriter()) {
   const store = openStore(":memory:");
   const generate = async () => {
     throw new Error("the model must not be called");
@@ -24,11 +26,12 @@ export function newGame(seed = 1) {
   const combiner = createCombiner({ data, store, generate });
   const progress = createProgress({ data, store, listDiscovered: combiner.listDiscovered });
   const shop = createShop({ data, store, progress, listDiscovered: combiner.listDiscovered, random: seeded(seed) });
+  const events = createEvents({ data, store, progress, listDiscovered: combiner.listDiscovered, writer, random: seeded(seed + 100) });
   // Plays the given combos in order for one player.
   async function play(player: string, steps: [string, string][]) {
     for (const [a, b] of steps) await combiner.combine(player, a, b);
   }
-  return { store, combiner, progress, shop, play };
+  return { store, combiner, progress, shop, events, play };
 }
 
 export const TO_FIRE_BOLT: [string, string][] = [

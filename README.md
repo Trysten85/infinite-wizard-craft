@@ -83,6 +83,34 @@ The server owns gold, XP, level, quests, and learned spells. They are saved per 
 when a spell is dropped on the focus, instead of saving learned spells in the browser; and fill
 the shop shelf from the shop routes. Learned spells saved in a browser are not carried over.
 
+### Events and requests
+
+An event arrives when a player has earned 15 points: 1 per new discovery made by combining,
+2 per quest or request finished, 1 per spell learned, 3 per level gained.
+
+| Route | Returns |
+|---|---|
+| `GET /api/players/:player/event` | `{ event, eventIn }`. `event` is null until one is due |
+| `POST /api/players/:player/event/respond` with `{ type }` | `{ outcome, effects, request, rewards, progress }` |
+
+- `progress` also carries `rep`, `repBand`, `requests`, `eventReady`, and `eventIn`
+  (the shared type is `PlayerProgress`).
+- An event is `{ id, kind, mood, person, scene, responses }`. Each response is `{ type, text }`,
+  where `type` is `generous`, `skilled`, `fair`, `sharp`, or `avoid`. A Skilled response that uses
+  one of the player's spells also has `spell: { id, name }`.
+- Outcomes and effects are only returned by responding. `effects` is `{ gold, rep, fondness }`.
+- `request` is set when the person goes on to ask for something: `{ id, from, ask, entry, gold, state }`.
+  It is filled the moment the player has that entry, and then shows up in `rewards.quests`.
+- Writing an event takes the model 10 to 30 seconds. The server starts writing as soon as one is
+  due, so `GET event` usually answers at once; if it is still being written, the call waits.
+
+```
+npm run events -- <player>    # the people a player knows, every event, and open requests
+```
+
+Seeds are in `data/event-seeds.json`; every number is under `events` in `config/balance.json`.
+The design is in `Event Seeds Guide.md`.
+
 ## Schools and spells
 
 - A school is discovered by its recipe in `data/combos.json` (Fire + Light = Evocation).
@@ -132,6 +160,15 @@ npm run craft -- materials           # ask the local model for recipes for new m
 Set `status` to `ok` to make a row live, by hand or with `approve`. Re-running `plan` or
 `materials` never overwrites existing rows. Depth limits for new materials are
 `componentDepthByTier` in `config/balance.json`.
+
+## How new combinations are named
+
+- An ordinary pair makes an ordinary, real-world thing with a plain name (Water + Sand = Beach).
+- A pair with magic in it may make a storybook thing (Clay + Life = Golem). Magic is in play when
+  an ingredient is one of `generation.wonderInputs` in `config/balance.json`, a focus, or itself a
+  storybook result.
+- For a magical pair the model picks from the fixed list in `data/storybook.json`, or says none.
+  Edit that list to turn the fantasy up or down.
 
 ## Blocklist
 

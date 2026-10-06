@@ -14,8 +14,39 @@
     "spellMarkup": 2,
     "neverSells": ["person", "wilds"]
   },
+  "events": {
+    "every": 15,
+    "points": { "discovery": 1, "quest": 2, "spell": 1, "level": 3 },
+    "stakes": {
+      "S": { "gold": 5, "scale": 1 },
+      "M": { "gold": 12, "scale": 1 },
+      "L": { "gold": 25, "scale": 2 }
+    },
+    "effects": {
+      "generous": { "gold": -1, "rep": 1, "fondness": 2 },
+      "skilled": { "gold": 0, "rep": 2, "fondness": 2 },
+      "fair": { "gold": 0, "rep": 1, "fondness": 1 },
+      "sharp": { "gold": 1, "rep": -1, "fondness": -1 },
+      "avoid": { "gold": 0, "rep": -2, "fondness": -2 }
+    },
+    "repBands": [
+      { "name": "Wobbly", "from": -1000, "shopPrice": 0.1, "requestPay": -0.1, "eventEvery": 2 },
+      { "name": "Fine", "from": -5, "shopPrice": 0, "requestPay": 0, "eventEvery": 0 },
+      { "name": "Liked", "from": 6, "shopPrice": -0.05, "requestPay": 0.1, "eventEvery": -2 },
+      { "name": "Beloved", "from": 16, "shopPrice": -0.1, "requestPay": 0.2, "eventEvery": -4 }
+    ],
+    "repeatShare": 0.25,
+    "repeatMinPeople": 2,
+    "followUpChance": { "none": 0, "possible": 0.3, "likely": 0.7 },
+    "request": { "chance": 0.5, "goldPerLevel": 15, "rep": 1, "fondness": 2, "maxMissingSteps": 4 },
+    "spellCheck": { "chance": 0.75, "blockedTags": ["control"] },
+    "maxActivePeople": 10,
+    "memory": 4,
+    "settledAt": 8
+  },
   "generation": {
     "maxAttempts": 3,
-    "temperature": 0.8
+    "temperature": 0.8,
+    "wonderInputs": ["life", "death", "light", "shadow", "mind"]
   }
 }

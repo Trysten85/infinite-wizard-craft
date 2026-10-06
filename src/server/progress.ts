@@ -1,4 +1,4 @@
-import type { Balance, GameEntry, Progress, Quest, Rewards } from "../shared/schema";
+import type { Balance, GameEntry, PlayerProgress, Quest, RequestView, Rewards } from "../shared/schema";
 import { RuleError } from "./combiner";
 import { learnCostForTier, type GameData } from "./gameData";
 import type { Store } from "./store";
@@ -15,6 +15,17 @@ export function levelFor(xp: number, balance: Balance): { level: number; into: n
     level++;
   }
   return { level, into, span: level * xpStep };
+}
+
+// The band a player's standing falls in: the last one whose `from` they have reached.
+export function repBandFor(rep: number, balance: Balance) {
+  const bands = balance.events.repBands;
+  return bands.findLast((band) => rep >= band.from) ?? bands[0]!;
+}
+
+// How many points the next event takes for this player. Well-liked players see events sooner.
+export function eventThreshold(rep: number, balance: Balance): number {
+  return Math.max(1, balance.events.every + repBandFor(rep, balance).eventEvery);
 }
 
 export function discoveryGold(entry: GameEntry, balance: Balance): number {
@@ -54,14 +65,21 @@ export function createProgress(deps: { data: GameData; store: Store; listDiscove
   }
 
   // Pays out anything the player has earned and not yet been paid for: gold for discoveries made
-  // by combining, and quests newly completed. Safe to call any number of times.
+  // by combining, quests newly completed, and requests newly filled. It also counts the points
+  // those earn toward the next event. Safe to call any number of times.
   function settle(player: string): Rewards {
     const rewards: Rewards = { gold: 0, quests: [] };
+    const { points } = data.balance.events;
+    let earned = 0;
+    const discovered = listDiscovered(player);
     const bought = new Set(store.getLedgerRefs(player, "shop"));
-    for (const entry of listDiscovered(player)) {
+    for (const entry of discovered) {
       if (starting.has(entry.id) || bought.has(entry.id)) continue;
       const gold = discoveryGold(entry, data.balance);
-      if (store.addLedger(player, gold, "discovery", entry.id)) rewards.gold += gold;
+      if (store.addLedger(player, gold, "discovery", entry.id)) {
+        rewards.gold += gold;
+        earned += points.discovery;
+      }
     }
     // A quest's gold can raise nothing that another quest checks, so one pass is enough.
     const state = measure(player);
@@ -69,12 +87,44 @@ export function createProgress(deps: { data: GameData; store: Store; listDiscove
       if (isDone(quest, state) && store.addLedger(player, quest.gold, "quest", quest.id)) {
         rewards.gold += quest.gold;
         rewards.quests.push({ id: quest.id, title: quest.title, gold: quest.gold });
+        earned += points.quest;
       }
     }
+    // A request is filled the moment the player has the thing, however they came by it.
+    const have = new Set(discovered.map((entry) => entry.id));
+    const people = new Map(store.listPeople(player).map((person) => [person.id, person]));
+    for (const request of store.listRequests(player)) {
+      if (request.state !== "open" || !have.has(request.entryId)) continue;
+      store.finishRequest(request.id);
+      store.addLedger(player, request.gold, "request", String(request.id));
+      store.changeStats(player, { rep: data.balance.events.request.rep });
+      const person = people.get(request.personId);
+      if (person) store.updatePerson(person.id, { fondness: person.fondness + data.balance.events.request.fondness });
+      rewards.gold += request.gold;
+      rewards.quests.push({ id: `request-${request.id}`, title: `A favor for ${person?.name ?? "a friend"}`, gold: request.gold });
+      earned += points.quest;
+    }
+    const stats = store.getStats(player);
+    const levelsGained = Math.max(0, state.level - stats.lastLevel);
+    earned += levelsGained * points.level;
+    if (earned > 0 || levelsGained > 0) store.changeStats(player, { eventPoints: earned, lastLevel: state.level });
     return rewards;
   }
 
-  function getProgress(player: string): Progress {
+  function listRequestViews(player: string): RequestView[] {
+    const people = new Map(store.listPeople(player).map((person) => [person.id, person.name]));
+    const views = store.listRequests(player).map((request) => ({
+      id: request.id,
+      from: people.get(request.personId) ?? "Someone",
+      ask: request.ask,
+      entry: { id: request.entryId, name: data.entries.get(request.entryId)?.name ?? request.entryId },
+      gold: request.gold,
+      state: request.state,
+    }));
+    return [...views.filter((view) => view.state === "open"), ...views.filter((view) => view.state === "done")];
+  }
+
+  function getProgress(player: string): PlayerProgress {
     settle(player);
     const state = measure(player);
     const done = new Set(store.getLedgerRefs(player, "quest"));
@@ -94,6 +144,20 @@ export function createProgress(deps: { data: GameData; store: Store; listDiscove
       gold: store.getGold(player),
       learned: state.learned,
       quests,
+      ...standing(player),
+    };
+  }
+
+  function standing(player: string) {
+    const stats = store.getStats(player);
+    const waiting = store.listEvents(player).some((event) => event.state === "pending");
+    const eventIn = waiting ? 0 : Math.max(0, eventThreshold(stats.rep, data.balance) - stats.eventPoints);
+    return {
+      rep: stats.rep,
+      repBand: repBandFor(stats.rep, data.balance).name,
+      requests: listRequestViews(player),
+      eventReady: eventIn === 0,
+      eventIn,
     };
   }
 
@@ -110,6 +174,7 @@ export function createProgress(deps: { data: GameData; store: Store; listDiscove
     if (cost > gold) throw new RuleError(`Learning ${spell.name} costs ${cost} gold. You have ${gold}.`, "not-enough-gold");
     store.addLedger(player, -cost, "learn", spell.id);
     store.addLearned(player, spell.id);
+    store.changeStats(player, { eventPoints: data.balance.events.points.spell });
     return { spell, cost, rewards: settle(player) };
   }
 

@@ -13,7 +13,44 @@ export type ModelCall = {
   error?: string;
 };
 
-export type LedgerReason = "quest" | "discovery" | "learn" | "shop";
+export type LedgerReason = "quest" | "discovery" | "learn" | "shop" | "event" | "request";
+
+export type PlayerStats = { rep: number; eventPoints: number; lastLevel: number };
+
+// Someone the player has met in an event. Name, role, traits, and facts are fixed once written.
+export type Person = {
+  id: number;
+  name: string;
+  role: string;
+  traits: string[];
+  facts: string[];
+  fondness: number;
+  status: "active" | "settled" | "dormant";
+  firstDay: number;
+  lastDay: number;
+  // A pending follow-up, and the earliest day it should come up.
+  flag: string | null;
+  flagDay: number | null;
+};
+
+export type StoredEvent = {
+  id: number;
+  day: number;
+  seedId: string;
+  kind: string;
+  mood: string[];
+  personId: number;
+  stakes: string;
+  // Everything the writer produced, plus the plan code made. Never sent back to the model whole.
+  payload: unknown;
+  state: "pending" | "resolved";
+  chosen: string | null;
+  effects: unknown;
+  sceneSummary: string;
+  outcomeSummary: string | null;
+};
+
+export type StoredRequest = { id: number; personId: number; eventId: number; entryId: string; ask: string; gold: number; state: "open" | "done" };
 export type StockedSlot = { slot: number; entryId: string; type: "random" | "tailored"; reason: string; sold: boolean };
 
 export type Store = ReturnType<typeof openStore>;
@@ -78,6 +115,54 @@ export function openStore(path: string) {
       entry_id TEXT NOT NULL,
       price INTEGER NOT NULL,
       PRIMARY KEY (player, entry_id)
+    );
+    CREATE TABLE IF NOT EXISTS player_stats (
+      player TEXT PRIMARY KEY,
+      rep INTEGER NOT NULL DEFAULT 0,
+      event_points INTEGER NOT NULL DEFAULT 0,
+      last_level INTEGER NOT NULL DEFAULT 1
+    );
+    CREATE TABLE IF NOT EXISTS people (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      player TEXT NOT NULL,
+      name TEXT NOT NULL,
+      role TEXT NOT NULL,
+      traits TEXT NOT NULL,
+      facts TEXT NOT NULL,
+      fondness INTEGER NOT NULL DEFAULT 0,
+      status TEXT NOT NULL DEFAULT 'active',
+      first_day INTEGER NOT NULL,
+      last_day INTEGER NOT NULL,
+      flag TEXT,
+      flag_day INTEGER,
+      UNIQUE (player, name)
+    );
+    CREATE TABLE IF NOT EXISTS events (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      player TEXT NOT NULL,
+      day INTEGER NOT NULL,
+      seed_id TEXT NOT NULL,
+      kind TEXT NOT NULL,
+      mood TEXT NOT NULL,
+      person_id INTEGER NOT NULL,
+      stakes TEXT NOT NULL,
+      payload TEXT NOT NULL,
+      state TEXT NOT NULL DEFAULT 'pending',
+      chosen TEXT,
+      effects TEXT,
+      scene_summary TEXT NOT NULL,
+      outcome_summary TEXT,
+      at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE TABLE IF NOT EXISTS requests (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      player TEXT NOT NULL,
+      person_id INTEGER NOT NULL,
+      event_id INTEGER NOT NULL,
+      entry_id TEXT NOT NULL,
+      ask TEXT NOT NULL,
+      gold INTEGER NOT NULL,
+      state TEXT NOT NULL DEFAULT 'open'
     );
     CREATE TABLE IF NOT EXISTS model_calls (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -287,6 +372,136 @@ export function openStore(path: string) {
 
     setPrice(player: string, entryId: string, price: number): void {
       db.prepare("INSERT OR IGNORE INTO shop_prices (player, entry_id, price) VALUES (?, ?, ?)").run(player, entryId, price);
+    },
+
+    getStats(player: string): PlayerStats {
+      const row = db.prepare("SELECT rep, event_points, last_level FROM player_stats WHERE player = ?").get(player);
+      return row
+        ? { rep: row.rep as number, eventPoints: row.event_points as number, lastLevel: row.last_level as number }
+        : { rep: 0, eventPoints: 0, lastLevel: 1 };
+    },
+
+    // Adds to a player's running totals. `lastLevel` is set outright when given.
+    changeStats(player: string, change: { rep?: number; eventPoints?: number; lastLevel?: number }): void {
+      db.prepare("INSERT OR IGNORE INTO player_stats (player) VALUES (?)").run(player);
+      db.prepare(
+        "UPDATE player_stats SET rep = rep + ?, event_points = event_points + ?, last_level = COALESCE(?, last_level) WHERE player = ?",
+      ).run(change.rep ?? 0, change.eventPoints ?? 0, change.lastLevel ?? null, player);
+    },
+
+    addPerson(player: string, person: Pick<Person, "name" | "role" | "traits" | "facts">, day: number): Person {
+      const result = db
+        .prepare("INSERT INTO people (player, name, role, traits, facts, first_day, last_day) VALUES (?, ?, ?, ?, ?, ?, ?)")
+        .run(player, person.name, person.role, JSON.stringify(person.traits), JSON.stringify(person.facts), day, day);
+      return { ...person, id: Number(result.lastInsertRowid), fondness: 0, status: "active", firstDay: day, lastDay: day, flag: null, flagDay: null };
+    },
+
+    listPeople(player: string): Person[] {
+      return db
+        .prepare("SELECT * FROM people WHERE player = ? ORDER BY id")
+        .all(player)
+        .map((row) => ({
+          id: row.id as number,
+          name: row.name as string,
+          role: row.role as string,
+          traits: JSON.parse(row.traits as string) as string[],
+          facts: JSON.parse(row.facts as string) as string[],
+          fondness: row.fondness as number,
+          status: row.status as Person["status"],
+          firstDay: row.first_day as number,
+          lastDay: row.last_day as number,
+          flag: (row.flag as string | null) ?? null,
+          flagDay: (row.flag_day as number | null) ?? null,
+        }));
+    },
+
+    // Code owns these fields. `flag: null` clears a follow-up.
+    updatePerson(id: number, change: { fondness?: number; status?: Person["status"]; lastDay?: number; flag?: string | null; flagDay?: number | null }): void {
+      const row = db.prepare("SELECT fondness, status, last_day, flag, flag_day FROM people WHERE id = ?").get(id);
+      if (!row) return;
+      db.prepare("UPDATE people SET fondness = ?, status = ?, last_day = ?, flag = ?, flag_day = ? WHERE id = ?").run(
+        change.fondness ?? (row.fondness as number),
+        change.status ?? (row.status as string),
+        change.lastDay ?? (row.last_day as number),
+        change.flag === undefined ? (row.flag as string | null) : change.flag,
+        change.flag === undefined ? (row.flag_day as number | null) : (change.flagDay ?? null),
+        id,
+      );
+    },
+
+    deletePerson(id: number): void {
+      db.prepare("DELETE FROM people WHERE id = ?").run(id);
+    },
+
+    addEvent(player: string, event: Omit<StoredEvent, "id" | "state" | "chosen" | "effects" | "outcomeSummary">): number {
+      const result = db
+        .prepare(
+          `INSERT INTO events (player, day, seed_id, kind, mood, person_id, stakes, payload, scene_summary)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        )
+        .run(player, event.day, event.seedId, event.kind, JSON.stringify(event.mood), event.personId, event.stakes, JSON.stringify(event.payload), event.sceneSummary);
+      return Number(result.lastInsertRowid);
+    },
+
+    // Every event for a player, oldest first.
+    listEvents(player: string): StoredEvent[] {
+      return db
+        .prepare("SELECT * FROM events WHERE player = ? ORDER BY id")
+        .all(player)
+        .map((row) => ({
+          id: row.id as number,
+          day: row.day as number,
+          seedId: row.seed_id as string,
+          kind: row.kind as string,
+          mood: JSON.parse(row.mood as string) as string[],
+          personId: row.person_id as number,
+          stakes: row.stakes as string,
+          payload: JSON.parse(row.payload as string) as unknown,
+          state: row.state as StoredEvent["state"],
+          chosen: (row.chosen as string | null) ?? null,
+          effects: row.effects ? (JSON.parse(row.effects as string) as unknown) : null,
+          sceneSummary: row.scene_summary as string,
+          outcomeSummary: (row.outcome_summary as string | null) ?? null,
+        }));
+    },
+
+    resolveEvent(id: number, chosen: string, effects: unknown, outcomeSummary: string): void {
+      db.prepare("UPDATE events SET state = 'resolved', chosen = ?, effects = ?, outcome_summary = ? WHERE id = ?").run(
+        chosen,
+        JSON.stringify(effects),
+        outcomeSummary,
+        id,
+      );
+    },
+
+    deleteEvent(id: number): void {
+      db.prepare("DELETE FROM events WHERE id = ?").run(id);
+    },
+
+    addRequest(player: string, request: Omit<StoredRequest, "id" | "state">): number {
+      const result = db
+        .prepare("INSERT INTO requests (player, person_id, event_id, entry_id, ask, gold) VALUES (?, ?, ?, ?, ?, ?)")
+        .run(player, request.personId, request.eventId, request.entryId, request.ask, request.gold);
+      return Number(result.lastInsertRowid);
+    },
+
+    listRequests(player: string): StoredRequest[] {
+      return db
+        .prepare("SELECT * FROM requests WHERE player = ? ORDER BY id")
+        .all(player)
+        .map((row) => ({
+          id: row.id as number,
+          personId: row.person_id as number,
+          eventId: row.event_id as number,
+          entryId: row.entry_id as string,
+          ask: row.ask as string,
+          gold: row.gold as number,
+          state: row.state as StoredRequest["state"],
+        }));
+    },
+
+    finishRequest(id: number): void {
+      db.prepare("UPDATE requests SET state = 'done' WHERE id = ?").run(id);
     },
 
     logModelCall(call: ModelCall): void {

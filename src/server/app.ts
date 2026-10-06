@@ -1,7 +1,8 @@
 import { Hono, type Context } from "hono";
 import { z } from "zod";
-import { idSchema } from "../shared/schema";
+import { idSchema, responseTypeSchema } from "../shared/schema";
 import { RuleError, type Combiner } from "./combiner";
+import type { EventService } from "./events/service";
 import { GenerationError } from "./llm/generate";
 import type { ProgressService } from "./progress";
 import type { ShopService } from "./shop";
@@ -10,6 +11,7 @@ const playerSchema = z.string().regex(/^[A-Za-z0-9_-]{1,24}$/);
 const combineBodySchema = z.object({ a: idSchema, b: idSchema });
 const learnBodySchema = z.object({ spell: idSchema });
 const buyBodySchema = z.object({ slot: z.number().int().min(0) });
+const respondBodySchema = z.object({ type: responseTypeSchema });
 
 // What the rules refuse comes back as { error, code }. `error` is a sentence for the player.
 function refuse(c: Context, err: unknown) {
@@ -23,7 +25,7 @@ function refuse(c: Context, err: unknown) {
   throw err;
 }
 
-export function createApp(combiner: Combiner, services?: { progress: ProgressService; shop: ShopService }) {
+export function createApp(combiner: Combiner, services?: { progress: ProgressService; shop: ShopService; events?: EventService }) {
   const app = new Hono();
 
   // Reads the player name and, when a schema is given, the JSON body. Returns null if either is bad.
@@ -53,6 +55,7 @@ export function createApp(combiner: Combiner, services?: { progress: ProgressSer
       const result = await combiner.combine(request.player, request.body.a, request.body.b);
       if (!services) return c.json(result);
       const rewards = services.progress.settle(request.player);
+      services.events?.prepare(request.player);
       return c.json({ ...result, rewards, progress: services.progress.getProgress(request.player) });
     } catch (err) {
       return refuse(c, err);
@@ -60,13 +63,39 @@ export function createApp(combiner: Combiner, services?: { progress: ProgressSer
   });
 
   if (services) {
-    const { progress, shop } = services;
+    const { progress, shop, events } = services;
+
+    if (events) {
+      // Returns the event waiting on the player. If one is due, it is written first, which can
+      // take a few seconds.
+      app.get("/api/players/:player/event", async (c) => {
+        const request = await read(c);
+        if (!request) return invalid(c);
+        try {
+          return c.json(await events.current(request.player));
+        } catch (err) {
+          return refuse(c, err);
+        }
+      });
+
+      app.post("/api/players/:player/event/respond", async (c) => {
+        const request = await read(c, respondBodySchema);
+        if (!request) return invalid(c);
+        try {
+          const result = events.respond(request.player, request.body.type);
+          return c.json({ ...result, progress: progress.getProgress(request.player) });
+        } catch (err) {
+          return refuse(c, err);
+        }
+      });
+    }
 
     app.post("/api/players/:player/learn", async (c) => {
       const request = await read(c, learnBodySchema);
       if (!request) return invalid(c);
       try {
         const learned = progress.learn(request.player, request.body.spell);
+        events?.prepare(request.player);
         return c.json({ ...learned, progress: progress.getProgress(request.player) });
       } catch (err) {
         return refuse(c, err);

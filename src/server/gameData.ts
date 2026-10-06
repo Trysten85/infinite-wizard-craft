@@ -6,6 +6,7 @@ import {
   comboKey,
   comboSchema,
   entrySchema,
+  eventSeedSchema,
   jobSchema,
   ladderSchema,
   questSchema,
@@ -18,6 +19,7 @@ import {
   type Balance,
   type Combo,
   type Entry,
+  type EventSeed,
   type GameEntry,
   type Job,
   type Ladder,
@@ -37,6 +39,9 @@ export type GameData = {
   spells: Map<string, Spell>;
   jobs: Map<string, Job>;
   quests: Quest[];
+  eventSeeds: EventSeed[];
+  // Well-known fairy-tale creatures and objects a magical combination may produce.
+  storybook: string[];
   // comboKey -> what the pair makes, and anything else the player must have discovered first
   combos: Map<string, Recipe>;
 };
@@ -110,8 +115,11 @@ export function buildGameData(raw: {
   spellMaterials?: SpellMaterial[];
   jobs?: Job[];
   quests?: Quest[];
+  eventSeeds?: EventSeed[];
+  storybook?: string[];
 }): GameData {
   const { balance, tags, schools, combos, spells = [], ladders = [], spellRecipes = [], spellMaterials = [], jobs = [], quests = [] } = raw;
+  const eventSeeds = raw.eventSeeds ?? [];
   const problems: string[] = [];
   const spellsById = new Map(spells.map((spell) => [spell.id, spell]));
 
@@ -310,6 +318,12 @@ export function buildGameData(raw: {
     }
   }
 
+  for (const seed of eventSeeds) {
+    for (const tag of [...seed.tags, ...seed.skillTags]) {
+      if (!tagMap.has(tag)) problems.push(`event seed "${seed.id}" uses unknown tag "${tag}"`);
+    }
+  }
+
   const comboMap = new Map<string, Recipe>();
   for (const recipe of recipes) {
     const key = comboKey(...recipe.inputs);
@@ -337,6 +351,8 @@ export function buildGameData(raw: {
     spells: spellMap,
     jobs: new Map(jobs.map((job) => [job.id, job])),
     quests,
+    eventSeeds,
+    storybook: raw.storybook ?? [],
     combos: comboMap,
   };
 }
@@ -355,6 +371,8 @@ export function readGameFiles(rootDir: string) {
     spellMaterials: readOptional(join(rootDir, SPELL_MATERIALS_FILE), z.array(spellMaterialSchema)),
     jobs: readJson(join(rootDir, "data/jobs.json"), z.array(jobSchema)),
     quests: readJson(join(rootDir, "data/quests.json"), z.array(questSchema)),
+    eventSeeds: readJson(join(rootDir, "data/event-seeds.json"), z.array(eventSeedSchema)),
+    storybook: readJson(join(rootDir, "data/storybook.json"), z.array(z.string().regex(/^[A-Z][A-Za-z'-]*( [A-Z][A-Za-z'-]*)?$/, "one or two capitalised words"))),
   };
 }
 
