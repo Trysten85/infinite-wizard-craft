@@ -12,6 +12,7 @@ const combineBodySchema = z.object({ a: idSchema, b: idSchema });
 const learnBodySchema = z.object({ spell: idSchema });
 const buyBodySchema = z.object({ slot: z.number().int().min(0) });
 const respondBodySchema = z.object({ type: responseTypeSchema });
+const testEventBodySchema = z.object({ seed: z.string().optional() });
 
 // What the rules refuse comes back as { error, code }. `error` is a sentence for the player.
 function refuse(c: Context, err: unknown) {
@@ -73,6 +74,18 @@ export function createApp(combiner: Combiner, services?: { progress: ProgressSer
         if (!request) return invalid(c);
         try {
           return c.json(await events.current(request.player));
+        } catch (err) {
+          return refuse(c, err);
+        }
+      });
+
+      // For testing: writes a fresh event now, whatever the player's points. `seed` is optional.
+      app.post("/api/players/:player/event/test", async (c) => {
+        const player = playerSchema.safeParse(c.req.param("player"));
+        const body = testEventBodySchema.safeParse((await c.req.json().catch(() => null)) ?? {});
+        if (!player.success || !body.success) return invalid(c);
+        try {
+          return c.json(await events.test(player.data, body.data.seed));
         } catch (err) {
           return refuse(c, err);
         }

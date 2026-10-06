@@ -93,6 +93,11 @@ An event arrives when a player has earned 15 points: 1 per new discovery made by
 | `GET /api/players/:player/event` | `{ event, eventIn }`. `event` is null until one is due |
 | `POST /api/players/:player/event/respond` with `{ type }` | `{ outcome, effects, request, rewards, progress }` |
 
+- **Test route:** `POST /api/players/:player/event/test`, with an optional `{ seed }`, writes a
+  fresh event at once and returns `{ event, eventIn, seed }`. It needs no points and spends none.
+  An event already waiting is replaced. The result is a real event: responding to it changes gold,
+  standing, and fondness. Seed ids are in `data/event-seeds.json`, plus `repeat` to bring back
+  someone the player has met.
 - `progress` also carries `rep`, `repBand`, `requests`, `eventReady`, and `eventIn`
   (the shared type is `PlayerProgress`).
 - An event is `{ id, kind, mood, person, scene, responses }`. Each response is `{ type, text }`,

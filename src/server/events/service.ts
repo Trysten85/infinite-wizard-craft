@@ -93,7 +93,8 @@ export function createEvents(deps: {
     return spell ? { id: spell.id, name: spell.name, text: answer.text, outcome: answer.outcome } : null;
   }
 
-  async function writeNext(player: string): Promise<void> {
+  // `forcedSeed` is for testing: that seed is used whatever the player's state, and no points are spent.
+  async function writeNext(player: string, forcedSeed?: string): Promise<void> {
     const discovered = listDiscovered(player);
     const { level } = progress.getProgress(player);
     const stats = store.getStats(player);
@@ -107,7 +108,8 @@ export function createEvents(deps: {
     // First, whether someone the player knows comes back. If so the event inherits from their story.
     let returning: Person | undefined;
     let seed: EventSeed | undefined;
-    if (random() < repeatChance(people, day, data.balance)) {
+    const wantRepeat = forcedSeed ? forcedSeed === "repeat" : random() < repeatChance(people, day, data.balance);
+    if (wantRepeat) {
       returning = weightedPick(returningWeights(people, day, lastPersonId), random());
     }
     if (returning) {
@@ -129,7 +131,8 @@ export function createEvents(deps: {
         spellSolvable: true,
       };
     } else {
-      const options = eligibleSeeds(data.eventSeeds, snapshot).map((item) => ({ item, weight: seedWeight(item, snapshot, recent) }));
+      const candidates = forcedSeed ? data.eventSeeds.filter((item) => item.id === forcedSeed) : eligibleSeeds(data.eventSeeds, snapshot);
+      const options = candidates.map((item) => ({ item, weight: seedWeight(item, snapshot, recent) }));
       seed = weightedPick(options, random());
       if (!seed) return;
       // With a full cast, a seed that allows it brings back a familiar face instead of adding one.
@@ -183,7 +186,7 @@ export function createEvents(deps: {
     const payload: Payload = { written, responseTypes: offered, followUp: seed.followUp, request, spell: spell && { id: spell.id, name: spell.name } };
     store.addEvent(player, { day, seedId: seed.id, kind: seed.kind, mood: seed.mood, personId: person.id, stakes, payload, sceneSummary: written.sceneSummary });
     // The points that brought this event are spent. Anything over carries to the next.
-    store.changeStats(player, { eventPoints: -eventThreshold(stats.rep, data.balance) });
+    if (forcedSeed === undefined) store.changeStats(player, { eventPoints: -eventThreshold(stats.rep, data.balance) });
   }
 
   function toView(player: string, event: StoredEvent): EventView {
@@ -278,5 +281,28 @@ export function createEvents(deps: {
     current(player).catch((err) => console.error(`Could not write an event for ${player}:`, err instanceof Error ? err.message : err));
   }
 
-  return { current, respond, prepare };
+  // For testing: writes a fresh event right now, without waiting for points and without spending
+  // any. An event already waiting is thrown away first, along with a person it introduced.
+  // The result is a real event: answering it changes gold, standing, and fondness as usual.
+  async function test(player: string, seedId?: string): Promise<{ event: EventView | null; eventIn: number; seed: string }> {
+    const known = ["repeat", ...data.eventSeeds.map((seed) => seed.id)];
+    if (seedId !== undefined && !known.includes(seedId)) throw new RuleError(`There is no event seed "${seedId}". Seeds: ${known.join(", ")}.`);
+    if (seedId === "repeat" && store.listPeople(player).length === 0) throw new RuleError("Nobody can come back yet: this player has not met anyone.");
+    await writing.get(player);
+    const waiting = pendingEvent(player);
+    if (waiting) {
+      store.deleteEvent(waiting.id);
+      const introduced = store.listPeople(player).find((person) => person.id === waiting.personId && person.firstDay === waiting.day);
+      if (introduced) store.deletePerson(introduced.id);
+    }
+    // With no seed named, one is picked the usual way from those the player qualifies for.
+    const seed = seedId ?? weightedPick(eligibleSeeds(data.eventSeeds, snapshotPlayer(data, listDiscovered(player), progress.getProgress(player).level)).map((item) => ({ item: item.id, weight: 1 })), random())!;
+    const job = writeNext(player, seed).finally(() => writing.delete(player));
+    writing.set(player, job);
+    await job;
+    const written = pendingEvent(player);
+    return { event: written ? toView(player, written) : null, eventIn: progress.getProgress(player).eventIn, seed: written?.seedId ?? seed };
+  }
+
+  return { current, respond, prepare, test };
 }

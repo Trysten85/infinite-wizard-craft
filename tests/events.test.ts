@@ -490,6 +490,54 @@ describe("checking what the writer wrote", () => {
   });
 });
 
+describe("a test event", () => {
+  it("is written at once, without needing or spending any points", async () => {
+    const game = newGame();
+    const before = game.store.getStats("ann").eventPoints;
+    const { event, seed } = await game.events.test("ann");
+    expect(event!.scene).toBeTruthy();
+    expect(data.eventSeeds.map((item) => item.id)).toContain(seed);
+    expect(game.store.getStats("ann").eventPoints).toBe(before);
+    expect(game.progress.getProgress("ann").eventReady).toBe(true);
+    // It is a real event: answering it applies the usual effects.
+    const result = game.events.respond("ann", event!.responses[0]!.type);
+    expect(result.outcome).toBeTruthy();
+    expect(game.store.listEvents("ann")[0]!.state).toBe("resolved");
+  });
+
+  it("uses the seed asked for, even one the player would not normally qualify for", async () => {
+    const game = newGame();
+    const { seed, event } = await game.events.test("ann", "grand_guest");
+    expect(seed).toBe("grand_guest");
+    expect(event!.kind).toBe("social");
+    expect(game.store.listEvents("ann")[0]!.seedId).toBe("grand_guest");
+  });
+
+  it("replaces an event that was still waiting, and the person it introduced", async () => {
+    const game = newGame();
+    const first = (await game.events.test("ann", "small_thief")).event!;
+    const second = (await game.events.test("ann", "not_my_mess")).event!;
+    expect(second.id).not.toBe(first.id);
+    expect(game.store.listEvents("ann")).toHaveLength(1);
+    expect(game.store.listPeople("ann")).toHaveLength(1);
+    expect((await game.events.current("ann")).event!.id).toBe(second.id);
+  });
+
+  it("can bring someone back, once the player has met someone", async () => {
+    const game = newGame();
+    await expect(game.events.test("ann", "repeat")).rejects.toThrow(/has not met anyone/);
+    const first = (await game.events.test("ann", "small_thief")).event!;
+    game.events.respond("ann", first.responses[0]!.type);
+    const again = await game.events.test("ann", "repeat");
+    expect(again.seed).toBe("repeat");
+    expect(again.event!.person).toMatchObject({ name: first.person.name, returning: true });
+  });
+
+  it("refuses a seed that does not exist", async () => {
+    await expect(newGame().events.test("ann", "dragon_attack")).rejects.toThrow(/no event seed "dragon_attack"/);
+  });
+});
+
 describe("the event routes", () => {
   const post = (body: unknown) => ({ method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
 
@@ -510,5 +558,17 @@ describe("the event routes", () => {
     expect(resolved).toMatchObject({ outcome: expect.any(String), effects: expect.any(Object), progress: { eventReady: false } });
     expect((await app.request("/api/players/ann/event/respond", post({ type }))).status).toBe(400);
     expect((await app.request("/api/players/ann/event/respond", post({ type: "heroic" }))).status).toBe(400);
+  });
+
+  it("write a test event on request, with or without a seed", async () => {
+    const game = newGame();
+    const app = createApp(game.combiner, { progress: game.progress, shop: game.shop, events: game.events });
+    const any = (await (await app.request("/api/players/ann/event/test", { method: "POST" })).json()) as Record<string, any>;
+    expect(any.event.responses.length).toBeGreaterThanOrEqual(2);
+    const chosen = (await (await app.request("/api/players/ann/event/test", post({ seed: "the_official" }))).json()) as Record<string, any>;
+    expect(chosen).toMatchObject({ seed: "the_official", event: { kind: "bureaucracy" } });
+    const bad = await app.request("/api/players/ann/event/test", post({ seed: "nope" }));
+    expect(bad.status).toBe(400);
+    expect(((await bad.json()) as Record<string, any>).error).toContain("small_thief");
   });
 });
