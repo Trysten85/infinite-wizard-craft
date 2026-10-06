@@ -15,6 +15,15 @@ npm run typecheck
 
 Override the model or address with `OLLAMA_MODEL` and `OLLAMA_URL`.
 
+## Recipe key
+
+`Recipe Key.md` lists everything that can be made right now: a quick table of what makes each
+thing, and the full path to it from the starting elements. Search it for a name, for example
+"Wizard", to see every combo in order.
+
+It is generated, so don't edit it. It is rewritten when the server starts, when drafts are
+approved, and by `npm run key`. A test fails if it falls out of step with the data.
+
 ## Where things live
 
 | Path | What |

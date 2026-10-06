@@ -11,6 +11,7 @@ import { loadBlocklist } from "../server/blocklist";
 import { assignKeys, candidatesFor, existingMatches, RANKED_BASE_COST } from "../server/crafting/keys";
 import { classifyMaterial, draftMaterialRecipe, rankElements } from "../server/crafting/materials";
 import { loadGameData, readOptional, SPELL_MATERIALS_FILE, SPELL_RECIPES_FILE } from "../server/gameData";
+import { RECIPE_KEY_FILE, renderRecipeKey } from "../server/recipeKey";
 import { createOllamaClient } from "../server/llm/ollama";
 import { openStore } from "../server/store";
 import {
@@ -229,7 +230,8 @@ function approve(ids: string[]): void {
   writeRows(recipesPath, recipes);
   writeRows(materialsPath, materials);
   try {
-    loadGameData(root);
+    // Approved rows are now live, so the recipe key is rewritten to include them.
+    writeFileSync(join(root, RECIPE_KEY_FILE), renderRecipeKey(loadGameData(root)));
   } catch (err) {
     // An approval that breaks the game data is undone, so the game always starts.
     writeRows(recipesPath, before.recipes);

@@ -1,5 +1,5 @@
 import { serve } from "@hono/node-server";
-import { mkdirSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { createApp } from "./app";
 import { loadBlocklist } from "./blocklist";
@@ -7,6 +7,7 @@ import { createCombiner } from "./combiner";
 import { createComboGenerator } from "./comboGenerator";
 import { loadGameData } from "./gameData";
 import { createOllamaClient } from "./llm/ollama";
+import { RECIPE_KEY_FILE, renderRecipeKey } from "./recipeKey";
 import { openStore } from "./store";
 
 const root = process.cwd();
@@ -16,6 +17,10 @@ const ollamaUrl = process.env.OLLAMA_URL ?? "http://192.168.56.1:11434";
 const ollamaModel = process.env.OLLAMA_MODEL ?? "gemma3:12b";
 
 const data = loadGameData(root);
+// Keep the recipe key in step with whatever data the server is actually running.
+const keyPath = join(root, RECIPE_KEY_FILE);
+const key = renderRecipeKey(data);
+if (!existsSync(keyPath) || readFileSync(keyPath, "utf8") !== key) writeFileSync(keyPath, key);
 mkdirSync(join(root, "var"), { recursive: true });
 const store = openStore(join(root, "var/game.db"));
 const client = createOllamaClient({ baseUrl: ollamaUrl, model: ollamaModel });
