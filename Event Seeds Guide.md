@@ -1,16 +1,28 @@
-# Infinite Wizard Craft: Event Seeds v0.4 (DRAFT, seed and tag system)
+# Infinite Wizard Craft: Event Seeds v0.5 (DRAFT, seed and tag system)
 
 This replaces the fixed event templates. An event is now a **seed**: a one-line premise plus tags. The AI invents the actual story, the people, and the wording. The code owns the consequences through **response types**, not through scripted options. Tone follows `voice.md`. Every number is a placeholder to tune in the config file.
 
 ## How an event works
+An event is a short conversation, not a single choice. It has two beats.
+
 1. **Code picks a seed** by matching the seed's tags against the player's job, top tags, level, Shop Rep, and recent events (see "Picking a seed"). It also picks the stakes size (S, M, or L) and whether the main person is new or returning.
-2. **AI invents the story.** It gets the seed's premise and tags, the player brief (job, tags, rep band, recent history), and the cast. It writes a scene of 3-5 sentences, names any new people, and decides what went wrong or what is on offer. The seed is a starting point, so two events from the same seed should read differently.
-3. **AI offers 3-4 responses,** each written in its own words but each tagged with exactly one **response type** (below). The AI chooses what the responses *are*; the code decides what each type *does*.
-4. **AI takes a second look for a spell.** After the scene is written and before the player sees it, the AI is shown the scene and the spells the player has learned and can cast. If one of them would plainly solve the problem, it becomes the Skilled response (see "Spell solutions"). Usually none fits, and that is the expected answer.
-5. **Player picks one.** The code applies the effects for that response type and stakes size. The AI writes a 1-2 sentence outcome.
-6. **Code logs the event** to the interaction history, and may set a follow-up flag.
+2. **Beat 1, the arrival.** The AI writes two or three sentences: the person turns up and something is plainly on their mind, but they have not said what. The player reacts with one of three opening responses, the same for every seed: **Generous** (offer tea, a seat, a kind word), **Fair** (a polite nod, ask what is wrong), or **Avoid** (too busy). The AI writes one line for how the person takes it.
+   - The first reaction only warms or cools the person a little (Fondness up or down by one). No gold or Shop Rep moves yet.
+   - **Avoid ends the event at the door,** with the full Avoid effect.
+3. **Beat 2, the heart of it.** The AI is told what happened in beat 1 and writes the person saying what they are really after: something they are looking for, a favour they need, or simply someone to listen. It offers the seed's response types (below).
+4. **AI takes a second look for a spell.** After beat 2 is written and before the player sees it, the AI is shown the scene and the spells the player has learned and can cast. If one of them would plainly solve the problem, it becomes the Skilled response (see "Spell solutions"). Usually none fits, and that is the expected answer.
+5. **Player picks one.** The code applies the effects for that response type and stakes size, and the AI's outcome line is shown.
+6. **What they leave behind.** If the player helped (Generous, Skilled, or Fair), the person may leave one thing on their way out, chosen by the code:
+   - **A request:** they ask the player to make or bring a named thing. It pays gold, Shop Rep, and Fondness when the player has it.
+   - **A hint:** they mention a thing the player has never made and what it is made from. It is saved to the player's notes.
+   - **A gift:** they hand over a material, which the player then has.
+   - **Nothing,** sometimes.
+   The code picks which, and which material (always something the player lacks and could reach). The AI writes one closing line that names it. If the AI cannot, a plain line is used, so the player always gets what was planned.
+7. **Code logs the event** to the interaction history, and may set a follow-up flag.
 
 The code never reads the AI's story to decide effects. It only reads which response type the player chose.
+
+**Timing:** each beat is written separately, so beat 2 can answer what the player did in beat 1. The server writes beat 2 for both ways of carrying on while the player is still reading beat 1.
 
 ## Response types (code-owned)
 Every response the AI writes must map to one of these. Each type has a fixed effect profile, scaled by stakes size.
@@ -31,7 +43,7 @@ Every response the AI writes must map to one of these. Each type has a fixed eff
 ### Spell solutions (the second look)
 Some events get better if the player knows a spell that solves them. Break something while you know Mending, and there is no loss to you and the town thinks more of you.
 
-- **When:** after the AI has written the event, and before the player sees it. It is a separate, second step, so the scene is never written around a spell.
+- **When:** after the AI has written beat 2, where the problem is finally stated, and before the player sees it. It is a separate, second step, so the scene is never written around a spell.
 - **Who decides what:** the AI only answers one question: does one of these spells plainly solve this scene, and which one? It picks from the player's own list or says "none". The code owns the effect, which is the fixed **Skilled** profile: no gold lost, Shop Rep up, Fondness up.
 - **Which spells count:** spells the player has **learned** and is high enough level to cast, **and that carry one of the seed's spell tags.** The code filters on tags before the AI is asked, so the AI only ever chooses among spells of the right kind: a mess wants a `utility` spell, an inspection wants a `knowledge` spell, and a damage spell fits nothing.
 - **Never:** a spell that bends someone's will (anything tagged `control`, such as Charm Person, Sleep, or Hold Person) is never offered as a solution.

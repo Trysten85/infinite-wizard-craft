@@ -11,7 +11,7 @@ const playerSchema = z.string().regex(/^[A-Za-z0-9_-]{1,24}$/);
 const combineBodySchema = z.object({ a: idSchema, b: idSchema });
 const learnBodySchema = z.object({ spell: idSchema });
 const buyBodySchema = z.object({ slot: z.number().int().min(0) });
-const respondBodySchema = z.object({ type: responseTypeSchema });
+const respondBodySchema = z.object({ type: responseTypeSchema, beat: z.number().int().min(1).optional() });
 const testEventBodySchema = z.object({ seed: z.string().optional() });
 
 // What the rules refuse comes back as { error, code }. `error` is a sentence for the player.
@@ -95,7 +95,7 @@ export function createApp(combiner: Combiner, services?: { progress: ProgressSer
         const request = await read(c, respondBodySchema);
         if (!request) return invalid(c);
         try {
-          const result = events.respond(request.player, request.body.type);
+          const result = await events.respond(request.player, request.body.type, request.body.beat);
           return c.json({ ...result, progress: progress.getProgress(request.player) });
         } catch (err) {
           return refuse(c, err);

@@ -13,7 +13,7 @@ export type ModelCall = {
   error?: string;
 };
 
-export type LedgerReason = "quest" | "discovery" | "learn" | "shop" | "event" | "request";
+export type LedgerReason = "quest" | "discovery" | "learn" | "shop" | "event" | "request" | "gift";
 
 export type PlayerStats = { rep: number; eventPoints: number; lastLevel: number };
 
@@ -163,6 +163,14 @@ export function openStore(path: string) {
       ask TEXT NOT NULL,
       gold INTEGER NOT NULL,
       state TEXT NOT NULL DEFAULT 'open'
+    );
+    CREATE TABLE IF NOT EXISTS hints (
+      player TEXT NOT NULL,
+      entry_id TEXT NOT NULL,
+      recipe TEXT NOT NULL,
+      from_name TEXT NOT NULL,
+      at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (player, entry_id)
     );
     CREATE TABLE IF NOT EXISTS model_calls (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -463,6 +471,22 @@ export function openStore(path: string) {
           sceneSummary: row.scene_summary as string,
           outcomeSummary: (row.outcome_summary as string | null) ?? null,
         }));
+    },
+
+    // Replaces what is stored for an event still in progress, as its conversation moves on.
+    updateEvent(id: number, payload: unknown, sceneSummary: string): void {
+      db.prepare("UPDATE events SET payload = ?, scene_summary = ? WHERE id = ?").run(JSON.stringify(payload), sceneSummary, id);
+    },
+
+    addHint(player: string, entryId: string, recipe: string, fromName: string): void {
+      db.prepare("INSERT OR IGNORE INTO hints (player, entry_id, recipe, from_name) VALUES (?, ?, ?, ?)").run(player, entryId, recipe, fromName);
+    },
+
+    listHints(player: string): { entryId: string; recipe: string; fromName: string }[] {
+      return db
+        .prepare("SELECT entry_id, recipe, from_name FROM hints WHERE player = ? ORDER BY at, rowid")
+        .all(player)
+        .map((row) => ({ entryId: row.entry_id as string, recipe: row.recipe as string, fromName: row.from_name as string }));
     },
 
     resolveEvent(id: number, chosen: string, effects: unknown, outcomeSummary: string): void {

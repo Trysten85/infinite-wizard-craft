@@ -83,32 +83,44 @@ The server owns gold, XP, level, quests, and learned spells. They are saved per 
 when a spell is dropped on the focus, instead of saving learned spells in the browser; and fill
 the shop shelf from the shop routes. Learned spells saved in a browser are not carried over.
 
-### Events and requests
+### Events
 
 An event arrives when a player has earned 15 points: 1 per new discovery made by combining,
 2 per quest or request finished, 1 per spell learned, 3 per level gained.
 
+An event is a short conversation in two beats. Someone arrives with something on their mind, the
+player reacts, the person says what they are after, and the player answers.
+
 | Route | Returns |
 |---|---|
 | `GET /api/players/:player/event` | `{ event, eventIn }`. `event` is null until one is due |
-| `POST /api/players/:player/event/respond` with `{ type }` | `{ outcome, effects, request, rewards, progress }` |
+| `POST /api/players/:player/event/respond` with `{ type, beat? }` | `{ outcome, effects, next, request, hint, gift, rewards, progress }` |
+| `POST /api/players/:player/event/test` with `{ seed? }` | `{ event, eventIn, seed }` |
 
-- **Test route:** `POST /api/players/:player/event/test`, with an optional `{ seed }`, writes a
-  fresh event at once and returns `{ event, eventIn, seed }`. It needs no points and spends none.
-  An event already waiting is replaced. The result is a real event: responding to it changes gold,
-  standing, and fondness. Seed ids are in `data/event-seeds.json`, plus `repeat` to bring back
-  someone the player has met.
-- `progress` also carries `rep`, `repBand`, `requests`, `eventReady`, and `eventIn`
+- An event is `{ id, beat, beats, earlier, kind, mood, person, scene, responses }`. `earlier` is
+  the conversation so far: `[{ scene, chosen, outcome }]`. Each response is `{ type, text }`, where
+  `type` is `generous`, `skilled`, `fair`, `sharp`, or `avoid`.
+- **Beat 1** always offers `generous`, `fair`, and `avoid`. Answering it returns `outcome` (how the
+  person takes it) and `next`, the second beat. `avoid` ends the event there, with `next: null`.
+- **Beat 2** offers what the seed allows. Answering it ends the event: `next` is null, and one of
+  `request`, `hint`, or `gift` may be set if the player helped.
+  - `request`: `{ id, from, ask, entry, gold, state }`. Filled the moment the player has that entry.
+  - `hint`: `{ entry, recipe, from }`. `recipe` is what the thing is made from, such as "Sand and Fire".
+  - `gift`: `{ id, name }`. The player now has that entry.
+- A Skilled response at beat 2 that uses one of the player's spells also has `spell: { id, name }`.
+  A spell is only put forward if it carries one of the seed's `spellTags` and none of
+  `events.spellCheck.blockedTags`.
+- Send `beat` (the beat being answered) with a response. If it is not the current beat the server
+  answers 400 "That moment has passed", so a double click cannot answer the next beat by accident.
+- `effects` is `{ gold, rep, fondness }`. Outcomes and effects are only returned by responding.
+- `progress` also carries `rep`, `repBand`, `requests`, `hints`, `eventReady`, and `eventIn`
   (the shared type is `PlayerProgress`).
-- An event is `{ id, kind, mood, person, scene, responses }`. Each response is `{ type, text }`,
-  where `type` is `generous`, `skilled`, `fair`, `sharp`, or `avoid`. A Skilled response that uses
-  one of the player's spells also has `spell: { id, name }`. A spell is only put forward if it
-  carries one of the seed's `spellTags` and none of `events.spellCheck.blockedTags`.
-- Outcomes and effects are only returned by responding. `effects` is `{ gold, rep, fondness }`.
-- `request` is set when the person goes on to ask for something: `{ id, from, ask, entry, gold, state }`.
-  It is filled the moment the player has that entry, and then shows up in `rewards.quests`.
-- Writing an event takes the model 10 to 30 seconds. The server starts writing as soon as one is
-  due, so `GET event` usually answers at once; if it is still being written, the call waits.
+- **Timing:** each beat takes the model about 10 seconds to write. The server writes the first
+  beat as soon as an event is due, and the second beat while the player reads the first, so both
+  are usually ready. If the player answers before the second beat is written, the call waits.
+- **Test route:** writes a fresh event at once. It needs no points and spends none, and an event
+  already waiting is replaced. It is a real event: playing it changes gold, standing, and fondness.
+  Seed ids are in `data/event-seeds.json`, plus `repeat` to bring back someone the player has met.
 
 ```
 npm run events -- <player>    # the people a player knows, every event, and open requests

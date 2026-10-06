@@ -72,7 +72,8 @@ export function createProgress(deps: { data: GameData; store: Store; listDiscove
     const { points } = data.balance.events;
     let earned = 0;
     const discovered = listDiscovered(player);
-    const bought = new Set(store.getLedgerRefs(player, "shop"));
+    // Things bought or given were not made by the player, so they pay no discovery gold or points.
+    const bought = new Set([...store.getLedgerRefs(player, "shop"), ...store.getLedgerRefs(player, "gift")]);
     for (const entry of discovered) {
       if (starting.has(entry.id) || bought.has(entry.id)) continue;
       const gold = discoveryGold(entry, data.balance);
@@ -156,6 +157,11 @@ export function createProgress(deps: { data: GameData; store: Store; listDiscove
       rep: stats.rep,
       repBand: repBandFor(stats.rep, data.balance).name,
       requests: listRequestViews(player),
+      hints: store.listHints(player).map((hint) => ({
+        entry: { id: hint.entryId, name: data.entries.get(hint.entryId)?.name ?? hint.entryId },
+        recipe: hint.recipe,
+        from: hint.fromName,
+      })),
       eventReady: eventIn === 0,
       eventIn,
     };

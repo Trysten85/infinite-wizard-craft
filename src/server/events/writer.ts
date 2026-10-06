@@ -8,6 +8,11 @@ import { createVoiceCheck, endsCleanly } from "../voice";
 
 // Everything the writer is told. It never sees a number: code owns those.
 export type EventBrief = {
+  // An event is a short conversation. "arrival" is the person turning up with something plainly on
+  // their mind. "heart" is them saying what they are really after, once the player has responded.
+  stage: "arrival" | "heart";
+  // At the heart: how the event opened, what the player did, and how the person took it.
+  soFar: { scene: string; choice: string; reaction: string } | null;
   seed: { premise: string; kind: string; mood: string[] };
   stakes: Stakes;
   player: { job: string | null; topTags: string[]; repBand: string };
@@ -18,8 +23,6 @@ export type EventBrief = {
   // One line each for the last few events, whoever they involved.
   recent: string[];
   responseTypes: ResponseType[];
-  // The thing the person asks for if the player helps, when code has planned a request.
-  ask: { name: string } | null;
   // Names already used for people this player knows.
   takenNames: string[];
 };
@@ -29,7 +32,6 @@ export type WrittenEvent = {
   sceneSummary: string;
   person: { name: string; role: string; traits: string[]; facts: string[] } | null;
   responses: { type: ResponseType; text: string; outcome: string }[];
-  ask: string | null;
 };
 
 // A second look at a finished scene: would one of the player's spells plainly solve it?
@@ -41,9 +43,39 @@ export type SpellQuestion = {
 // `spellId` is null when no spell fits, which is the usual answer.
 export type SpellAnswer = { spellId: string | null; text: string; outcome: string };
 
+// What a person leaves the player with as they go, decided by code. The writer only puts it into
+// one line of the person's speech.
+export type PartingQuestion = {
+  kind: "request" | "hint" | "gift";
+  // The thing asked for, hinted at, or given, and for a hint, what it is made from.
+  name: string;
+  madeFrom: string;
+  person: { name: string; role: string; traits: string[] };
+  // How the visit ended, for the line to follow on from.
+  ending: string;
+};
+
 export interface EventWriter {
   write(brief: EventBrief): Promise<WrittenEvent>;
   checkSpell(question: SpellQuestion): Promise<SpellAnswer>;
+  writeParting(question: PartingQuestion): Promise<string>;
+}
+
+// A parting line must name the thing, finish its sentence, and keep to the usual rules.
+export function checkParting(question: PartingQuestion, line: string, blocklist?: Blocklist): string | null {
+  if (!line.toLowerCase().includes(question.name.toLowerCase())) return `The line must contain the exact word "${question.name}".`;
+  if (!endsCleanly(line)) return "The line stops in the middle of a sentence. Finish it.";
+  if (/[0-9!]/.test(line)) return "Do not use digits or exclamation marks.";
+  if (blocklist && blocklist.find(line).length > 0) return "A name in the line is not available. Use different names.";
+  return null;
+}
+
+// A plain parting line that needs no model. Used when the model cannot produce one that names the thing.
+export function plainParting(question: PartingQuestion): string {
+  const { person, name, madeFrom } = question;
+  if (question.kind === "request") return `On the way out, ${person.name} turns back. "If you ever come by some ${name}, I would be glad of it."`;
+  if (question.kind === "hint") return `At the door, ${person.name} adds, "You know, ${name} comes from ${madeFrom}. I thought you might like to know."`;
+  return `Before leaving, ${person.name} presses something into your hands. "Take this ${name}. I have no use for it, and you might."`;
 }
 
 // What a spell answer must satisfy. Returns the reason it fails, or null.
@@ -56,7 +88,7 @@ export function checkSpellAnswer(question: SpellQuestion, answer: SpellAnswer, b
     if (text.trim() === "") return "Write both the response line and its outcome.";
     if (!endsCleanly(text)) return "A line stops in the middle of a sentence. Finish every sentence, and keep it short.";
     if (/[0-9!]/.test(text)) return "Do not use digits or exclamation marks anywhere.";
-    if (/\b(fondness|reputation|xp)\b/i.test(text)) return "Never mention reputation, fondness, or any game term.";
+    if (/\b(xp|shop rep)\b/i.test(text)) return "Never mention experience points, standing scores, or any game term.";
     if (blocklist && blocklist.find(text).length > 0) return "A name in the text is not available. Use different names.";
   }
   return null;
@@ -92,17 +124,11 @@ export function checkWritten(
     }
   }
 
-  if (brief.ask && !written.ask) return `Write the ask: one line in which the person asks the player for ${brief.ask.name}.`;
-  if (brief.ask && !written.ask!.toLowerCase().includes(brief.ask.name.toLowerCase())) {
-    return `The ask must name the thing wanted: ${brief.ask.name}.`;
-  }
-  if (!brief.ask && written.ask) return "Nobody asks for anything in this event. Set ask to null.";
-
-  const texts = [written.scene, written.sceneSummary, written.ask ?? "", ...written.responses.flatMap((r) => [r.text, r.outcome])];
+  const texts = [written.scene, written.sceneSummary, ...written.responses.flatMap((r) => [r.text, r.outcome])];
   const personText = written.person ? [written.person.name, written.person.role, ...written.person.traits, ...written.person.facts] : [];
   for (const text of [...texts, ...personText]) {
     if (/[0-9!]/.test(text)) return "Do not use digits or exclamation marks anywhere.";
-    if (/\b(fondness|reputation|xp)\b/i.test(text)) return "Never mention reputation, fondness, or any game term.";
+    if (/\b(xp|shop rep)\b/i.test(text)) return "Never mention experience points, standing scores, or any game term.";
     if (checks.blocklist && checks.blocklist.find(text).length > 0) return "A name in the text is not available. Use different names.";
   }
   for (const text of texts) {
@@ -137,13 +163,27 @@ export function renderBrief(brief: EventBrief): string {
     if (brief.takenNames.length > 0) lines.push(`Names already taken: ${brief.takenNames.join(", ")}.`);
   }
   if (brief.recent.length > 0) lines.push("", "Recent events, for continuity:", ...brief.recent.map((line) => `- ${line}`));
+  if (brief.stage === "arrival") {
+    lines.push(
+      "",
+      "Write only the arrival. The person turns up and something is plainly on their mind, but they have not said what.",
+      "Do not explain the problem yet and do not resolve anything. End on them hesitating, or about to speak.",
+      "Each response is how the player first reacts, and each outcome is one sentence: how the person takes it.",
+    );
+  } else {
+    lines.push(
+      "",
+      "How it began:",
+      brief.soFar!.scene,
+      `What the player did: ${brief.soFar!.choice}`,
+      `How the person took it: ${brief.soFar!.reaction}`,
+      "",
+      "Now write the heart of it. The person says what they are really after: something they are looking for, a favour they need, or simply someone to listen.",
+      "Carry on from what has already happened. Do not repeat it.",
+      "Each response is what the player does about it, and each outcome is how the visit ends.",
+    );
+  }
   lines.push("", "Write one response of each of these types:", ...brief.responseTypes.map((type) => `- ${type}: ${TYPE_MEANING[type]}`));
-  lines.push(
-    "",
-    brief.ask
-      ? `If the player helps, the person then asks them to make or bring: ${brief.ask.name}. Write that ask as one line of the person's speech, naming it.`
-      : "Nobody asks the player for anything afterwards. Set ask to null.",
-  );
   return lines.join("\n");
 }
 
@@ -160,9 +200,11 @@ export function createModelEventWriter(deps: {
   const system = [
     deps.voice.trim(),
     "",
-    "You write one small event in the player's working life, from a premise.",
+    "You write one small event in the player's working life, from a premise. It is told in two parts, and you are asked for one part at a time.",
     "Use the premise and mood as a starting point, then invent freely: the setting, the problem, and the details.",
-    "scene: three to five sentences, addressed to the player as 'you'.",
+    "It should read as a conversation with a person, not a report. Let them speak.",
+    "Keep the world ordinary. Food, drink, plants, and tools are real, everyday ones: chamomile, shortbread, a kettle, a hammer. Never invent a named herb, potion, tea, or material.",
+    "scene: two or three sentences, addressed to the player as 'you'.",
     "sceneSummary: one plain sentence saying what happened, for the record.",
     "person: when the main person is new, their name, a short role (neighbor, customer, inspector), one to three trait words, and up to three small facts. When they are already known, null.",
     "responses: for each response type asked for, one sentence of under twenty words saying what the player does, labeled with its type, and an outcome of one or two sentences saying how it turns out.",
@@ -187,7 +229,40 @@ export function createModelEventWriter(deps: {
     "If none fits, leave text and outcome empty.",
   ].join("\n");
 
+  const PARTING: Record<PartingQuestion["kind"], (q: PartingQuestion) => string> = {
+    request: (q) => `${q.person.name} asks the player to make or bring them some ${q.name}.`,
+    hint: (q) => `${q.person.name} mentions, in passing, that ${q.name} comes from ${q.madeFrom}. The player has never made ${q.name}.`,
+    gift: (q) => `${q.person.name} gives the player ${q.name}, as thanks.`,
+  };
+  const partingSystem = [
+    deps.voice.trim(),
+    "",
+    "A visit is ending. Write the one last thing the visitor says or does as they go.",
+    "One or two short sentences, with their words in quotation marks. Keep it in their character.",
+    "It must contain the exact name of the thing, spelled exactly as given, as an ordinary word in the sentence. No asterisks or other marks around it.",
+    "Do not bring up anything else by name. Just this one thing.",
+  ].join("\n");
+
   return {
+    async writeParting(question) {
+      const { line } = await generateValidated(deps.client, deps.log, {
+        purpose: "event-parting",
+        system: partingSystem,
+        prompt: [
+          `The visitor: ${question.person.name}, ${question.person.role} (${question.person.traits.join(", ")}).`,
+          `How the visit ended: ${question.ending}`,
+          `What happens now: ${PARTING[question.kind](question)}`,
+          `The exact name to use: ${question.name}`,
+        ].join("\n"),
+        schema: z.strictObject({ line: z.string().min(1).max(400) }),
+        reject: (value) => checkParting(question, value.line, deps.blocklist),
+        maxAttempts: 3,
+        temperature: 0.6,
+      });
+      // The model likes to put the name in asterisks for emphasis. The page shows plain text.
+      return line.replace(/\*/g, "");
+    },
+
     async checkSpell(question) {
       const NONE = "none";
       const schema = z.strictObject({
@@ -218,18 +293,19 @@ export function createModelEventWriter(deps: {
       const schema = z.strictObject({
         scene: z.string().min(1).max(1400),
         sceneSummary: z.string().min(1).max(400),
-        person: z
-          .strictObject({
-            name: z.string().min(1).max(60),
-            role: z.string().min(1).max(80),
-            traits: z.array(z.string().min(1).max(40)).min(1).max(3),
-            facts: z.array(z.string().min(1).max(240)).max(3),
-          })
-          .nullable(),
+        // The schema itself settles whether a person is invented, so the model cannot get it wrong:
+        // someone already known is always null, and someone new is always described.
+        person: brief.person.returning
+          ? z.null()
+          : z.strictObject({
+              name: z.string().min(1).max(60),
+              role: z.string().min(1).max(80),
+              traits: z.array(z.string().min(1).max(40)).min(1).max(3),
+              facts: z.array(z.string().min(1).max(240)).max(3),
+            }),
         responses: z
           .array(z.strictObject({ type: z.enum(brief.responseTypes as [ResponseType, ...ResponseType[]]), text: z.string().min(1).max(400), outcome: z.string().min(1).max(700) }))
           .length(brief.responseTypes.length),
-        ask: z.string().max(400).nullable(),
       });
       return generateValidated(deps.client, deps.log, {
         purpose: "event",
@@ -249,6 +325,10 @@ export function createModelEventWriter(deps: {
 export function createCannedEventWriter(): EventWriter {
   const names = ["Pim Kettlebrook", "Odessa Tuck", "Bram Pennywhistle", "Hettie Marrow", "Corwin Dale", "Ida Thistle", "Noll Quince", "Wren Applegate"];
   return {
+    async writeParting(question) {
+      return plainParting(question);
+    },
+
     // The canned writer reaches for a spell only when the player knows a plainly practical one.
     async checkSpell(question) {
       const spell = question.spells.find((item) => item.tags.includes("utility"));
@@ -260,7 +340,10 @@ export function createCannedEventWriter(): EventWriter {
       const free = names.find((name) => !brief.takenNames.includes(name)) ?? `Guest ${brief.takenNames.length + 1}`;
       const who = brief.person.returning ? brief.person.name : free;
       return {
-        scene: `${who} turns up while you are working. ${brief.seed.premise}. It is a ${STAKES_WORD[brief.stakes]} matter, and they are waiting to see what you do.`,
+        scene:
+          brief.stage === "arrival"
+            ? `${who} turns up while you are working, with something plainly on their mind.`
+            : `${who} explains. ${brief.seed.premise}. It is a ${STAKES_WORD[brief.stakes]} matter, and they are waiting to see what you do.`,
         sceneSummary: `${who} came by: ${brief.seed.premise.toLowerCase()}.`,
         person: brief.person.returning ? null : { name: free, role: "neighbor", traits: ["cheerful"], facts: [] },
         responses: brief.responseTypes.map((type) => ({
@@ -268,7 +351,6 @@ export function createCannedEventWriter(): EventWriter {
           text: `Be ${type} about it.`,
           outcome: `You chose to be ${type}, and ${who} took note.`,
         })),
-        ask: brief.ask ? `Could you bring me some ${brief.ask.name}, when you have a moment?` : null,
       };
     },
   };

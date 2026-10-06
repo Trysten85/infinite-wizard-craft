@@ -38,7 +38,14 @@
     "repeatShare": 0.25,
     "repeatMinPeople": 2,
     "followUpChance": { "none": 0, "possible": 0.3, "likely": 0.7 },
-    "request": { "chance": 0.5, "goldPerLevel": 15, "rep": 1, "fondness": 2, "maxMissingSteps": 4 },
+    "openingTypes": ["generous", "fair", "avoid"],
+    "payoff": {
+      "weights": { "request": 3, "hint": 3, "gift": 2, "none": 1 },
+      "hintMaxMissingSteps": 3,
+      "giftMaxMissingSteps": 2,
+      "never": ["mind", "sound", "person", "wilds", "animal", "forge", "blood", "bone-dust", "bat-guano"]
+    },
+    "request": { "goldPerLevel": 15, "rep": 1, "fondness": 2, "maxMissingSteps": 4 },
     "spellCheck": { "chance": 0.75, "blockedTags": ["control"] },
     "maxActivePeople": 10,
     "memory": 4,

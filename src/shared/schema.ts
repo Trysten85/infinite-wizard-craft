@@ -134,9 +134,16 @@ export type QuestProgress = { id: string; title: string; detail: string; gold: n
 // Something a person from an event has asked the player to make.
 export type RequestView = { id: number; from: string; ask: string; entry: { id: string; name: string }; gold: number; state: "open" | "done" };
 
-// An event waiting on the player. Outcomes and effects are only revealed by responding.
+// Something a person let slip: a thing the player has not made, and what it is made from.
+export type HintView = { entry: { id: string; name: string }; recipe: string; from: string };
+
+// An event waiting on the player. It is a short conversation: `beat` counts from 1, and `earlier`
+// holds what has been said so far. Outcomes and effects are only revealed by responding.
 export type EventView = {
   id: number;
+  beat: number;
+  beats: number;
+  earlier: { scene: string; chosen: string; outcome: string }[];
   kind: (typeof EVENT_KINDS)[number];
   mood: (typeof MOODS)[number][];
   person: { name: string; role: string; returning: boolean };
@@ -148,8 +155,12 @@ export type EventView = {
 export type EventOutcome = {
   outcome: string;
   effects: { gold: number; rep: number; fondness: number };
-  // Set when the person goes on to ask for something.
+  // The conversation goes on: this is its next beat. Null when the event is over.
+  next: EventView | null;
+  // What the person left the player with, if anything. At most one of these is set.
   request: RequestView | null;
+  hint: HintView | null;
+  gift: { id: string; name: string } | null;
 };
 
 export type Progress = {
@@ -171,6 +182,8 @@ export type Standing = {
   repBand: string;
   // Open requests first, then finished ones.
   requests: RequestView[];
+  // Recipes people have mentioned, newest last. The server always sends this.
+  hints?: HintView[];
   // An event is waiting, or will be once this many more points are earned.
   eventReady: boolean;
   eventIn: number;
@@ -291,8 +304,18 @@ export const balanceSchema = z.strictObject({
     repeatShare: z.number().min(0).max(1),
     repeatMinPeople: z.number().int().min(1),
     followUpChance: z.strictObject({ none: z.number(), possible: z.number(), likely: z.number() }),
+    // The ways a player can answer when someone first arrives, before they have said what they want.
+    openingTypes: z.array(responseTypeSchema).min(2),
+    // What a person may leave the player with, if the player helped. Weights are relative.
+    payoff: z.strictObject({
+      weights: z.strictObject({ request: z.number().min(0), hint: z.number().min(0), gift: z.number().min(0), none: z.number().min(0) }),
+      // A hint or a gift is never for something further away than this many combos.
+      hintMaxMissingSteps: z.number().int().min(1),
+      giftMaxMissingSteps: z.number().int().min(1),
+      // Things nobody asks for, hints at, or hands over, because they make no sense as an object.
+      never: z.array(idSchema),
+    }),
     request: z.strictObject({
-      chance: z.number().min(0).max(1),
       goldPerLevel: z.number().int().min(0),
       rep: z.number().int(),
       fondness: z.number().int(),

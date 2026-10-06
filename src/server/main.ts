@@ -43,7 +43,7 @@ const combiner = createCombiner({ data, store, generate, blocklist });
 const progress = createProgress({ data, store, listDiscovered: combiner.listDiscovered });
 const shop = createShop({ data, store, progress, listDiscovered: combiner.listDiscovered });
 const writer = createModelEventWriter({ client, log: store.logModelCall, voice: readFileSync(join(root, "prompts/voice.md"), "utf8"), blocklist });
-const events = createEvents({ data, store, progress, listDiscovered: combiner.listDiscovered, writer });
+const events = createEvents({ data, store, progress, listDiscovered: combiner.listDiscovered, writer, writeAhead: true });
 const app = createApp(combiner, { progress, shop, events });
 
 serve({ fetch: app.fetch, port }, () => {

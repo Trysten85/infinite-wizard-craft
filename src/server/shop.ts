@@ -26,7 +26,7 @@ export function createShop(deps: {
 
   // Discoveries made by combining. Purchases are left out, so buying never triggers a restock.
   function craftedCount(player: string): number {
-    return store.getDiscoveries(player).length - store.getLedgerRefs(player, "shop").length;
+    return store.getDiscoveries(player).length - store.getLedgerRefs(player, "shop").length - store.getLedgerRefs(player, "gift").length;
   }
 
   // The shop sells materials and spells the player does not have. Elements, schools, jobs, and
