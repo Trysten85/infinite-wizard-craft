@@ -1,0 +1,9 @@
+[
+  {"id": "first-combine", "title": "Combine two elements", "detail": "Drag two bubbles onto the board and drop one on the other.", "gold": 5, "done": {"type": "discovered-any"}},
+  {"id": "first-focus", "title": "Craft your first focus", "detail": "A focus turns matter into magic. Grow something, then give it Light.", "gold": 10, "done": {"type": "has-kind", "kind": "focus"}},
+  {"id": "first-cantrip", "title": "Cast your first cantrip", "detail": "Find a school of magic, then combine it with an element.", "gold": 15, "done": {"type": "has-kind", "kind": "spell"}},
+  {"id": "first-learned", "title": "Learn your first spell", "detail": "Drop a spell on your focus. Learning it costs gold.", "gold": 20, "done": {"type": "learned-count", "count": 1}},
+  {"id": "level-two", "title": "Reach level 2", "detail": "Every new discovery earns experience. Keep making things.", "gold": 20, "done": {"type": "level", "level": 2}},
+  {"id": "component", "title": "Find a component for a higher spell", "detail": "Stronger spells ask for rarer materials.", "gold": 25, "done": {"type": "has-tag", "tag": "reagent"}},
+  {"id": "first-job", "title": "Become a Wizard", "detail": "A person and a spellbook, brought together.", "gold": 30, "done": {"type": "has-entry", "entry": "wizard"}}
+]

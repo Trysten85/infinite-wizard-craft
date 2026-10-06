@@ -7,7 +7,9 @@ import { createCombiner } from "./combiner";
 import { createComboGenerator } from "./comboGenerator";
 import { loadGameData } from "./gameData";
 import { createOllamaClient } from "./llm/ollama";
+import { createProgress } from "./progress";
 import { RECIPE_KEY_FILE, renderRecipeKey } from "./recipeKey";
+import { createShop } from "./shop";
 import { openStore } from "./store";
 
 const root = process.cwd();
@@ -33,7 +35,10 @@ const generate = createComboGenerator({
 });
 const blocklist = loadBlocklist(join(root, "Blocklist.md"));
 if (blocklist.size === 0) console.warn("Blocklist.md not found or empty: generated names are not being checked against it.");
-const app = createApp(createCombiner({ data, store, generate, blocklist }));
+const combiner = createCombiner({ data, store, generate, blocklist });
+const progress = createProgress({ data, store, listDiscovered: combiner.listDiscovered });
+const shop = createShop({ data, store, progress, listDiscovered: combiner.listDiscovered });
+const app = createApp(combiner, { progress, shop });
 
 serve({ fetch: app.fetch, port }, () => {
   console.log(`Game server on http://localhost:${port} (model ${ollamaModel} at ${ollamaUrl})`);

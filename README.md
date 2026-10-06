@@ -56,6 +56,31 @@ approved, and by `npm run key`. A test fails if it falls out of step with the da
 | `missing-needs` | 400 | The spell needs materials the player has not discovered; `error` names them |
 | `rule` | 400 | Anything else the rules refuse, such as an undiscovered input |
 
+### Progression and the shop
+
+The server owns gold, XP, level, quests, and learned spells. They are saved per player.
+
+| Route | Returns |
+|---|---|
+| `GET /api/players/:player` | also `progress` |
+| `POST /api/players/:player/combine` | also `progress` and `rewards` |
+| `POST /api/players/:player/learn` with `{ spell }` | `{ rewards, progress }` |
+| `GET /api/players/:player/shop` | `{ slots, restockIn }` |
+| `POST /api/players/:player/shop/buy` with `{ slot }` | `{ entry, rewards, progress, shop }` |
+
+- `progress` is `{ xp, level, levelInto, levelSpan, gold, learned, quests }`. Each quest has a
+  `state` of `done`, `active`, or `upcoming`.
+- `rewards` is `{ gold, quests }`: what the player earned by that action, for toasts.
+- Each shop slot is `{ slot, type, reason, entry, price, sold }`. `type` is `random` or `tailored`,
+  and `reason` says why a tailored item was picked. `restockIn` counts new discoveries to go.
+- The types are exported from `src/shared/schema.ts`: `Progress`, `Rewards`, `ShopSlot`, `ShopView`.
+- More error codes: `not-enough-gold` and `sold-out` (both 400).
+
+**For the page to switch over:** stop working out XP, level, gold, and quests in
+`web/src/progress.ts` and `web/src/quests.ts` and read `progress` instead; call the learn route
+when a spell is dropped on the focus, instead of saving learned spells in the browser; and fill
+the shop shelf from the shop routes. Learned spells saved in a browser are not carried over.
+
 ## Schools and spells
 
 - A school is discovered by its recipe in `data/combos.json` (Fire + Light = Evocation).

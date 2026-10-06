@@ -4,7 +4,7 @@ import type { ComboGenerator } from "./comboGenerator";
 import { tierForDepth, xpForTier, type GameData } from "./gameData";
 import type { Store } from "./store";
 
-export type RuleCode = "rule" | "no-focus" | "missing-needs" | "no-result";
+export type RuleCode = "rule" | "no-focus" | "missing-needs" | "no-result" | "not-enough-gold" | "sold-out";
 
 // Thrown when the player asks for something the rules don't allow.
 export class RuleError extends Error {

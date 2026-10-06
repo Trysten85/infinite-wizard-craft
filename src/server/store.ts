@@ -13,9 +13,13 @@ export type ModelCall = {
   error?: string;
 };
 
+export type LedgerReason = "quest" | "discovery" | "learn" | "shop";
+export type StockedSlot = { slot: number; entryId: string; type: "random" | "tailored"; reason: string; sold: boolean };
+
 export type Store = ReturnType<typeof openStore>;
 
-// One SQLite file holds the shared combo cache, each player's discoveries, and the model call log.
+// One SQLite file holds the shared combo cache, each player's discoveries, gold, learned spells
+// and shop shelf, and the model call log.
 export function openStore(path: string) {
   const db = new DatabaseSync(path);
   db.exec(`
@@ -39,6 +43,40 @@ export function openStore(path: string) {
       player TEXT NOT NULL,
       entry_id TEXT NOT NULL,
       discovered_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (player, entry_id)
+    );
+    CREATE TABLE IF NOT EXISTS ledger (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      player TEXT NOT NULL,
+      amount INTEGER NOT NULL,
+      reason TEXT NOT NULL,
+      ref TEXT NOT NULL,
+      at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE (player, reason, ref)
+    );
+    CREATE TABLE IF NOT EXISTS learned (
+      player TEXT NOT NULL,
+      spell_id TEXT NOT NULL,
+      at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (player, spell_id)
+    );
+    CREATE TABLE IF NOT EXISTS shop_stock (
+      player TEXT NOT NULL,
+      slot INTEGER NOT NULL,
+      entry_id TEXT NOT NULL,
+      type TEXT NOT NULL,
+      reason TEXT NOT NULL,
+      sold INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY (player, slot)
+    );
+    CREATE TABLE IF NOT EXISTS shop_state (
+      player TEXT PRIMARY KEY,
+      stocked_at INTEGER NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS shop_prices (
+      player TEXT NOT NULL,
+      entry_id TEXT NOT NULL,
+      price INTEGER NOT NULL,
       PRIMARY KEY (player, entry_id)
     );
     CREATE TABLE IF NOT EXISTS model_calls (
@@ -175,6 +213,80 @@ export function openStore(path: string) {
         .prepare("INSERT OR IGNORE INTO discoveries (player, entry_id) VALUES (?, ?)")
         .run(player, entryId);
       return result.changes === 1;
+    },
+
+    // Records gold gained or spent. Each (reason, ref) pays a player once, so awards are safe to repeat.
+    // Returns true if the row was new.
+    addLedger(player: string, amount: number, reason: LedgerReason, ref: string): boolean {
+      const result = db
+        .prepare("INSERT OR IGNORE INTO ledger (player, amount, reason, ref) VALUES (?, ?, ?, ?)")
+        .run(player, amount, reason, ref);
+      return result.changes === 1;
+    },
+
+    getGold(player: string): number {
+      const row = db.prepare("SELECT COALESCE(SUM(amount), 0) AS gold FROM ledger WHERE player = ?").get(player);
+      return row!.gold as number;
+    },
+
+    // The refs a player has ledger rows for under one reason: quests done, things bought, and so on.
+    getLedgerRefs(player: string, reason: LedgerReason): string[] {
+      return db
+        .prepare("SELECT ref FROM ledger WHERE player = ? AND reason = ? ORDER BY id")
+        .all(player, reason)
+        .map((row) => row.ref as string);
+    },
+
+    getLearned(player: string): string[] {
+      return db
+        .prepare("SELECT spell_id FROM learned WHERE player = ? ORDER BY at, rowid")
+        .all(player)
+        .map((row) => row.spell_id as string);
+    },
+
+    addLearned(player: string, spellId: string): boolean {
+      const result = db.prepare("INSERT OR IGNORE INTO learned (player, spell_id) VALUES (?, ?)").run(player, spellId);
+      return result.changes === 1;
+    },
+
+    // The player's shelf, and how many combined discoveries they had when it was stocked.
+    getShop(player: string): { stockedAt: number; slots: StockedSlot[] } | undefined {
+      const state = db.prepare("SELECT stocked_at FROM shop_state WHERE player = ?").get(player);
+      if (!state) return undefined;
+      const slots = db
+        .prepare("SELECT slot, entry_id, type, reason, sold FROM shop_stock WHERE player = ? ORDER BY slot")
+        .all(player)
+        .map((row) => ({
+          slot: row.slot as number,
+          entryId: row.entry_id as string,
+          type: row.type as StockedSlot["type"],
+          reason: row.reason as string,
+          sold: row.sold === 1,
+        }));
+      return { stockedAt: state.stocked_at as number, slots };
+    },
+
+    setShop(player: string, stockedAt: number, slots: Omit<StockedSlot, "sold">[]): void {
+      transaction(() => {
+        db.prepare("DELETE FROM shop_stock WHERE player = ?").run(player);
+        db.prepare("INSERT OR REPLACE INTO shop_state (player, stocked_at) VALUES (?, ?)").run(player, stockedAt);
+        const insert = db.prepare("INSERT INTO shop_stock (player, slot, entry_id, type, reason) VALUES (?, ?, ?, ?, ?)");
+        for (const slot of slots) insert.run(player, slot.slot, slot.entryId, slot.type, slot.reason);
+      });
+    },
+
+    markSold(player: string, slot: number): void {
+      db.prepare("UPDATE shop_stock SET sold = 1 WHERE player = ? AND slot = ?").run(player, slot);
+    },
+
+    // The price a player was first shown for an entry. It never changes after that.
+    getPrice(player: string, entryId: string): number | undefined {
+      const row = db.prepare("SELECT price FROM shop_prices WHERE player = ? AND entry_id = ?").get(player, entryId);
+      return row?.price as number | undefined;
+    },
+
+    setPrice(player: string, entryId: string, price: number): void {
+      db.prepare("INSERT OR IGNORE INTO shop_prices (player, entry_id, price) VALUES (?, ?, ?)").run(player, entryId, price);
     },
 
     logModelCall(call: ModelCall): void {

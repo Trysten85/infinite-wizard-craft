@@ -7,6 +7,10 @@ const balance: Balance = {
   depthPerTier: 2,
   discoveryXpByTier: [10, 25],
   componentDepthByTier: {},
+  levels: { xpStep: 100, cap: 5 },
+  learnCostPerTier: 10,
+  discoveryGoldByTier: [1, 3],
+  shop: { restockEvery: 5, basePrice: 5, pricePerDepth: 3, pricePerMissingStep: 4, spellMarkup: 2, neverSells: [] },
   generation: { maxAttempts: 3, temperature: 0.8 },
 };
 

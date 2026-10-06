@@ -76,6 +76,7 @@ describe("every entry has a buildable path", () => {
       combos: files.combos.filter((combo) => combo.result !== "spellbook"),
       entries: files.entries.filter((entry) => entry.id !== "spellbook"),
       jobs: files.jobs.filter((job) => !job.magic),
+      quests: [],
     });
     const { unbuildable } = await playEverything(broken);
     expect(unbuildable.length).toBeGreaterThan(0);

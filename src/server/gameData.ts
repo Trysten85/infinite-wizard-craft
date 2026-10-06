@@ -8,6 +8,7 @@ import {
   entrySchema,
   jobSchema,
   ladderSchema,
+  questSchema,
   schoolSchema,
   spellEntryId,
   spellMaterialSchema,
@@ -20,6 +21,7 @@ import {
   type GameEntry,
   type Job,
   type Ladder,
+  type Quest,
   type School,
   type Spell,
   type SpellMaterial,
@@ -34,6 +36,7 @@ export type GameData = {
   entries: Map<string, GameEntry>;
   spells: Map<string, Spell>;
   jobs: Map<string, Job>;
+  quests: Quest[];
   // comboKey -> what the pair makes, and anything else the player must have discovered first
   combos: Map<string, Recipe>;
 };
@@ -101,8 +104,9 @@ export function buildGameData(raw: {
   spellRecipes?: SpellRecipe[];
   spellMaterials?: SpellMaterial[];
   jobs?: Job[];
+  quests?: Quest[];
 }): GameData {
-  const { balance, tags, schools, combos, spells = [], ladders = [], spellRecipes = [], spellMaterials = [], jobs = [] } = raw;
+  const { balance, tags, schools, combos, spells = [], ladders = [], spellRecipes = [], spellMaterials = [], jobs = [], quests = [] } = raw;
   const problems: string[] = [];
   const spellsById = new Map(spells.map((spell) => [spell.id, spell]));
 
@@ -292,6 +296,15 @@ export function buildGameData(raw: {
     for (const from of lower) recipes.push({ inputs: [from.id, key.id], result: spellEntryId(spell.id), needs: [] });
   }
 
+  for (const quest of quests) {
+    if (quest.done.type === "has-entry" && !entryIds.has(quest.done.entry)) {
+      problems.push(`quest "${quest.id}" asks for unknown entry "${quest.done.entry}"`);
+    }
+    if (quest.done.type === "has-tag" && !tagMap.has(quest.done.tag)) {
+      problems.push(`quest "${quest.id}" asks for unknown tag "${quest.done.tag}"`);
+    }
+  }
+
   const comboMap = new Map<string, Recipe>();
   for (const recipe of recipes) {
     const key = comboKey(...recipe.inputs);
@@ -317,6 +330,7 @@ export function buildGameData(raw: {
     entries: entryMap,
     spells: spellMap,
     jobs: new Map(jobs.map((job) => [job.id, job])),
+    quests,
     combos: comboMap,
   };
 }
@@ -334,6 +348,7 @@ export function readGameFiles(rootDir: string) {
     spellRecipes: readOptional(join(rootDir, SPELL_RECIPES_FILE), z.array(spellRecipeSchema)),
     spellMaterials: readOptional(join(rootDir, SPELL_MATERIALS_FILE), z.array(spellMaterialSchema)),
     jobs: readJson(join(rootDir, "data/jobs.json"), z.array(jobSchema)),
+    quests: readJson(join(rootDir, "data/quests.json"), z.array(questSchema)),
   };
 }
 

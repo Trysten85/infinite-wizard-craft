@@ -71,6 +71,54 @@ export const jobSchema = z.strictObject({
 });
 export type Job = z.infer<typeof jobSchema>;
 
+// A quest is done when its condition is met. Conditions are data, so quests never need code.
+export const questSchema = z.strictObject({
+  id: idSchema,
+  title: z.string().min(1),
+  detail: z.string().min(1),
+  gold: z.number().int().min(0),
+  done: z.discriminatedUnion("type", [
+    // Anything at all beyond the starting entries.
+    z.strictObject({ type: z.literal("discovered-any") }),
+    z.strictObject({ type: z.literal("has-kind"), kind: z.enum(["material", "focus", "school", "spell", "job"]) }),
+    z.strictObject({ type: z.literal("has-entry"), entry: idSchema }),
+    z.strictObject({ type: z.literal("learned-count"), count: z.number().int().min(1) }),
+    z.strictObject({ type: z.literal("level"), level: z.number().int().min(1) }),
+    z.strictObject({ type: z.literal("has-tag"), tag: z.string() }),
+  ]),
+});
+export type Quest = z.infer<typeof questSchema>;
+
+// "active" is the quest to work on next: the first one not yet done.
+export type QuestProgress = { id: string; title: string; detail: string; gold: number; state: "done" | "active" | "upcoming" };
+
+export type Progress = {
+  xp: number;
+  level: number;
+  // XP earned inside the current level, and how much that level takes in all.
+  levelInto: number;
+  levelSpan: number;
+  gold: number;
+  // Ids of learned spell entries, oldest first.
+  learned: string[];
+  quests: QuestProgress[];
+};
+
+// What a player just earned, for the page to announce.
+export type Rewards = { gold: number; quests: { id: string; title: string; gold: number }[] };
+
+export type ShopSlot = {
+  slot: number;
+  // A tailored slot was picked for this player, and `reason` says why.
+  type: "random" | "tailored";
+  reason: string;
+  entry: GameEntry;
+  price: number;
+  // Bought from this shelf, or since made by the player.
+  sold: boolean;
+};
+export type ShopView = { slots: ShopSlot[]; restockIn: number };
+
 // Rows drafted by `npm run craft`. Only rows with status "ok" are live in the game.
 export const draftStatusSchema = z.enum(["draft", "ok", "review"]);
 
@@ -138,6 +186,22 @@ export const balanceSchema = z.strictObject({
   discoveryXpByTier: z.array(z.number().int().min(0)).min(1),
   // Spell tier -> [shallowest, deepest] depth allowed for a material that keys a spell of that tier.
   componentDepthByTier: z.record(z.string(), z.tuple([z.number().int().min(1), z.number().int().min(1)])),
+  // Going from level N to N + 1 takes N times xpStep. Nobody goes past the cap.
+  levels: z.strictObject({ xpStep: z.number().int().min(1), cap: z.number().int().min(1) }),
+  // Learning a spell costs this much gold per tier, counting a cantrip as one tier.
+  learnCostPerTier: z.number().int().min(0),
+  // Gold for a first discovery made by combining, by the entry's tier.
+  discoveryGoldByTier: z.array(z.number().int().min(0)).min(1),
+  shop: z.strictObject({
+    // The shelf restocks after this many new discoveries made by combining.
+    restockEvery: z.number().int().min(1),
+    basePrice: z.number().int().min(0),
+    pricePerDepth: z.number().int().min(0),
+    // "Missing steps" are the combos the player still has not made on the way to the item.
+    pricePerMissingStep: z.number().int().min(0),
+    spellMarkup: z.number().min(1),
+    neverSells: z.array(idSchema),
+  }),
   generation: z.strictObject({
     maxAttempts: z.number().int().min(1),
     temperature: z.number().min(0).max(2),
