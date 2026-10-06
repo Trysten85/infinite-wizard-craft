@@ -323,7 +323,8 @@ export function comboDraftSchema(tags: Iterable<Tag>) {
   const allowed = [...tags].filter((tag) => tag.assignedBy === "model").map((tag) => tag.id);
   return z.strictObject({
     name: z.string().min(1).max(40),
-    description: z.string().min(1).max(240),
+    // Roomy on purpose. A tight limit cuts the model off mid-sentence.
+    description: z.string().min(1).max(500),
     tags: z.array(z.enum(allowed as [string, ...string[]])).max(MAX_TAGS),
     // One word for what the vocabulary lacked. A hint for human review, never used as a tag.
     missingTag: z.string().max(20).nullable(),

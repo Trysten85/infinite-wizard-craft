@@ -89,14 +89,14 @@ describe("generated combos", () => {
   });
 
   it("does not let the model hand out a hand-written entry", async () => {
-    const death: ComboDraft = { name: "Death", description: "x", tags: [], missingTag: null };
+    const death: ComboDraft = { name: "Death", description: "A thing.", tags: [], missingTag: null };
     const combiner = createCombiner({ data, store, generate: generatorOffering(death, ash) });
     const { entry } = await combiner.combine("ann", "fire", "fire");
     expect(entry.id).toBe("ash");
   });
 
   it("rejects names that are not plain words", async () => {
-    const odd: ComboDraft = { name: "Ash 2.0 <b>", description: "x", tags: [], missingTag: null };
+    const odd: ComboDraft = { name: "Ash 2.0 <b>", description: "A thing.", tags: [], missingTag: null };
     const combiner = createCombiner({ data, store, generate: generatorOffering(odd, ash) });
     expect((await combiner.combine("ann", "fire", "fire")).entry.id).toBe("ash");
   });
@@ -114,7 +114,7 @@ describe("generated combos", () => {
   });
 
   it("keeps the model's missing-tag hint for review without making it a tag", async () => {
-    const mist: ComboDraft = { name: "Mist", description: "x", tags: [], missingTag: "vapor" };
+    const mist: ComboDraft = { name: "Mist", description: "A thing.", tags: [], missingTag: "vapor" };
     const combiner = createCombiner({ data, store, generate: generatorOffering(mist) });
     const { entry } = await combiner.combine("ann", "air", "air");
     expect(entry.tags).toEqual([]);

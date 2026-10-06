@@ -170,6 +170,13 @@ describe("checks on generated text", () => {
     expect(reasons).toEqual(["Use a plainer name: one everyday word, two at most."]);
   });
 
+  it("rerolls a description that stops mid-sentence", async () => {
+    const { generate, reasons } = generatorOffering(draft("Wind", "It drifts under doors and you will only end up"), draft("Ash"));
+    const combiner = createCombiner({ data, store, generate });
+    expect((await combiner.combine("ann", "fire", "fire")).entry.id).toBe("ash");
+    expect(reasons[0]).toMatch(/middle of a sentence/);
+  });
+
   it("capitalises the first letter of a generated name", async () => {
     const combiner = createCombiner({ data, store, ...generatorOffering(draft("slag")) });
     expect((await combiner.combine("ann", "fire", "fire")).entry).toMatchObject({ id: "slag", name: "Slag" });

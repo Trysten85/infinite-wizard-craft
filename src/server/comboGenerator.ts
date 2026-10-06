@@ -101,7 +101,7 @@ export function createComboGenerator(deps: {
     const storybook = await pickStorybook(a, b);
     // A storybook pick that the game's rules refuse (a name already made another way, say) falls
     // back to an ordinary result instead of failing the combination.
-    if (storybook && reject({ name: storybook, description: "x", tags: [], missingTag: null }) === null) {
+    if (storybook && reject({ name: storybook, description: "A thing.", tags: [], missingTag: null }) === null) {
       const draft = await generateValidated(deps.client, deps.log, {
         purpose: "combo",
         system,

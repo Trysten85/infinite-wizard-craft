@@ -4,6 +4,7 @@ import type { Blocklist } from "../blocklist";
 import { generateValidated, GenerationError } from "../llm/generate";
 import type { LlmClient } from "../llm/types";
 import type { ModelCall } from "../store";
+import { endsCleanly } from "../voice";
 
 export type MaterialDraft = { inputs: [string, string]; logic: string; description: string; tags: string[] };
 
@@ -34,6 +35,7 @@ export function checkMaterialDraft(draft: MaterialDraft, rules: DraftRules): str
     return "The description uses a proper name. Rewrite it without naming any person, place, or group.";
   }
   if (/[0-9!]/.test(draft.description)) return "The description must not contain digits or exclamation marks.";
+  if (!endsCleanly(draft.description)) return "The description stops in the middle of a sentence. Write one or two short, complete sentences.";
   return null;
 }
 
@@ -107,8 +109,8 @@ export async function draftMaterialRecipe(
       prompt: subject,
       schema: z.strictObject({
         partner: z.enum(partners.map((entry) => entry.id) as [string, ...string[]]),
-        logic: z.string().min(1).max(120),
-        description: z.string().min(1).max(240),
+        logic: z.string().min(1).max(300),
+        description: z.string().min(1).max(500),
         tags: z.array(z.enum(modelTags.map((tag) => tag.id) as [string, ...string[]])).max(3),
       }),
       reject: (value) => checkMaterialDraft({ ...value, inputs: [a.id, value.partner] }, rules),

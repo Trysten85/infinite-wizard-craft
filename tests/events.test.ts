@@ -505,6 +505,17 @@ describe("checking what the writer wrote", () => {
     expect(checkWritten(brief, good, { voiceCheck: (text) => (text.includes("goose has your hammer") ? "copied" : null) })).toBe("copied");
   });
 
+  it("rejects a line that stops mid-sentence, and leaves the model room to finish", async () => {
+    expect(checkWritten(brief, withResponse(0, { text: "You gently coax the goose down and even offer to r" }))).toMatch(/middle of a sentence/);
+    expect(checkWritten(brief, { ...good, scene: "A goose has your hammer and it is" })).toMatch(/middle of a sentence/);
+    expect(checkWritten(brief, withResponse(0, { outcome: "The goose says, 'Thank you.'" }))).toBeNull();
+    // The limits sent to the model are well above what a line needs, so they never cut one short.
+    const client = createFakeClient([JSON.stringify(good)]);
+    await createModelEventWriter({ client, log: () => {}, voice: "v" }).write(brief);
+    const limits = [...JSON.stringify(client.requests[0]!.jsonSchema).matchAll(/"maxLength":(\d+)/g)].map((match) => Number(match[1]));
+    expect(Math.min(...limits.filter((limit) => limit > 100))).toBeGreaterThanOrEqual(240);
+  });
+
   it("is never told a number", () => {
     const returning: EventBrief = { ...brief, stakes: "L", ask: { name: "Glass" }, recent: ["A goose took the hammer."], person: { returning: true, name: "Odessa Tuck", role: "baker", traits: ["fussy"], facts: ["has a cat"], feeling: "fond of the player", followUp: "to say thank you", history: ["She came by."] } };
     for (const text of [renderBrief(brief), renderBrief(returning)]) expect(text).not.toMatch(/[0-9]/);

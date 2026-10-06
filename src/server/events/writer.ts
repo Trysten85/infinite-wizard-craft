@@ -4,7 +4,7 @@ import type { Blocklist } from "../blocklist";
 import { generateValidated } from "../llm/generate";
 import type { LlmClient } from "../llm/types";
 import type { ModelCall } from "../store";
-import { createVoiceCheck } from "../voice";
+import { createVoiceCheck, endsCleanly } from "../voice";
 
 // Everything the writer is told. It never sees a number: code owns those.
 export type EventBrief = {
@@ -54,6 +54,7 @@ export function checkSpellAnswer(question: SpellQuestion, answer: SpellAnswer, b
   if (!answer.text.toLowerCase().includes(spell.name.toLowerCase())) return `The response line must name the spell: ${spell.name}.`;
   for (const text of [answer.text, answer.outcome]) {
     if (text.trim() === "") return "Write both the response line and its outcome.";
+    if (!endsCleanly(text)) return "A line stops in the middle of a sentence. Finish every sentence, and keep it short.";
     if (/[0-9!]/.test(text)) return "Do not use digits or exclamation marks anywhere.";
     if (/\b(fondness|reputation|xp)\b/i.test(text)) return "Never mention reputation, fondness, or any game term.";
     if (blocklist && blocklist.find(text).length > 0) return "A name in the text is not available. Use different names.";
@@ -105,6 +106,7 @@ export function checkWritten(
     if (checks.blocklist && checks.blocklist.find(text).length > 0) return "A name in the text is not available. Use different names.";
   }
   for (const text of texts) {
+    if (text !== "" && !endsCleanly(text)) return "A line stops in the middle of a sentence. Finish every sentence, and keep each response to one or two short ones.";
     const echo = checks.voiceCheck?.(text);
     if (echo) return echo;
   }
@@ -163,7 +165,8 @@ export function createModelEventWriter(deps: {
     "scene: three to five sentences, addressed to the player as 'you'.",
     "sceneSummary: one plain sentence saying what happened, for the record.",
     "person: when the main person is new, their name, a short role (neighbor, customer, inspector), one to three trait words, and up to three small facts. When they are already known, null.",
-    "responses: one short line for each response type asked for, labeled with its type, and for each an outcome of one or two sentences saying how it turns out.",
+    "responses: for each response type asked for, one sentence of under twenty words saying what the player does, labeled with its type, and an outcome of one or two sentences saying how it turns out.",
+    "person.role is two or three words at most.",
     "Each response must really fit its type. A generous response is actually generous.",
     "Never mention money amounts, numbers, or game terms. No injury, cruelty, or real people. Romance stays light.",
   ].join("\n");
@@ -179,7 +182,7 @@ export function createModelEventWriter(deps: {
     "Fits: something is broken and the player knows Mending. A spill or a stain and the player knows Prestidigitation. Something out of reach and the player knows Mage Hand.",
     "Does not fit: a nervous customer and Fire Bolt. A missing delivery and Light.",
     "If a spell fits, also write:",
-    "text: one short line in which the player uses the spell, naming it.",
+    "text: one sentence of under twenty words in which the player uses the spell, naming it.",
     "outcome: one or two sentences saying how that turns out. It goes well, at no cost to the player.",
     "If none fits, leave text and outcome empty.",
   ].join("\n");
@@ -189,8 +192,8 @@ export function createModelEventWriter(deps: {
       const NONE = "none";
       const schema = z.strictObject({
         spell: z.enum([NONE, ...question.spells.map((spell) => spell.id)]),
-        text: z.string().max(160),
-        outcome: z.string().max(320),
+        text: z.string().max(400),
+        outcome: z.string().max(700),
       });
       const toAnswer = (value: z.infer<typeof schema>): SpellAnswer => ({ spellId: value.spell === NONE ? null : value.spell, text: value.text, outcome: value.outcome });
       const result = await generateValidated(deps.client, deps.log, {
@@ -213,20 +216,20 @@ export function createModelEventWriter(deps: {
 
     async write(brief) {
       const schema = z.strictObject({
-        scene: z.string().min(1).max(700),
-        sceneSummary: z.string().min(1).max(200),
+        scene: z.string().min(1).max(1400),
+        sceneSummary: z.string().min(1).max(400),
         person: z
           .strictObject({
-            name: z.string().min(1).max(40),
-            role: z.string().min(1).max(40),
-            traits: z.array(z.string().min(1).max(20)).min(1).max(3),
-            facts: z.array(z.string().min(1).max(120)).max(3),
+            name: z.string().min(1).max(60),
+            role: z.string().min(1).max(80),
+            traits: z.array(z.string().min(1).max(40)).min(1).max(3),
+            facts: z.array(z.string().min(1).max(240)).max(3),
           })
           .nullable(),
         responses: z
-          .array(z.strictObject({ type: z.enum(brief.responseTypes as [ResponseType, ...ResponseType[]]), text: z.string().min(1).max(160), outcome: z.string().min(1).max(320) }))
+          .array(z.strictObject({ type: z.enum(brief.responseTypes as [ResponseType, ...ResponseType[]]), text: z.string().min(1).max(400), outcome: z.string().min(1).max(700) }))
           .length(brief.responseTypes.length),
-        ask: z.string().max(200).nullable(),
+        ask: z.string().max(400).nullable(),
       });
       return generateValidated(deps.client, deps.log, {
         purpose: "event",

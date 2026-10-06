@@ -11,7 +11,7 @@ import { loadGameData } from "../server/gameData";
 import { generateValidated, GenerationError } from "../server/llm/generate";
 import { createOllamaClient } from "../server/llm/ollama";
 import { openStore } from "../server/store";
-import { createVoiceCheck } from "../server/voice";
+import { createVoiceCheck, endsCleanly } from "../server/voice";
 
 const dbPath = join(process.cwd(), "var/game.db");
 if (!existsSync(dbPath)) {
@@ -74,9 +74,11 @@ if (command === "list") {
           "The sample lines in the guide show tone only. Never reuse their wording.",
         ].join("\n"),
         prompt: `Name: ${entry.name}\nMade from: ${madeFrom.get(entry.id) ?? "unknown"}\nOld description: ${entry.description}`,
-        schema: z.strictObject({ description: z.string().min(1).max(240) }),
+        schema: z.strictObject({ description: z.string().min(1).max(500) }),
         reject: (value) =>
-          /[0-9!]/.test(value.description)
+          !endsCleanly(value.description)
+            ? "The description stops in the middle of a sentence. Write one or two short, complete sentences."
+            : /[0-9!]/.test(value.description)
             ? "The description must not contain digits or exclamation marks."
             : blocklist.find(value.description).length > 0
               ? "The description uses a proper name. Rewrite it without naming any person, place, or group."

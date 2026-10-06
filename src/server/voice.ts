@@ -1,6 +1,13 @@
 // The voice guide includes sample lines for tone. Small models tend to copy them word for word,
 // so generated text is checked against them.
 
+// Length limits in a schema are hard stops for the model: it is cut off mid-word when it reaches
+// one. So the limits are kept roomy, as a guard against runaway text only, and this check catches
+// anything that still ends without finishing its sentence.
+export function endsCleanly(text: string): boolean {
+  return /[.?…"'’”)]$/.test(text.trim());
+}
+
 function words(text: string): string[] {
   return text.toLowerCase().match(/[a-z']+/g) ?? [];
 }
