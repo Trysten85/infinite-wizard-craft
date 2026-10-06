@@ -2,6 +2,7 @@ import { comboDraftSchema, type Balance, type ComboDraft, type GameEntry, type T
 import { generateValidated } from "./llm/generate";
 import type { LlmClient } from "./llm/types";
 import type { ModelCall } from "./store";
+import { createVoiceCheck } from "./voice";
 
 // Writes the words for a combo nobody has made before. `reject` lets the caller apply game rules.
 export type ComboGenerator = (
@@ -24,6 +25,7 @@ export function createComboGenerator(deps: {
 }): ComboGenerator {
   const tags = [...deps.tags];
   const schema = comboDraftSchema(tags);
+  const voiceCheck = createVoiceCheck(deps.voice);
   const tagList = tags
     .filter((tag) => tag.assignedBy === "model")
     .map((tag) => `- ${tag.id}: ${tag.meaning}`)
@@ -48,7 +50,7 @@ export function createComboGenerator(deps: {
       system,
       prompt: `Combine these two:\n1. ${describe(a)}\n2. ${describe(b)}`,
       schema,
-      reject,
+      reject: (draft) => reject(draft) ?? voiceCheck(draft.description, draft.name),
       maxAttempts: deps.balance.generation.maxAttempts,
       temperature: deps.balance.generation.temperature,
     });

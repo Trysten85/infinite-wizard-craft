@@ -121,6 +121,15 @@ export function openStore(path: string) {
       return row?.suggestion as string | undefined;
     },
 
+    // Replaces a generated entry's description, for when the voice guide changes. The name stays.
+    setEntryDescription(id: string, description: string): boolean {
+      const row = db.prepare("SELECT json FROM entries WHERE id = ?").get(id);
+      if (!row) return false;
+      const entry = { ...(JSON.parse(row.json as string) as GameEntry), description };
+      db.prepare("UPDATE entries SET json = ? WHERE id = ?").run(JSON.stringify(entry), id);
+      return true;
+    },
+
     // Replaces a generated entry's tags after human review. Returns false if there is no such entry.
     setEntryTags(id: string, tags: string[]): boolean {
       const row = db.prepare("SELECT json FROM entries WHERE id = ?").get(id);

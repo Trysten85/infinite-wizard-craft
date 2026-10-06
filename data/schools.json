@@ -1,10 +1,10 @@
 [
-  {"id": "abjuration", "name": "Abjuration", "description": "Protective magic: wards, blocking, banishing, countering other magic.", "tags": ["protection"], "naturalElements": ["earth", "light"]},
-  {"id": "conjuration", "name": "Conjuration", "description": "Summoning creatures, creating objects, teleportation.", "tags": ["summon"], "naturalElements": ["air", "water", "shadow"]},
-  {"id": "divination", "name": "Divination", "description": "Revealing information, scrying, foresight.", "tags": ["knowledge"], "naturalElements": ["light", "shadow"]},
-  {"id": "enchantment", "name": "Enchantment", "description": "Influencing minds, charming, compelling behavior and emotions.", "tags": ["mind", "control"], "naturalElements": ["air", "life"]},
-  {"id": "evocation", "name": "Evocation", "description": "Channeling raw energy for destructive effects or healing.", "tags": ["energy", "damage", "healing"], "naturalElements": ["fire", "water", "air", "light", "life"]},
-  {"id": "illusion", "name": "Illusion", "description": "Deceiving the senses or mind, phantasms, altered perception.", "tags": ["mind"], "naturalElements": ["light", "shadow"]},
-  {"id": "necromancy", "name": "Necromancy", "description": "Manipulating life and death energies, harming undead, raising the dead.", "tags": ["damage", "summon"], "naturalElements": ["death", "shadow", "life"]},
-  {"id": "transmutation", "name": "Transmutation", "description": "Physically altering the properties, form, or matter of creatures and objects.", "tags": ["transform"], "naturalElements": ["earth", "air", "fire", "water"]}
+  {"id": "abjuration", "name": "Abjuration", "description": "The magic of keeping things out: rain, drafts, moths, and the neighbor's goose. Wards, mostly, and very good ones.", "tags": ["protection"], "naturalElements": ["earth", "light"]},
+  {"id": "conjuration", "name": "Conjuration", "description": "Fetching and carrying, without the walking. Mostly it moves furniture, and now and then it brings back something you did not ask for.", "tags": ["summon"], "naturalElements": ["air", "water", "shadow"]},
+  {"id": "divination", "name": "Divination", "description": "The magic of finding out. Lost keys, tomorrow's weather, and who finished the biscuits.", "tags": ["knowledge"], "naturalElements": ["light", "shadow"]},
+  {"id": "enchantment", "name": "Enchantment", "description": "The gentle art of persuasion. It cheers up customers, settles geese, and has never once worked on a cat.", "tags": ["mind", "control"], "naturalElements": ["air", "life"]},
+  {"id": "evocation", "name": "Evocation", "description": "Raw energy, pointed somewhere useful. It lights stoves, forges, and lanterns, and can do rather more if asked.", "tags": ["energy", "damage", "healing"], "naturalElements": ["fire", "water", "air", "light", "life"]},
+  {"id": "illusion", "name": "Illusion", "description": "Decorating with things that are not quite there. Lovely for shop windows and surprise parties.", "tags": ["mind"], "naturalElements": ["light", "shadow"]},
+  {"id": "necromancy", "name": "Necromancy", "description": "Looking after what comes after. It tends graves, keeps the pantry from spoiling, and chats with polite ghosts.", "tags": ["damage", "summon"], "naturalElements": ["death", "shadow", "life"]},
+  {"id": "transmutation", "name": "Transmutation", "description": "Changing one thing into a slightly better thing. Mending, reshaping, and turning leftovers into supper.", "tags": ["transform"], "naturalElements": ["earth", "air", "fire", "water"]}
 ]

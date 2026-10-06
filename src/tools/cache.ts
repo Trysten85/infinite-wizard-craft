@@ -2,9 +2,16 @@
 //   npm run cache -- list
 //   npm run cache -- delete fire+mud
 //   npm run cache -- calls
-import { existsSync } from "node:fs";
+//   npm run cache -- revoice     rewrite every cached description in the current voice guide
+import { copyFileSync, existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { z } from "zod";
+import { loadBlocklist } from "../server/blocklist";
+import { loadGameData } from "../server/gameData";
+import { generateValidated, GenerationError } from "../server/llm/generate";
+import { createOllamaClient } from "../server/llm/ollama";
 import { openStore } from "../server/store";
+import { createVoiceCheck } from "../server/voice";
 
 const dbPath = join(process.cwd(), "var/game.db");
 if (!existsSync(dbPath)) {
@@ -38,7 +45,54 @@ if (command === "list") {
         (call.error ? `  ${call.error}` : ""),
     );
   }
+} else if (command === "revoice") {
+  // Names, tags, and recipes stay exactly as they are. Only the wording changes.
+  const root = process.cwd();
+  // A new backup each run, so an earlier one is never overwritten.
+  const backup = join(root, `var/game.before-revoice-${new Date().toISOString().replace(/[:.]/g, "-")}.db`);
+  copyFileSync(dbPath, backup);
+  const data = loadGameData(root);
+  const blocklist = loadBlocklist(join(root, "Blocklist.md"));
+  const voice = readFileSync(join(root, "prompts/voice.md"), "utf8");
+  const voiceCheck = createVoiceCheck(voice);
+  const client = createOllamaClient({
+    baseUrl: process.env.OLLAMA_URL ?? "http://192.168.56.1:11434",
+    model: process.env.OLLAMA_MODEL ?? "gemma3:12b",
+  });
+  const nameOf = (id: string) => data.entries.get(id)?.name ?? store.getEntry(id)?.name ?? id;
+  const madeFrom = new Map(store.listCombos().map((combo) => [combo.resultId, `${nameOf(combo.a)} + ${nameOf(combo.b)}`]));
+  for (const entry of store.listEntries()) {
+    try {
+      const { description } = await generateValidated(client, store.logModelCall, {
+        purpose: "revoice",
+        system: [
+          voice.trim(),
+          "",
+          "Rewrite the description of one thing from a crafting game in the voice above.",
+          "One or two short, plain sentences, with a small dry joke in the last few words if one fits.",
+          "Keep what the thing is. Do not list its ingredients, do not start with its name, and do not use digits.",
+          "The sample lines in the guide show tone only. Never reuse their wording.",
+        ].join("\n"),
+        prompt: `Name: ${entry.name}\nMade from: ${madeFrom.get(entry.id) ?? "unknown"}\nOld description: ${entry.description}`,
+        schema: z.strictObject({ description: z.string().min(1).max(240) }),
+        reject: (value) =>
+          /[0-9!]/.test(value.description)
+            ? "The description must not contain digits or exclamation marks."
+            : blocklist.find(value.description).length > 0
+              ? "The description uses a proper name. Rewrite it without naming any person, place, or group."
+              : voiceCheck(value.description, entry.name),
+        maxAttempts: 3,
+        temperature: data.balance.generation.temperature,
+      });
+      store.setEntryDescription(entry.id, description);
+      console.log(`${entry.name}\n    was: ${entry.description}\n    now: ${description}`);
+    } catch (err) {
+      if (!(err instanceof GenerationError)) throw err;
+      console.log(`${entry.name}: left as it was (the model's rewrites kept failing the checks)`);
+    }
+  }
+  console.log(`\nThe previous cache was saved to ${backup}`);
 } else {
-  console.log("Usage: npm run cache -- list | delete <key> | calls");
+  console.log("Usage: npm run cache -- list | delete <key> | calls | revoice");
 }
 store.close();

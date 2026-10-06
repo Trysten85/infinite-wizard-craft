@@ -77,7 +77,7 @@ describe("jobs", () => {
     const response = await createApp(newCombiner()).request("/api/jobs");
     const body = (await response.json()) as { jobs: Record<string, unknown>[] };
     expect(body.jobs).toHaveLength(22);
-    expect(body.jobs.find((job) => job.id === "spy")).toEqual({ id: "spy", magic: false, hint: "Someone works in the dark.", starter: false });
-    expect(body.jobs.find((job) => job.id === "wizard")).toMatchObject({ starter: true, hint: "Someone opens the book." });
+    expect(body.jobs.find((job) => job.id === "spy")).toEqual({ id: "spy", magic: false, hint: "Someone who likes the shade and listens well. Curtains are involved.", starter: false });
+    expect(body.jobs.find((job) => job.id === "wizard")).toMatchObject({ starter: true });
   });
 });

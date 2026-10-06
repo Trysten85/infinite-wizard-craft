@@ -151,4 +151,5 @@ npm run srd -- download          # re-fetch the pinned source file
 npm run cache -- list            # every cached combo and what it made
 npm run cache -- delete fire+mud # delete one; also removes anything built from it
 npm run cache -- calls           # recent model calls with tokens and latency
+npm run cache -- revoice         # rewrite cached descriptions in the current voice (names stay; a backup is kept)
 ```
