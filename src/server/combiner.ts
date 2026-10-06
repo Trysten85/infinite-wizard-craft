@@ -135,7 +135,7 @@ export function createCombiner(deps: {
 
   // Every job, for the journal. An undiscovered job shows only its hint.
   function listJobs() {
-    return [...data.jobs.values()].map((job) => ({ id: job.id, magic: job.magic, hint: job.hint }));
+    return [...data.jobs.values()].map((job) => ({ id: job.id, magic: job.magic, hint: job.hint, starter: job.starter ?? false }));
   }
 
   return { combine, listDiscovered, listJobs };

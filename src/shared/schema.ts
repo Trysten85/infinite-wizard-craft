@@ -58,6 +58,10 @@ export const jobSchema = z.strictObject({
   // A magic job cannot be reached without a school or a focus somewhere in its recipe chain.
   magic: z.boolean(),
   inputs: z.tuple([idSchema, idSchema]),
+  // The job is also made by the first input + any spell in play that carries this tag.
+  orAnySpellTagged: z.string().optional(),
+  // The job the first job quest points the player at.
+  starter: z.boolean().optional(),
   description: z.string().min(1),
   // Shown in place of the job while it is still undiscovered.
   hint: z.string().min(1),

@@ -263,6 +263,11 @@ export function buildGameData(raw: {
   }
   for (const job of jobs) {
     recipes.push({ inputs: job.inputs, result: job.id, needs: [] });
+    if (job.orAnySpellTagged) {
+      if (!tagMap.has(job.orAnySpellTagged)) problems.push(`job "${job.id}" names unknown tag "${job.orAnySpellTagged}"`);
+      const others = spellEntries.filter((entry) => entry.tags.includes(job.orAnySpellTagged!) && entry.id !== job.inputs[1]);
+      for (const spell of others) recipes.push({ inputs: [job.inputs[0], spell.id], result: job.id, needs: [] });
+    }
     for (const tag of job.wantedTags) {
       if (!tagMap.has(tag)) problems.push(`job "${job.id}" wants unknown tag "${tag}"`);
     }

@@ -62,8 +62,10 @@ Jobs are in `data/jobs.json`. Each is discovered by combining its two `inputs`, 
 - A mundane job is a Person plus a tool, place, or material (Person + Forge = Blacksmith).
 - A magic job needs a school or a focus somewhere in its chain (Blacksmith + Spellbook = Runesmith).
 - `hint` is what the journal shows while a job is undiscovered. `GET /api/jobs` returns
-  `{ jobs: [{ id, magic, hint }] }` for every job; a discovered job also appears among the
+  `{ jobs: [{ id, magic, hint, starter }] }` for every job. `starter` is true for the job the
+  first job quest should point at (Wizard); a discovered job also appears among the
   player's entries with kind `job`.
+- `orAnySpellTagged` adds recipes: a Healer is a Herbalist plus any healing spell in play.
 - `wantedTags` is for score, which is not built yet.
 - A job combined with anything that has no hand-written recipe returns `no-result`.
 

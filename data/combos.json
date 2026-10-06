@@ -55,5 +55,6 @@
   {"inputs": ["fire", "iron"], "result": "forge", "logic": "A fire kept for iron"},
   {"inputs": ["tree", "mud"], "result": "herb", "logic": "What grows low in wet ground"},
   {"inputs": ["tree", "animal"], "result": "wilds", "logic": "Trees and beasts left alone"},
-  {"inputs": ["gold", "crystal"], "result": "crown", "logic": "Gold set with stones"}
+  {"inputs": ["gold", "crystal"], "result": "crown", "logic": "Gold set with stones"},
+  {"inputs": ["herb", "steam"], "result": "tea", "logic": "Leaves in hot water"}
 ]

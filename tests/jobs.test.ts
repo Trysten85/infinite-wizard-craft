@@ -17,10 +17,11 @@ function newCombiner() {
 
 describe("jobs", () => {
   it("are all entries of kind job, mundane and magic", () => {
-    expect(jobs).toHaveLength(18);
-    expect(jobs.filter((job) => job.magic)).toHaveLength(9);
+    expect(jobs).toHaveLength(22);
+    expect(jobs.filter((job) => job.magic)).toHaveLength(12);
+    expect(data.jobs.has("sorcerer")).toBe(false);
     for (const job of jobs) expect(data.entries.get(job.id), job.id).toMatchObject({ kind: "job", name: job.name });
-    for (const id of ["alchemist", "blacksmith", "runesmith", "spy", "court-mage", "hermit-wizard"]) expect(data.jobs.has(id), id).toBe(true);
+    for (const id of ["alchemist", "blacksmith", "runesmith", "spy", "court-mage", "hermit-wizard", "healer", "professor", "magical-scholar", "tea-shop-owner", "back-room-apothecary"]) expect(data.jobs.has(id), id).toBe(true);
   });
 
   // The reverse check: work each job back to the starting elements, then play that exact path
@@ -48,6 +49,18 @@ describe("jobs", () => {
     expect(buildPath(data, "court-mage").map((step) => step.result)).toEqual(expect.arrayContaining(["wizard", "crown"]));
   });
 
+  it("make a healer from a herbalist and any healing spell in play", () => {
+    const makesHealer = [...data.combos.values()].filter((recipe) => recipe.result === "healer");
+    expect(makesHealer.map((recipe) => recipe.inputs)).toEqual(
+      expect.arrayContaining([["herbalist", "spell-spare-the-dying"], ["herbalist", "spell-false-life"]]),
+    );
+    for (const recipe of makesHealer) expect(data.entries.get(recipe.inputs[1])!.tags, recipe.inputs[1]).toContain("healing");
+  });
+
+  it("mark Wizard, and only Wizard, as the job for the first job quest", () => {
+    expect(jobs.filter((job) => job.starter).map((job) => job.id)).toEqual(["wizard"]);
+  });
+
   it("do not combine with anything that has no hand-written recipe, and never call the model", async () => {
     const combiner = newCombiner();
     for (const step of buildPath(data, "blacksmith")) await combiner.combine("tester", ...step.inputs);
@@ -63,7 +76,8 @@ describe("jobs", () => {
   it("are listed for the journal with a hint and no name", async () => {
     const response = await createApp(newCombiner()).request("/api/jobs");
     const body = (await response.json()) as { jobs: Record<string, unknown>[] };
-    expect(body.jobs).toHaveLength(18);
-    expect(body.jobs.find((job) => job.id === "spy")).toEqual({ id: "spy", magic: false, hint: "Someone works in the dark." });
+    expect(body.jobs).toHaveLength(22);
+    expect(body.jobs.find((job) => job.id === "spy")).toEqual({ id: "spy", magic: false, hint: "Someone works in the dark.", starter: false });
+    expect(body.jobs.find((job) => job.id === "wizard")).toMatchObject({ starter: true, hint: "Someone opens the book." });
   });
 });

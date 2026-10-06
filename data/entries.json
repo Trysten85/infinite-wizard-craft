@@ -36,5 +36,6 @@
   {"id": "herb", "name": "Herb", "kind": "material", "description": "What grows low where the ground stays wet. Bitter, mostly, and worth more dried.", "tags": ["plant", "reagent"], "affinity": ["earth", "life"], "tier": 2, "source": "authored"},
   {"id": "wilds", "name": "Wilds", "kind": "material", "description": "Where the trees and the beasts are left to it. No roads, no tithes, no witnesses.", "tags": ["plant", "animal"], "affinity": ["life", "earth"], "tier": 2, "source": "authored"},
   {"id": "crown", "name": "Crown", "kind": "material", "description": "Gold set with stones, heavier than it looks. Everyone near it stands very straight.", "tags": ["metal", "court"], "affinity": ["earth", "light"], "tier": 2, "source": "authored"},
+  {"id": "tea", "name": "Tea", "kind": "material", "description": "Dried leaf and hot water. The cheapest comfort in the city, and the only one not taxed yet.", "tags": ["plant", "liquid"], "affinity": ["earth", "life", "water"], "tier": 2, "source": "authored"},
   {"id": "spellbook", "name": "Spellbook", "kind": "focus", "description": "A tome-type focus. Pages that hold a working still.", "tags": ["plant"], "affinity": ["light"], "tier": 1, "source": "authored"}
 ]

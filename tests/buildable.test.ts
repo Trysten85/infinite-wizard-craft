@@ -69,13 +69,13 @@ describe("every entry has a buildable path", () => {
   });
 
   it("reports what is stranded when a path is broken", async () => {
-    // Without the Spellbook there is no focus, so no spell can be shaped. (Jobs that are made
-    // from the Spellbook or from a wizard are left out too, since they could not load without it.)
+    // Without the Spellbook there is no focus, so no spell can be shaped. (Magic jobs are left
+    // out too: several are made from the Spellbook, so the data could not load without it.)
     const broken = buildGameData({
       ...files,
       combos: files.combos.filter((combo) => combo.result !== "spellbook"),
       entries: files.entries.filter((entry) => entry.id !== "spellbook"),
-      jobs: files.jobs.filter((job) => !job.inputs.includes("spellbook") && !job.inputs.includes("wizard")),
+      jobs: files.jobs.filter((job) => !job.magic),
     });
     const { unbuildable } = await playEverything(broken);
     expect(unbuildable.length).toBeGreaterThan(0);
