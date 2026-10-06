@@ -19,7 +19,7 @@ Override the model or address with `OLLAMA_MODEL` and `OLLAMA_URL`.
 
 | Path | What |
 |---|---|
-| `data/` | Game data: entries, combos, schools, tag vocabulary |
+| `data/` | Game data: entries, combos, schools, tag vocabulary (design notes in `Tag Guide.md`) |
 | `config/balance.json` | Every balance number |
 | `prompts/voice.md` | Voice guide sent with every model call (placeholder until Phase 0) |
 | `src/shared/schema.ts` | Schemas for data files and model output |
@@ -27,6 +27,17 @@ Override the model or address with `OLLAMA_MODEL` and `OLLAMA_URL`.
 | `src/server/store.ts` | SQLite: combo cache, discoveries, model call log (`var/game.db`) |
 | `src/server/llm/` | The one model interface, the Ollama client, and a fake for tests |
 | `web/` | React page |
+
+## Tag review
+
+Tags come from the closed list in `data/tags.json`. The model can only pick from it.
+
+```
+npm run tags                          # entries with no tags, a model hint, or retired tags
+npm run tags -- set mist utility,area # set a generated entry's tags
+```
+
+Hand-written entries are retagged by editing `data/entries.json`.
 
 ## Cache tool
 

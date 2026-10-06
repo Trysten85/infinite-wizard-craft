@@ -22,7 +22,7 @@ const generate = createComboGenerator({
   client,
   log: store.logModelCall,
   voice: readFileSync(join(root, "prompts/voice.md"), "utf8"),
-  tags: data.tags,
+  tags: data.tags.values(),
   balance: data.balance,
 });
 const app = createApp(createCombiner({ data, store, generate }));

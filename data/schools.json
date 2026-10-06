@@ -1,10 +1,10 @@
 [
-  { "id": "abjuration", "name": "Abjuration", "description": "Protective magic: wards, blocking, banishing, countering other magic.", "tags": ["protection", "ward", "counter"] },
-  { "id": "conjuration", "name": "Conjuration", "description": "Summoning creatures, creating objects, teleportation.", "tags": ["summon", "create", "teleport"] },
-  { "id": "divination", "name": "Divination", "description": "Revealing information, scrying, foresight.", "tags": ["knowledge", "scrying", "foresight"] },
-  { "id": "enchantment", "name": "Enchantment", "description": "Influencing minds, charming, compelling behavior and emotions.", "tags": ["mind", "charm", "compel"] },
-  { "id": "evocation", "name": "Evocation", "description": "Channeling raw energy for destructive effects or healing.", "tags": ["energy", "damage", "healing"] },
-  { "id": "illusion", "name": "Illusion", "description": "Deceiving the senses or mind, phantasms, altered perception.", "tags": ["deception", "phantasm", "perception"] },
-  { "id": "necromancy", "name": "Necromancy", "description": "Manipulating life and death energies, harming undead, raising the dead.", "tags": ["life", "death", "undead"] },
-  { "id": "transmutation", "name": "Transmutation", "description": "Physically altering the properties, form, or matter of creatures and objects.", "tags": ["change", "form", "matter"] }
+  {"id": "abjuration", "name": "Abjuration", "description": "Protective magic: wards, blocking, banishing, countering other magic.", "tags": ["protection"]},
+  {"id": "conjuration", "name": "Conjuration", "description": "Summoning creatures, creating objects, teleportation.", "tags": ["summon"]},
+  {"id": "divination", "name": "Divination", "description": "Revealing information, scrying, foresight.", "tags": ["knowledge"]},
+  {"id": "enchantment", "name": "Enchantment", "description": "Influencing minds, charming, compelling behavior and emotions.", "tags": ["mind", "control"]},
+  {"id": "evocation", "name": "Evocation", "description": "Channeling raw energy for destructive effects or healing.", "tags": ["energy", "damage", "healing"]},
+  {"id": "illusion", "name": "Illusion", "description": "Deceiving the senses or mind, phantasms, altered perception.", "tags": ["mind"]},
+  {"id": "necromancy", "name": "Necromancy", "description": "Manipulating life and death energies, harming undead, raising the dead.", "tags": ["damage", "summon"]},
+  {"id": "transmutation", "name": "Transmutation", "description": "Physically altering the properties, form, or matter of creatures and objects.", "tags": ["transform"]}
 ]

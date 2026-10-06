@@ -16,7 +16,7 @@ function generatorOffering(...drafts: ComboDraft[]) {
   return vi.fn(generate);
 }
 
-const ash: ComboDraft = { name: "Ash", description: "What the fire leaves.", tags: ["fire", "decay"] };
+const ash: ComboDraft = { name: "Ash", description: "What the fire leaves.", tags: ["mineral"], missingTag: null };
 
 let store: Store;
 beforeEach(() => {
@@ -89,20 +89,20 @@ describe("generated combos", () => {
   });
 
   it("does not let the model hand out a hand-written entry", async () => {
-    const death: ComboDraft = { name: "Death", description: "x", tags: ["death"] };
+    const death: ComboDraft = { name: "Death", description: "x", tags: [], missingTag: null };
     const combiner = createCombiner({ data, store, generate: generatorOffering(death, ash) });
     const { entry } = await combiner.combine("ann", "fire", "fire");
     expect(entry.id).toBe("ash");
   });
 
   it("rejects names that are not plain words", async () => {
-    const odd: ComboDraft = { name: "Ash 2.0 <b>", description: "x", tags: ["fire"] };
+    const odd: ComboDraft = { name: "Ash 2.0 <b>", description: "x", tags: [], missingTag: null };
     const combiner = createCombiner({ data, store, generate: generatorOffering(odd, ash) });
     expect((await combiner.combine("ann", "fire", "fire")).entry.id).toBe("ash");
   });
 
   it("reuses an existing generated entry when two combos make the same thing", async () => {
-    const rewritten: ComboDraft = { name: "Ash", description: "A different description.", tags: ["air"] };
+    const rewritten: ComboDraft = { name: "Ash", description: "A different description.", tags: ["toxic"], missingTag: null };
     const combiner = createCombiner({ data, store, generate: generatorOffering(ash) });
     const first = await combiner.combine("ann", "fire", "fire");
     const second = await createCombiner({ data, store, generate: generatorOffering(rewritten) }).combine(
@@ -111,6 +111,15 @@ describe("generated combos", () => {
       "water",
     );
     expect(second.entry).toEqual(first.entry);
+  });
+
+  it("keeps the model's missing-tag hint for review without making it a tag", async () => {
+    const mist: ComboDraft = { name: "Mist", description: "x", tags: [], missingTag: "vapor" };
+    const combiner = createCombiner({ data, store, generate: generatorOffering(mist) });
+    const { entry } = await combiner.combine("ann", "air", "air");
+    expect(entry.tags).toEqual([]);
+    expect(entry).not.toHaveProperty("missingTag");
+    expect(store.getTagSuggestion("mist")).toBe("vapor");
   });
 
   it("makes one model call when two players try the same new combo at once", async () => {

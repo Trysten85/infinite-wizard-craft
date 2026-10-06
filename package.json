@@ -8,7 +8,8 @@
     "dev:web": "vite",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "cache": "tsx src/tools/cache.ts"
+    "cache": "tsx src/tools/cache.ts",
+    "tags": "tsx src/tools/tags.ts"
   },
   "dependencies": {
     "@hono/node-server": "^2.1.3",

@@ -7,16 +7,18 @@ import {
   comboSchema,
   entrySchema,
   schoolSchema,
+  tagSchema,
   type Balance,
   type Combo,
   type Entry,
   type GameEntry,
   type School,
+  type Tag,
 } from "../shared/schema";
 
 export type GameData = {
   balance: Balance;
-  tags: string[];
+  tags: Map<string, Tag>;
   schools: Map<string, School>;
   entries: Map<string, GameEntry>;
   // comboKey -> result entry id
@@ -64,13 +66,15 @@ export function computeDepths(entries: Entry[], combos: Combo[], starting: strin
 
 export function buildGameData(raw: {
   balance: Balance;
-  tags: string[];
+  tags: Tag[];
   schools: School[];
   entries: Entry[];
   combos: Combo[];
 }): GameData {
   const { balance, tags, schools, entries, combos } = raw;
   const problems: string[] = [];
+  const tagMap = new Map(tags.map((tag) => [tag.id, tag]));
+  if (tagMap.size !== tags.length) problems.push("the tag vocabulary lists a tag twice");
   const entryIds = new Set<string>();
   const schoolIds = new Set(schools.map((s) => s.id));
   const elementIds = new Set(entries.filter((e) => e.kind === "element").map((e) => e.id));
@@ -79,12 +83,17 @@ export function buildGameData(raw: {
     if (entryIds.has(entry.id)) problems.push(`duplicate entry id "${entry.id}"`);
     entryIds.add(entry.id);
     for (const tag of entry.tags) {
-      if (!tags.includes(tag)) problems.push(`entry "${entry.id}" uses unknown tag "${tag}"`);
+      if (!tagMap.has(tag)) problems.push(`entry "${entry.id}" uses unknown tag "${tag}"`);
     }
     for (const affinity of entry.affinity) {
       if (!elementIds.has(affinity) && !schoolIds.has(affinity)) {
         problems.push(`entry "${entry.id}" has affinity "${affinity}", which is not an element or school`);
       }
+    }
+  }
+  for (const school of schools) {
+    for (const tag of school.tags) {
+      if (!tagMap.has(tag)) problems.push(`school "${school.id}" uses unknown tag "${tag}"`);
     }
   }
   for (const id of balance.startingEntries) {
@@ -107,13 +116,13 @@ export function buildGameData(raw: {
   for (const entry of entries) {
     entryMap.set(entry.id, { ...entry, depth: depths.get(entry.id)!, xp: xpForTier(entry.tier, balance) });
   }
-  return { balance, tags, schools: new Map(schools.map((s) => [s.id, s])), entries: entryMap, combos: comboMap };
+  return { balance, tags: tagMap, schools: new Map(schools.map((s) => [s.id, s])), entries: entryMap, combos: comboMap };
 }
 
 export function loadGameData(rootDir: string): GameData {
   return buildGameData({
     balance: readJson(join(rootDir, "config/balance.json"), balanceSchema),
-    tags: readJson(join(rootDir, "data/tags.json"), z.array(z.string()).min(1)),
+    tags: readJson(join(rootDir, "data/tags.json"), z.array(tagSchema).min(1)),
     schools: readJson(join(rootDir, "data/schools.json"), z.array(schoolSchema)),
     entries: readJson(join(rootDir, "data/entries.json"), z.array(entrySchema)),
     combos: readJson(join(rootDir, "data/combos.json"), z.array(comboSchema)),

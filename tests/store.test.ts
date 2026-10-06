@@ -8,7 +8,7 @@ function generated(id: string): GameEntry {
     name: id,
     kind: "material",
     description: "x",
-    tags: ["fire"],
+    tags: ["mineral"],
     affinity: [],
     tier: 0,
     source: "generated",
@@ -49,6 +49,13 @@ describe("deleting a cached combo", () => {
     save("lye", "earth", "soap");
     expect(store.deleteCombo("fire+fire").sort()).toEqual(["ash", "lye", "soap"]);
     expect(store.listCombos()).toEqual([]);
+  });
+
+  it("removes the entry's tag review hint", () => {
+    store.saveGenerated("air+air", "air", "air", generated("mist"), "vapor");
+    expect(store.getTagSuggestion("mist")).toBe("vapor");
+    store.deleteCombo("air+air");
+    expect(store.getTagSuggestion("mist")).toBeUndefined();
   });
 
   it("does nothing for a key that is not cached", () => {

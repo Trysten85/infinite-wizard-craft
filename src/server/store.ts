@@ -31,6 +31,10 @@ export function openStore(path: string) {
       result_id TEXT NOT NULL,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
+    CREATE TABLE IF NOT EXISTS tag_reviews (
+      entry_id TEXT PRIMARY KEY,
+      suggestion TEXT NOT NULL
+    );
     CREATE TABLE IF NOT EXISTS discoveries (
       player TEXT NOT NULL,
       entry_id TEXT NOT NULL,
@@ -75,6 +79,7 @@ export function openStore(path: string) {
     if (deleted.changes === 0) return;
     removedEntries.push(resultId);
     db.prepare("DELETE FROM discoveries WHERE entry_id = ?").run(resultId);
+    db.prepare("DELETE FROM tag_reviews WHERE entry_id = ?").run(resultId);
     const dependents = db.prepare("SELECT key FROM combos WHERE a = ? OR b = ?").all(resultId, resultId);
     for (const dependent of dependents) removeCombo(dependent.key as string, removedEntries);
   }
@@ -91,11 +96,41 @@ export function openStore(path: string) {
     },
 
     // Saves a generated combo. An existing entry with the same id is kept, so its text never changes.
-    saveGenerated(key: string, a: string, b: string, entry: GameEntry): void {
+    // `missingTag` is the model's hint that the vocabulary lacked a word; it is kept for human review.
+    saveGenerated(key: string, a: string, b: string, entry: GameEntry, missingTag?: string | null): void {
       transaction(() => {
-        db.prepare("INSERT OR IGNORE INTO entries (id, json) VALUES (?, ?)").run(entry.id, JSON.stringify(entry));
+        const inserted = db
+          .prepare("INSERT OR IGNORE INTO entries (id, json) VALUES (?, ?)")
+          .run(entry.id, JSON.stringify(entry));
+        if (inserted.changes === 1 && missingTag) {
+          db.prepare("INSERT INTO tag_reviews (entry_id, suggestion) VALUES (?, ?)").run(entry.id, missingTag);
+        }
         db.prepare("INSERT INTO combos (key, a, b, result_id) VALUES (?, ?, ?, ?)").run(key, a, b, entry.id);
       });
+    },
+
+    listEntries(): GameEntry[] {
+      return db
+        .prepare("SELECT json FROM entries ORDER BY rowid")
+        .all()
+        .map((row) => JSON.parse(row.json as string) as GameEntry);
+    },
+
+    getTagSuggestion(entryId: string): string | undefined {
+      const row = db.prepare("SELECT suggestion FROM tag_reviews WHERE entry_id = ?").get(entryId);
+      return row?.suggestion as string | undefined;
+    },
+
+    // Replaces a generated entry's tags after human review. Returns false if there is no such entry.
+    setEntryTags(id: string, tags: string[]): boolean {
+      const row = db.prepare("SELECT json FROM entries WHERE id = ?").get(id);
+      if (!row) return false;
+      const entry = { ...(JSON.parse(row.json as string) as GameEntry), tags };
+      transaction(() => {
+        db.prepare("UPDATE entries SET json = ? WHERE id = ?").run(JSON.stringify(entry), id);
+        db.prepare("DELETE FROM tag_reviews WHERE entry_id = ?").run(id);
+      });
+      return true;
     },
 
     listCombos(): CachedCombo[] {

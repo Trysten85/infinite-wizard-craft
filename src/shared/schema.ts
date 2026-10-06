@@ -2,13 +2,25 @@ import { z } from "zod";
 
 export const idSchema = z.string().regex(/^[a-z0-9]+(-[a-z0-9]+)*$/, "ids are lowercase-with-dashes");
 
+export const MAX_TAGS = 5;
+
+// One word of the closed tag vocabulary. Author-only tags are never offered to the model.
+export const tagSchema = z.strictObject({
+  id: z.string().regex(/^[a-z]+$/, "tags are lowercase single words"),
+  group: z.enum(["effect", "form", "material", "craft", "society"]),
+  meaning: z.string().min(1),
+  assignedBy: z.enum(["model", "author"]),
+});
+export type Tag = z.infer<typeof tagSchema>;
+
 // An entry as written in data/entries.json: the shared fields from the design doc.
 export const entrySchema = z.strictObject({
   id: idSchema,
   name: z.string().min(1),
   kind: z.enum(["element", "material", "focus"]),
   description: z.string().min(1),
-  tags: z.array(z.string()).min(1),
+  // An entry with no tags is allowed. It shows up in `npm run tags` for review.
+  tags: z.array(z.string()).max(MAX_TAGS),
   affinity: z.array(idSchema),
   tier: z.number().int().min(0),
   source: z.enum(["start", "authored", "generated"]),
@@ -22,7 +34,7 @@ export const schoolSchema = z.strictObject({
   id: idSchema,
   name: z.string().min(1),
   description: z.string().min(1),
-  tags: z.array(z.string()).min(1),
+  tags: z.array(z.string()),
 });
 export type School = z.infer<typeof schoolSchema>;
 
@@ -45,14 +57,17 @@ export const balanceSchema = z.strictObject({
 export type Balance = z.infer<typeof balanceSchema>;
 
 // What the model is allowed to write for a new combo. Everything else is filled in by code.
-export function comboDraftSchema(tags: string[]) {
+export function comboDraftSchema(tags: Iterable<Tag>) {
+  const allowed = [...tags].filter((tag) => tag.assignedBy === "model").map((tag) => tag.id);
   return z.strictObject({
     name: z.string().min(1).max(40),
     description: z.string().min(1).max(240),
-    tags: z.array(z.enum(tags as [string, ...string[]])).min(1).max(4),
+    tags: z.array(z.enum(allowed as [string, ...string[]])).max(MAX_TAGS),
+    // One word for what the vocabulary lacked. A hint for human review, never used as a tag.
+    missingTag: z.string().max(20).nullable(),
   });
 }
-export type ComboDraft = { name: string; description: string; tags: string[] };
+export type ComboDraft = { name: string; description: string; tags: string[]; missingTag: string | null };
 
 export type CombineResult = {
   entry: GameEntry;

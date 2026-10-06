@@ -60,7 +60,7 @@ export function createCombiner(deps: { data: GameData; store: Store; generate: C
         xp: xpForTier(tier, data.balance),
       };
     }
-    store.saveGenerated(key, a.id, b.id, entry);
+    store.saveGenerated(key, a.id, b.id, entry, draft.missingTag);
     return store.getEntry(id)!;
   }
 

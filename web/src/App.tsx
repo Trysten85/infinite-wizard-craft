@@ -148,7 +148,8 @@ function ResultCard({ result }: { result: CombineResult }) {
       <h2>{entry.name}</h2>
       <p>{entry.description}</p>
       <p className="meta">
-        {entry.kind} · tier {entry.tier} · depth {entry.depth} · {entry.tags.join(", ")}
+        {entry.kind} · tier {entry.tier} · depth {entry.depth}
+        {entry.tags.length > 0 && ` · ${entry.tags.join(", ")}`}
         {origin === "generated" && " · newly written by the model"}
       </p>
     </section>

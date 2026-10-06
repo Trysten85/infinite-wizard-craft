@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildGameData, loadGameData, tierForDepth, xpForTier } from "../src/server/gameData";
-import type { Balance, Entry } from "../src/shared/schema";
+import { entrySchema, type Balance, type Entry, type Tag } from "../src/shared/schema";
 
 const balance: Balance = {
   startingEntries: ["fire", "air"],
@@ -9,13 +9,15 @@ const balance: Balance = {
   generation: { maxAttempts: 3, temperature: 0.8 },
 };
 
+const energy: Tag = { id: "energy", group: "form", meaning: "x", assignedBy: "model" };
+
 function entry(id: string, overrides: Partial<Entry> = {}): Entry {
   return {
     id,
     name: id,
     kind: "element",
     description: "x",
-    tags: ["fire"],
+    tags: ["energy"],
     affinity: [],
     tier: 0,
     source: "authored",
@@ -48,7 +50,7 @@ describe("the real data files", () => {
 describe("buildGameData", () => {
   const base = {
     balance,
-    tags: ["fire"],
+    tags: [energy],
     schools: [],
     entries: [entry("fire"), entry("air"), entry("light")],
     combos: [{ inputs: ["fire", "air"] as [string, string], result: "light" }],
@@ -85,6 +87,17 @@ describe("buildGameData", () => {
     expect(() =>
       buildGameData({ ...base, entries: [entry("fire", { tags: ["sparkly"] }), entry("air"), entry("light")] }),
     ).toThrow(/unknown tag "sparkly"/);
+  });
+
+  it("rejects a school with a tag outside the vocabulary", () => {
+    const school = { id: "evocation", name: "Evocation", description: "x", tags: ["ward"] };
+    expect(() => buildGameData({ ...base, schools: [school] })).toThrow(/school "evocation" uses unknown tag "ward"/);
+  });
+
+  it("allows an entry with no tags but not more than five", () => {
+    expect(entrySchema.safeParse(entry("fire", { tags: [] })).success).toBe(true);
+    const six = ["a", "b", "c", "d", "e", "f"];
+    expect(entrySchema.safeParse(entry("fire", { tags: six })).success).toBe(false);
   });
 
   it("rejects an entry that cannot be reached from the starting set", () => {
