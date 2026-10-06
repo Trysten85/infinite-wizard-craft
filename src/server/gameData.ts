@@ -290,8 +290,9 @@ export function buildGameData(raw: {
   };
 }
 
-export function loadGameData(rootDir: string): GameData {
-  return buildGameData({
+// The data files as written, validated but not yet assembled into a game.
+export function readGameFiles(rootDir: string) {
+  return {
     balance: readJson(join(rootDir, "config/balance.json"), balanceSchema),
     tags: readJson(join(rootDir, "data/tags.json"), z.array(tagSchema).min(1)),
     schools: readJson(join(rootDir, "data/schools.json"), z.array(schoolSchema)),
@@ -301,5 +302,9 @@ export function loadGameData(rootDir: string): GameData {
     ladders: readJson(join(rootDir, "data/ladders.json"), z.array(ladderSchema)),
     spellRecipes: readOptional(join(rootDir, SPELL_RECIPES_FILE), z.array(spellRecipeSchema)),
     spellMaterials: readOptional(join(rootDir, SPELL_MATERIALS_FILE), z.array(spellMaterialSchema)),
-  });
+  };
+}
+
+export function loadGameData(rootDir: string): GameData {
+  return buildGameData(readGameFiles(rootDir));
 }
