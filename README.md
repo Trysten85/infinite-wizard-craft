@@ -58,7 +58,7 @@ Override the model or address with `OLLAMA_MODEL` and `OLLAMA_URL`.
 ## Drafting spell recipes
 
 Spells outside the hand-written ladders are made by rule: **a spell of the same school one tier
-lower + the spell's key**. Keys and any new materials are drafted by `npm run craft` and are not
+lower + the spell's key** (for a cantrip, the school itself + the key). Keys and any new materials are drafted by `npm run craft` and are not
 in the game until approved.
 
 ```

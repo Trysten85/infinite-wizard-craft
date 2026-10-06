@@ -249,12 +249,17 @@ export function buildGameData(raw: {
   }
 
   // A drafted spell recipe: any spell of the school one tier lower + the spell's key.
+  // A cantrip has no lower spell, so it is the school itself + the key.
   for (const row of liveRecipes) {
     const spell = spellsById.get(row.spell);
     if (!spell) continue;
     const key = entryById.get(row.key!);
     if (key?.kind !== "element" && key?.kind !== "material") {
       problems.push(`spell recipe "${row.spell}": the key must be an element or a material`);
+      continue;
+    }
+    if (spell.tier === 0) {
+      recipes.push({ inputs: [spell.school, key.id], result: spellEntryId(spell.id), needs: [] });
       continue;
     }
     const lower = spellEntries.filter((entry) => entry.school === spell.school && entry.tier === spell.tier - 1);

@@ -154,6 +154,12 @@ describe("loading drafted rows", () => {
     expect(built.combos.get(comboKey("spell-ray-of-frost", "air"))!.result).toBe("spell-thunderwave");
   });
 
+  it("makes an approved cantrip from its school plus its key", () => {
+    const built = build([recipe("thaumaturgy", "sound")]);
+    expect(built.combos.get(comboKey("transmutation", "sound"))!.result).toBe("spell-thaumaturgy");
+    expect(built.entries.get("spell-thaumaturgy")).toMatchObject({ kind: "spell", tier: 0 });
+  });
+
   it("makes an approved material a real entry, with depth and tier worked out by code", () => {
     const built = build([], [material()]);
     expect(built.entries.get("mica")).toMatchObject({ kind: "material", depth: 3, tier: 1, affinity: ["earth", "air", "shadow"] });
