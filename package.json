@@ -12,7 +12,8 @@
     "tags": "tsx src/tools/tags.ts",
     "srd": "tsx src/tools/srd.ts",
     "blocklist": "tsx src/tools/blocklist.ts",
-    "craft": "tsx src/tools/craft.ts"
+    "craft": "tsx src/tools/craft.ts",
+    "path": "tsx src/tools/path.ts"
   },
   "dependencies": {
     "@hono/node-server": "^2.1.3",

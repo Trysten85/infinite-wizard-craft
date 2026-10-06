@@ -6,6 +6,7 @@ import {
   comboKey,
   comboSchema,
   entrySchema,
+  jobSchema,
   ladderSchema,
   schoolSchema,
   spellEntryId,
@@ -17,6 +18,7 @@ import {
   type Combo,
   type Entry,
   type GameEntry,
+  type Job,
   type Ladder,
   type School,
   type Spell,
@@ -31,6 +33,7 @@ export type GameData = {
   schools: Map<string, School>;
   entries: Map<string, GameEntry>;
   spells: Map<string, Spell>;
+  jobs: Map<string, Job>;
   // comboKey -> what the pair makes, and anything else the player must have discovered first
   combos: Map<string, Recipe>;
 };
@@ -97,8 +100,9 @@ export function buildGameData(raw: {
   ladders?: Ladder[];
   spellRecipes?: SpellRecipe[];
   spellMaterials?: SpellMaterial[];
+  jobs?: Job[];
 }): GameData {
-  const { balance, tags, schools, combos, spells = [], ladders = [], spellRecipes = [], spellMaterials = [] } = raw;
+  const { balance, tags, schools, combos, spells = [], ladders = [], spellRecipes = [], spellMaterials = [], jobs = [] } = raw;
   const problems: string[] = [];
   const spellsById = new Map(spells.map((spell) => [spell.id, spell]));
 
@@ -121,7 +125,17 @@ export function buildGameData(raw: {
       source: "authored",
     };
   });
-  const derivedTier = new Set(materialEntries.map((entry) => entry.id));
+  const jobEntries: Entry[] = jobs.map((job) => ({
+    id: job.id,
+    name: job.name,
+    kind: "job",
+    description: job.description,
+    tags: job.tags,
+    affinity: [],
+    tier: 0,
+    source: "authored",
+  }));
+  const derivedTier = new Set([...materialEntries, ...jobEntries].map((entry) => entry.id));
   const keyIds = new Set([...raw.entries, ...materialEntries].map((entry) => entry.id));
   const draftIds = new Set(spellMaterials.map((row) => row.id));
   const liveRecipes = spellRecipes.filter((row) => {
@@ -172,7 +186,7 @@ export function buildGameData(raw: {
       source: spell.source,
     });
   }
-  const entries = [...raw.entries, ...materialEntries, ...schoolEntries, ...spellEntries];
+  const entries = [...raw.entries, ...materialEntries, ...schoolEntries, ...spellEntries, ...jobEntries];
   const tagMap = new Map(tags.map((tag) => [tag.id, tag]));
   if (tagMap.size !== tags.length) problems.push("the tag vocabulary lists a tag twice");
   const entryIds = new Set<string>();
@@ -247,6 +261,12 @@ export function buildGameData(raw: {
   for (const row of liveMaterials) {
     if (row.inputs) recipes.push({ inputs: row.inputs, result: row.id, needs: [] });
   }
+  for (const job of jobs) {
+    recipes.push({ inputs: job.inputs, result: job.id, needs: [] });
+    for (const tag of job.wantedTags) {
+      if (!tagMap.has(tag)) problems.push(`job "${job.id}" wants unknown tag "${tag}"`);
+    }
+  }
 
   // A drafted spell recipe: any spell of the school one tier lower + the spell's key.
   // A cantrip has no lower spell, so it is the school itself + the key.
@@ -291,6 +311,7 @@ export function buildGameData(raw: {
     schools: new Map(schools.map((s) => [s.id, s])),
     entries: entryMap,
     spells: spellMap,
+    jobs: new Map(jobs.map((job) => [job.id, job])),
     combos: comboMap,
   };
 }
@@ -307,6 +328,7 @@ export function readGameFiles(rootDir: string) {
     ladders: readJson(join(rootDir, "data/ladders.json"), z.array(ladderSchema)),
     spellRecipes: readOptional(join(rootDir, SPELL_RECIPES_FILE), z.array(spellRecipeSchema)),
     spellMaterials: readOptional(join(rootDir, SPELL_MATERIALS_FILE), z.array(spellMaterialSchema)),
+    jobs: readJson(join(rootDir, "data/jobs.json"), z.array(jobSchema)),
   };
 }
 

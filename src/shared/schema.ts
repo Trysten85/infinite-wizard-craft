@@ -17,7 +17,7 @@ export type Tag = z.infer<typeof tagSchema>;
 export const entrySchema = z.strictObject({
   id: idSchema,
   name: z.string().min(1),
-  kind: z.enum(["element", "material", "focus", "school", "spell"]),
+  kind: z.enum(["element", "material", "focus", "school", "spell", "job"]),
   description: z.string().min(1),
   // An entry with no tags is allowed. It shows up in `npm run tags` for review.
   tags: z.array(z.string()).max(MAX_TAGS),
@@ -50,6 +50,22 @@ export const ladderSchema = z.strictObject({
   needs: z.array(idSchema),
 });
 export type Ladder = z.infer<typeof ladderSchema>;
+
+// A job is discovered like anything else: by combining the two things in `inputs`.
+export const jobSchema = z.strictObject({
+  id: idSchema,
+  name: z.string().min(1),
+  // A magic job cannot be reached without a school or a focus somewhere in its recipe chain.
+  magic: z.boolean(),
+  inputs: z.tuple([idSchema, idSchema]),
+  description: z.string().min(1),
+  // Shown in place of the job while it is still undiscovered.
+  hint: z.string().min(1),
+  tags: z.array(z.string()).max(MAX_TAGS),
+  // What a good build for this job has. Used for score, once score exists.
+  wantedTags: z.array(z.string()).min(1),
+});
+export type Job = z.infer<typeof jobSchema>;
 
 // Rows drafted by `npm run craft`. Only rows with status "ok" are live in the game.
 export const draftStatusSchema = z.enum(["draft", "ok", "review"]);

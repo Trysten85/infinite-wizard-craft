@@ -20,9 +20,10 @@ const NAME_PATTERN = /^[A-Za-z][A-Za-z '’-]*$/;
 
 export type Combiner = ReturnType<typeof createCombiner>;
 
-// Schools and spells belong to the magic layer, which the material generator must not write for.
-function isMagic(entry: GameEntry): boolean {
-  return entry.kind === "school" || entry.kind === "spell";
+// Schools, spells, and jobs only combine by hand-written recipes. The material generator must not
+// write for them: what a job makes from a material is crafting, which has its own rules later.
+function isAuthoredOnly(entry: GameEntry): boolean {
+  return entry.kind === "school" || entry.kind === "spell" || entry.kind === "job";
 }
 
 export function createCombiner(deps: {
@@ -112,7 +113,7 @@ export function createCombiner(deps: {
       const missing = recipe.needs.filter((id) => !known.has(id)).map((id) => getEntry(id)!.name);
       if (missing.length > 0) throw new RuleError(`${entry.name} needs: ${missing.join(", ")}.`, "missing-needs");
       origin = "authored";
-    } else if (isMagic(a) || isMagic(b)) {
+    } else if (isAuthoredOnly(a) || isAuthoredOnly(b)) {
       throw new RuleError("Nothing comes of it yet.", "no-result");
     } else if (cachedId) {
       entry = store.getEntry(cachedId)!;
@@ -132,5 +133,10 @@ export function createCombiner(deps: {
     return { entry, origin, firstDiscovery };
   }
 
-  return { combine, listDiscovered };
+  // Every job, for the journal. An undiscovered job shows only its hint.
+  function listJobs() {
+    return [...data.jobs.values()].map((job) => ({ id: job.id, magic: job.magic, hint: job.hint }));
+  }
+
+  return { combine, listDiscovered, listJobs };
 }

@@ -16,6 +16,8 @@ export function createApp(combiner: Combiner) {
     return c.json({ entries: combiner.listDiscovered(player.data) });
   });
 
+  app.get("/api/jobs", (c) => c.json({ jobs: combiner.listJobs() }));
+
   app.post("/api/players/:player/combine", async (c) => {
     const player = playerSchema.safeParse(c.req.param("player"));
     const body = combineBodySchema.safeParse(await c.req.json().catch(() => null));

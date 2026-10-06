@@ -35,7 +35,7 @@ Override the model or address with `OLLAMA_MODEL` and `OLLAMA_URL`.
 | `GET /api/players/:player` | `{ entries }`: everything the player has discovered |
 | `POST /api/players/:player/combine` with `{ a, b }` | `{ entry, origin, firstDiscovery }` |
 
-- Entries have a `kind`: `element`, `material`, `focus`, `school`, or `spell`.
+- Entries have a `kind`: `element`, `material`, `focus`, `school`, `spell`, or `job`.
 - Spell entries have ids prefixed `spell-` (the Light cantrip is `spell-light`, the element is `light`),
   a `school` field, and their elements in `affinity`. A school's `affinity` is its natural elements.
 - Errors return `{ error, code }`. `error` is a sentence that can be shown to the player.
@@ -54,6 +54,23 @@ Override the model or address with `OLLAMA_MODEL` and `OLLAMA_URL`.
 - School + a spell of that school one tier lower = the next spell in `data/ladders.json`,
   if the player has discovered every material in its `needs`.
 - Design notes are in `Magic School Patterns.md`.
+
+## Jobs
+
+Jobs are in `data/jobs.json`. Each is discovered by combining its two `inputs`, like anything else.
+
+- A mundane job is a Person plus a tool, place, or material (Person + Forge = Blacksmith).
+- A magic job needs a school or a focus somewhere in its chain (Blacksmith + Spellbook = Runesmith).
+- `hint` is what the journal shows while a job is undiscovered. `GET /api/jobs` returns
+  `{ jobs: [{ id, magic, hint }] }` for every job; a discovered job also appears among the
+  player's entries with kind `job`.
+- `wantedTags` is for score, which is not built yet.
+- A job combined with anything that has no hand-written recipe returns `no-result`.
+
+```
+npm run path -- blacksmith    # how something is made, worked back to the starting elements
+npm run path -- jobs          # every job with the length of its chain
+```
 
 ## Drafting spell recipes
 

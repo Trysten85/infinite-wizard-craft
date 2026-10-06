@@ -52,7 +52,7 @@ describe("every entry has a buildable path", () => {
     const data = buildGameData(files);
     const { found } = await playEverything(data);
     const kinds = new Set([...found].map((id) => data.entries.get(id)!.kind));
-    expect([...kinds].sort()).toEqual(["element", "focus", "material", "school", "spell"]);
+    expect([...kinds].sort()).toEqual(["element", "focus", "job", "material", "school", "spell"]);
     for (const school of data.schools.keys()) expect(found.has(school), school).toBe(true);
   });
 
@@ -69,8 +69,14 @@ describe("every entry has a buildable path", () => {
   });
 
   it("reports what is stranded when a path is broken", async () => {
-    // Without the Spellbook recipe there is no focus, so no spell can be shaped.
-    const broken = buildGameData({ ...files, combos: files.combos.filter((combo) => combo.result !== "spellbook"), entries: files.entries.filter((entry) => entry.id !== "spellbook") });
+    // Without the Spellbook there is no focus, so no spell can be shaped. (Jobs that are made
+    // from the Spellbook or from a wizard are left out too, since they could not load without it.)
+    const broken = buildGameData({
+      ...files,
+      combos: files.combos.filter((combo) => combo.result !== "spellbook"),
+      entries: files.entries.filter((entry) => entry.id !== "spellbook"),
+      jobs: files.jobs.filter((job) => !job.inputs.includes("spellbook") && !job.inputs.includes("wizard")),
+    });
     const { unbuildable } = await playEverything(broken);
     expect(unbuildable.length).toBeGreaterThan(0);
     expect(unbuildable.join("\n")).toContain("Fire Bolt (spell-fire-bolt): You need a focus to shape a spell.");

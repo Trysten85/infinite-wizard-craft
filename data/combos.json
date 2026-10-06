@@ -50,5 +50,10 @@
   {"inputs": ["life", "necromancy"], "result": "spell-spare-the-dying", "logic": "Cantrip seed"},
   {"inputs": ["earth", "transmutation"], "result": "spell-mending", "logic": "Cantrip seed"},
   {"inputs": ["air", "transmutation"], "result": "spell-message", "logic": "Cantrip seed"},
-  {"inputs": ["fire", "transmutation"], "result": "spell-prestidigitation", "logic": "Cantrip seed"}
+  {"inputs": ["fire", "transmutation"], "result": "spell-prestidigitation", "logic": "Cantrip seed"},
+  {"inputs": ["mud", "life"], "result": "person", "logic": "Clay given breath"},
+  {"inputs": ["fire", "iron"], "result": "forge", "logic": "A fire kept for iron"},
+  {"inputs": ["tree", "mud"], "result": "herb", "logic": "What grows low in wet ground"},
+  {"inputs": ["tree", "animal"], "result": "wilds", "logic": "Trees and beasts left alone"},
+  {"inputs": ["gold", "crystal"], "result": "crown", "logic": "Gold set with stones"}
 ]

@@ -31,5 +31,10 @@
   {"id": "rotted-leaves", "name": "Rotted leaves", "kind": "material", "description": "Black mulch from the bottom of the heap. Sweet smell, wet hands.", "tags": ["plant", "toxic", "reagent"], "affinity": ["life", "death"], "tier": 2, "source": "authored"},
   {"id": "bone-dust", "name": "Bone dust", "kind": "material", "description": "Ground fine and pale. The miller does not say what went under the stone.", "tags": ["animal", "reagent"], "affinity": ["death", "earth"], "tier": 2, "source": "authored"},
   {"id": "bat-guano", "name": "Bat guano", "kind": "material", "description": "Scraped from cave floors by people paid too little. Rich, dry, and eager to burn.", "tags": ["animal", "reagent"], "affinity": ["air", "life"], "tier": 2, "source": "authored"},
+  {"id": "person", "name": "Person", "kind": "material", "description": "Clay that got up and started owing money.", "tags": [], "affinity": ["earth", "water", "life"], "tier": 1, "source": "authored"},
+  {"id": "forge", "name": "Forge", "kind": "material", "description": "A fire fed until iron gives in. It eats coal and forearms.", "tags": ["forging", "industrial"], "affinity": ["fire", "earth"], "tier": 1, "source": "authored"},
+  {"id": "herb", "name": "Herb", "kind": "material", "description": "What grows low where the ground stays wet. Bitter, mostly, and worth more dried.", "tags": ["plant", "reagent"], "affinity": ["earth", "life"], "tier": 2, "source": "authored"},
+  {"id": "wilds", "name": "Wilds", "kind": "material", "description": "Where the trees and the beasts are left to it. No roads, no tithes, no witnesses.", "tags": ["plant", "animal"], "affinity": ["life", "earth"], "tier": 2, "source": "authored"},
+  {"id": "crown", "name": "Crown", "kind": "material", "description": "Gold set with stones, heavier than it looks. Everyone near it stands very straight.", "tags": ["metal", "court"], "affinity": ["earth", "light"], "tier": 2, "source": "authored"},
   {"id": "spellbook", "name": "Spellbook", "kind": "focus", "description": "A tome-type focus. Pages that hold a working still.", "tags": ["plant"], "affinity": ["light"], "tier": 1, "source": "authored"}
 ]

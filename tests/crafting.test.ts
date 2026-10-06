@@ -22,6 +22,7 @@ function build(spellRecipes: SpellRecipe[], spellMaterials: SpellMaterial[] = []
     combos: read("data/combos.json"),
     spells: read("data/spells.json"),
     ladders: read("data/ladders.json"),
+    jobs: read("data/jobs.json"),
     spellRecipes,
     spellMaterials,
   });
