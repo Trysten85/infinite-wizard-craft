@@ -55,6 +55,29 @@ Override the model or address with `OLLAMA_MODEL` and `OLLAMA_URL`.
   if the player has discovered every material in its `needs`.
 - Design notes are in `Magic School Patterns.md`.
 
+## Drafting spell recipes
+
+Spells outside the hand-written ladders are made by rule: **a spell of the same school one tier
+lower + the spell's key**. Keys and any new materials are drafted by `npm run craft` and are not
+in the game until approved.
+
+```
+npm run craft -- status              # what is drafted, approved, and waiting
+npm run craft -- approve all         # approve every complete draft (rows marked "review" are skipped)
+npm run craft -- approve mica shatter  # approve single materials or spells by id
+npm run craft -- plan 4-5            # draft keys for more tiers (default 1-3)
+npm run craft -- materials           # ask the local model for recipes for new materials
+```
+
+| To change | Edit |
+|---|---|
+| A spell's key | `data/spell-recipes.json` (`note` says why the key was chosen) |
+| A new material's recipe, text, or tags | `data/spell-materials.json` |
+
+Set `status` to `ok` to make a row live, by hand or with `approve`. Re-running `plan` or
+`materials` never overwrites existing rows. Depth limits for new materials are
+`componentDepthByTier` in `config/balance.json`.
+
 ## Blocklist
 
 `Blocklist.md` lists proper nouns the model must never produce. It is not in git because it holds

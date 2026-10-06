@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { z } from "zod";
 import {
@@ -9,6 +9,8 @@ import {
   ladderSchema,
   schoolSchema,
   spellEntryId,
+  spellMaterialSchema,
+  spellRecipeSchema,
   spellSchema,
   tagSchema,
   type Balance,
@@ -18,6 +20,8 @@ import {
   type Ladder,
   type School,
   type Spell,
+  type SpellMaterial,
+  type SpellRecipe,
   type Tag,
 } from "../shared/schema";
 
@@ -37,6 +41,13 @@ function readJson<T>(path: string, schema: z.ZodType<T>): T {
   const parsed = schema.safeParse(JSON.parse(readFileSync(path, "utf8")));
   if (!parsed.success) throw new Error(`${path} is invalid:\n${z.prettifyError(parsed.error)}`);
   return parsed.data;
+}
+
+export const SPELL_RECIPES_FILE = "data/spell-recipes.json";
+export const SPELL_MATERIALS_FILE = "data/spell-materials.json";
+
+export function readOptional<T>(path: string, schema: z.ZodType<T[]>): T[] {
+  return existsSync(path) ? readJson(path, schema) : [];
 }
 
 export function tierForDepth(depth: number, balance: Balance): number {
@@ -84,10 +95,42 @@ export function buildGameData(raw: {
   combos: Combo[];
   spells?: Spell[];
   ladders?: Ladder[];
+  spellRecipes?: SpellRecipe[];
+  spellMaterials?: SpellMaterial[];
 }): GameData {
-  const { balance, tags, schools, combos, spells = [], ladders = [] } = raw;
+  const { balance, tags, schools, combos, spells = [], ladders = [], spellRecipes = [], spellMaterials = [] } = raw;
   const problems: string[] = [];
   const spellsById = new Map(spells.map((spell) => [spell.id, spell]));
+
+  // Drafted materials and spell recipes only count once a human has marked them "ok".
+  const liveMaterials = spellMaterials.filter((row) => row.status === "ok");
+  for (const row of liveMaterials) {
+    if (!row.inputs) problems.push(`material "${row.id}" is marked ok but has no recipe`);
+    if (!row.description) problems.push(`material "${row.id}" is marked ok but has no description`);
+  }
+  const materialEntries: Entry[] = liveMaterials.map((row) => {
+    const parents = (row.inputs ?? []).map((id) => raw.entries.find((entry) => entry.id === id));
+    return {
+      id: row.id,
+      name: row.name,
+      kind: "material",
+      description: row.description || row.name,
+      tags: row.tags,
+      affinity: [...new Set(parents.flatMap((parent) => parent?.affinity ?? []))].slice(0, 3),
+      tier: 0,
+      source: "authored",
+    };
+  });
+  const derivedTier = new Set(materialEntries.map((entry) => entry.id));
+  const keyIds = new Set([...raw.entries, ...materialEntries].map((entry) => entry.id));
+  const draftIds = new Set(spellMaterials.map((row) => row.id));
+  const liveRecipes = spellRecipes.filter((row) => {
+    if (row.status !== "ok") return false;
+    if (!row.key) problems.push(`spell recipe "${row.spell}" is marked ok but has no key`);
+    else if (!keyIds.has(row.key) && !draftIds.has(row.key)) problems.push(`spell recipe "${row.spell}" has unknown key "${row.key}"`);
+    // A key that is still a draft material keeps the spell out of play without being an error.
+    return row.key !== null && keyIds.has(row.key);
+  });
 
   // Schools and the spells in play are discovered like anything else, so they become entries.
   const schoolEntries: Entry[] = schools.map((school) => ({
@@ -103,6 +146,7 @@ export function buildGameData(raw: {
   const prefix = spellEntryId("");
   const spellIdsInPlay = new Set([
     ...ladders.map((ladder) => ladder.spell),
+    ...liveRecipes.map((row) => row.spell),
     ...combos
       .flatMap((combo) => [...combo.inputs, combo.result])
       .filter((id) => id.startsWith(prefix))
@@ -128,7 +172,7 @@ export function buildGameData(raw: {
       source: spell.source,
     });
   }
-  const entries = [...raw.entries, ...schoolEntries, ...spellEntries];
+  const entries = [...raw.entries, ...materialEntries, ...schoolEntries, ...spellEntries];
   const tagMap = new Map(tags.map((tag) => [tag.id, tag]));
   if (tagMap.size !== tags.length) problems.push("the tag vocabulary lists a tag twice");
   const entryIds = new Set<string>();
@@ -200,6 +244,24 @@ export function buildGameData(raw: {
     }
   }
 
+  for (const row of liveMaterials) {
+    if (row.inputs) recipes.push({ inputs: row.inputs, result: row.id, needs: [] });
+  }
+
+  // A drafted spell recipe: any spell of the school one tier lower + the spell's key.
+  for (const row of liveRecipes) {
+    const spell = spellsById.get(row.spell);
+    if (!spell) continue;
+    const key = entryById.get(row.key!);
+    if (key?.kind !== "element" && key?.kind !== "material") {
+      problems.push(`spell recipe "${row.spell}": the key must be an element or a material`);
+      continue;
+    }
+    const lower = spellEntries.filter((entry) => entry.school === spell.school && entry.tier === spell.tier - 1);
+    if (lower.length === 0) problems.push(`spell recipe "${row.spell}" has no tier ${spell.tier - 1} ${spell.school} spell to build on`);
+    for (const from of lower) recipes.push({ inputs: [from.id, key.id], result: spellEntryId(spell.id), needs: [] });
+  }
+
   const comboMap = new Map<string, Recipe>();
   for (const recipe of recipes) {
     const key = comboKey(...recipe.inputs);
@@ -214,7 +276,9 @@ export function buildGameData(raw: {
   const depths = computeDepths(entries, recipes, balance.startingEntries);
   const entryMap = new Map<string, GameEntry>();
   for (const entry of entries) {
-    entryMap.set(entry.id, { ...entry, depth: depths.get(entry.id)!, xp: xpForTier(entry.tier, balance) });
+    const depth = depths.get(entry.id)!;
+    const tier = derivedTier.has(entry.id) ? tierForDepth(depth, balance) : entry.tier;
+    entryMap.set(entry.id, { ...entry, tier, depth, xp: xpForTier(tier, balance) });
   }
   return {
     balance,
@@ -235,5 +299,7 @@ export function loadGameData(rootDir: string): GameData {
     combos: readJson(join(rootDir, "data/combos.json"), z.array(comboSchema)),
     spells: readJson(join(rootDir, "data/spells.json"), z.array(spellSchema)),
     ladders: readJson(join(rootDir, "data/ladders.json"), z.array(ladderSchema)),
+    spellRecipes: readOptional(join(rootDir, SPELL_RECIPES_FILE), z.array(spellRecipeSchema)),
+    spellMaterials: readOptional(join(rootDir, SPELL_MATERIALS_FILE), z.array(spellMaterialSchema)),
   });
 }

@@ -51,6 +51,33 @@ export const ladderSchema = z.strictObject({
 });
 export type Ladder = z.infer<typeof ladderSchema>;
 
+// Rows drafted by `npm run craft`. Only rows with status "ok" are live in the game.
+export const draftStatusSchema = z.enum(["draft", "ok", "review"]);
+
+// How a spell outside the hand-written ladders is made: a lower spell of its school + this key.
+export const spellRecipeSchema = z.strictObject({
+  spell: idSchema,
+  key: idSchema.nullable(),
+  keySource: z.enum(["component", "new-material", "own-element", "ranked-element", "hand"]),
+  // Why this key, for whoever reviews the row.
+  note: z.string().optional(),
+  status: draftStatusSchema,
+});
+export type SpellRecipe = z.infer<typeof spellRecipeSchema>;
+
+// A material that exists because a spell needs it. `inputs` is null until a recipe is drafted.
+export const spellMaterialSchema = z.strictObject({
+  id: idSchema,
+  name: z.string().min(1),
+  description: z.string(),
+  tags: z.array(z.string()).max(MAX_TAGS),
+  inputs: z.tuple([idSchema, idSchema]).nullable(),
+  logic: z.string(),
+  forSpells: z.array(idSchema),
+  status: draftStatusSchema,
+});
+export type SpellMaterial = z.infer<typeof spellMaterialSchema>;
+
 // A spell appears among a player's discoveries as an entry. The prefix keeps the Light cantrip
 // apart from the Light element.
 export function spellEntryId(spellId: string): string {
@@ -89,6 +116,8 @@ export const balanceSchema = z.strictObject({
   startingEntries: z.array(idSchema).min(1),
   depthPerTier: z.number().int().min(1),
   discoveryXpByTier: z.array(z.number().int().min(0)).min(1),
+  // Spell tier -> [shallowest, deepest] depth allowed for a material that keys a spell of that tier.
+  componentDepthByTier: z.record(z.string(), z.tuple([z.number().int().min(1), z.number().int().min(1)])),
   generation: z.strictObject({
     maxAttempts: z.number().int().min(1),
     temperature: z.number().min(0).max(2),

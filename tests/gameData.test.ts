@@ -6,6 +6,7 @@ const balance: Balance = {
   startingEntries: ["fire", "air"],
   depthPerTier: 2,
   discoveryXpByTier: [10, 25],
+  componentDepthByTier: {},
   generation: { maxAttempts: 3, temperature: 0.8 },
 };
 
