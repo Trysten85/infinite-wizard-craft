@@ -38,6 +38,27 @@ export const schoolSchema = z.strictObject({
 });
 export type School = z.infer<typeof schoolSchema>;
 
+export const spellSchema = z.strictObject({
+  id: idSchema,
+  name: z.string().min(1),
+  tier: z.number().int().min(0).max(9),
+  school: idSchema,
+  elements: z.array(idSchema),
+  tags: z.array(z.string()).max(MAX_TAGS),
+  components: z.strictObject({
+    verbal: z.boolean(),
+    somatic: z.boolean(),
+    material: z.boolean(),
+    // The source's wording, kept verbatim. `materials` are ids from data/srd/materials.json.
+    materialText: z.string().nullable(),
+    materials: z.array(idSchema),
+    costGp: z.number().int().min(0).nullable(),
+    consumed: z.boolean(),
+  }),
+  source: z.enum(["srd", "authored", "generated"]),
+});
+export type Spell = z.infer<typeof spellSchema>;
+
 export const comboSchema = z.strictObject({
   inputs: z.tuple([idSchema, idSchema]),
   result: idSchema,

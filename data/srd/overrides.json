@@ -1,0 +1,6 @@
+{
+  "fire-bolt": { "tags": ["damage", "energy"], "elements": ["fire"] },
+  "fireball": { "tags": ["damage", "energy", "area", "explosive"], "elements": ["fire"] },
+  "mending": { "tags": ["utility"], "elements": ["earth"] },
+  "charm-person": { "tags": ["mind", "control"], "elements": ["life"] }
+}

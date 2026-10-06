@@ -7,12 +7,14 @@ import {
   comboSchema,
   entrySchema,
   schoolSchema,
+  spellSchema,
   tagSchema,
   type Balance,
   type Combo,
   type Entry,
   type GameEntry,
   type School,
+  type Spell,
   type Tag,
 } from "../shared/schema";
 
@@ -21,6 +23,7 @@ export type GameData = {
   tags: Map<string, Tag>;
   schools: Map<string, School>;
   entries: Map<string, GameEntry>;
+  spells: Map<string, Spell>;
   // comboKey -> result entry id
   combos: Map<string, string>;
 };
@@ -70,8 +73,9 @@ export function buildGameData(raw: {
   schools: School[];
   entries: Entry[];
   combos: Combo[];
+  spells?: Spell[];
 }): GameData {
-  const { balance, tags, schools, entries, combos } = raw;
+  const { balance, tags, schools, entries, combos, spells = [] } = raw;
   const problems: string[] = [];
   const tagMap = new Map(tags.map((tag) => [tag.id, tag]));
   if (tagMap.size !== tags.length) problems.push("the tag vocabulary lists a tag twice");
@@ -96,6 +100,18 @@ export function buildGameData(raw: {
       if (!tagMap.has(tag)) problems.push(`school "${school.id}" uses unknown tag "${tag}"`);
     }
   }
+  const spellMap = new Map<string, Spell>();
+  for (const spell of spells) {
+    if (spellMap.has(spell.id)) problems.push(`duplicate spell id "${spell.id}"`);
+    spellMap.set(spell.id, spell);
+    if (!schoolIds.has(spell.school)) problems.push(`spell "${spell.id}" has unknown school "${spell.school}"`);
+    for (const tag of spell.tags) {
+      if (!tagMap.has(tag)) problems.push(`spell "${spell.id}" uses unknown tag "${tag}"`);
+    }
+    for (const element of spell.elements) {
+      if (!elementIds.has(element)) problems.push(`spell "${spell.id}" has unknown element "${element}"`);
+    }
+  }
   for (const id of balance.startingEntries) {
     if (!entryIds.has(id)) problems.push(`starting entry "${id}" does not exist`);
   }
@@ -116,7 +132,14 @@ export function buildGameData(raw: {
   for (const entry of entries) {
     entryMap.set(entry.id, { ...entry, depth: depths.get(entry.id)!, xp: xpForTier(entry.tier, balance) });
   }
-  return { balance, tags: tagMap, schools: new Map(schools.map((s) => [s.id, s])), entries: entryMap, combos: comboMap };
+  return {
+    balance,
+    tags: tagMap,
+    schools: new Map(schools.map((s) => [s.id, s])),
+    entries: entryMap,
+    spells: spellMap,
+    combos: comboMap,
+  };
 }
 
 export function loadGameData(rootDir: string): GameData {
@@ -126,5 +149,6 @@ export function loadGameData(rootDir: string): GameData {
     schools: readJson(join(rootDir, "data/schools.json"), z.array(schoolSchema)),
     entries: readJson(join(rootDir, "data/entries.json"), z.array(entrySchema)),
     combos: readJson(join(rootDir, "data/combos.json"), z.array(comboSchema)),
+    spells: readJson(join(rootDir, "data/spells.json"), z.array(spellSchema)),
   });
 }

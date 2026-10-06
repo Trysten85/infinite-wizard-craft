@@ -39,6 +39,24 @@ npm run tags -- set mist utility,area # set a generated entry's tags
 
 Hand-written entries are retagged by editing `data/entries.json`.
 
+## SRD spells
+
+`data/spells.json` holds the 319 SRD 5.1 spells in the game's schema. It is generated, so don't
+edit it by hand. Attribution and source details are in `data/srd/ATTRIBUTION.md`.
+
+```
+npm run srd -- review            # spells whose tags need a human
+npm run srd -- review elements   # spells with no element
+npm run srd -- import            # rebuild data/spells.json after editing the files below
+npm run srd -- materials         # ask the local model to split any new material phrases
+npm run srd -- download          # re-fetch the pinned source file
+```
+
+| To change | Edit |
+|---|---|
+| A spell's tags or elements | `data/srd/overrides.json` |
+| The materials found in a phrase | `data/srd/material-phrases.json` (set `status` to `ok` when fixed) |
+
 ## Cache tool
 
 ```
