@@ -102,7 +102,8 @@ An event arrives when a player has earned 15 points: 1 per new discovery made by
   (the shared type is `PlayerProgress`).
 - An event is `{ id, kind, mood, person, scene, responses }`. Each response is `{ type, text }`,
   where `type` is `generous`, `skilled`, `fair`, `sharp`, or `avoid`. A Skilled response that uses
-  one of the player's spells also has `spell: { id, name }`.
+  one of the player's spells also has `spell: { id, name }`. A spell is only put forward if it
+  carries one of the seed's `spellTags` and none of `events.spellCheck.blockedTags`.
 - Outcomes and effects are only returned by responding. `effects` is `{ gold, rep, fondness }`.
 - `request` is set when the person goes on to ask for something: `{ id, from, ask, entry, gold, state }`.
   It is filled the moment the player has that entry, and then shows up in `rewards.quests`.

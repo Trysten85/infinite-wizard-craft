@@ -319,7 +319,7 @@ export function buildGameData(raw: {
   }
 
   for (const seed of eventSeeds) {
-    for (const tag of [...seed.tags, ...seed.skillTags]) {
+    for (const tag of [...seed.tags, ...seed.skillTags, ...(seed.spellTags ?? [])]) {
       if (!tagMap.has(tag)) problems.push(`event seed "${seed.id}" uses unknown tag "${tag}"`);
     }
   }

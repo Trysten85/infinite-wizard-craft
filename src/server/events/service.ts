@@ -79,13 +79,17 @@ export function createEvents(deps: {
   }
 
   // Asks the writer, some of the time, whether a spell the player has learned and can cast would
-  // solve the scene. The writer only chooses the spell. What it does is the fixed Skilled effect.
-  async function findSpellSolution(player: string, level: number, discovered: GameEntry[], written: WrittenEvent, personName: string) {
-    if (random() >= rules.spellCheck.chance) return null;
+  // solve the scene. Only spells carrying one of the seed's spell tags are put to it, so a damage
+  // spell is never the answer to a spilled pie. The writer only chooses the spell. What it does
+  // is the fixed Skilled effect.
+  async function findSpellSolution(player: string, level: number, discovered: GameEntry[], written: WrittenEvent, personName: string, spellTags: string[]) {
+    if (spellTags.length === 0 || random() >= rules.spellCheck.chance) return null;
     const learned = new Set(store.getLearned(player));
     const blocked = new Set(rules.spellCheck.blockedTags);
+    const fits = new Set(spellTags);
     const spells = discovered
-      .filter((entry) => learned.has(entry.id) && entry.tier <= level && !entry.tags.some((tag) => blocked.has(tag)))
+      .filter((entry) => learned.has(entry.id) && entry.tier <= level)
+      .filter((entry) => entry.tags.some((tag) => fits.has(tag)) && !entry.tags.some((tag) => blocked.has(tag)))
       .map((entry) => ({ id: entry.id, name: entry.name, school: data.entries.get(entry.school ?? "")?.name ?? "", tags: entry.tags }));
     if (spells.length === 0) return null;
     const answer = await writer.checkSpell({ scene: written.scene, personName, spells });
@@ -128,7 +132,7 @@ export function createEvents(deps: {
         responseTypes: ["generous", "skilled", "fair", "sharp", "avoid"],
         followUp: "possible",
         canRequest: true,
-        spellSolvable: true,
+        spellTags: ["utility", "healing", "knowledge"],
       };
     } else {
       const candidates = forcedSeed ? data.eventSeeds.filter((item) => item.id === forcedSeed) : eligibleSeeds(data.eventSeeds, snapshot);
@@ -173,7 +177,7 @@ export function createEvents(deps: {
     };
 
     const written = await writer.write(brief);
-    const spell = seed.spellSolvable ? await findSpellSolution(player, level, discovered, written, returning?.name ?? written.person!.name) : null;
+    const spell = await findSpellSolution(player, level, discovered, written, returning?.name ?? written.person!.name, seed.spellTags ?? skillTags);
     if (spell) {
       // The spell becomes the Skilled way through, whether or not the player's tags had earned one.
       written.responses = [...written.responses.filter((response) => response.type !== "skilled"), { type: "skilled", text: spell.text, outcome: spell.outcome }];

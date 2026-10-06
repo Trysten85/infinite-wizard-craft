@@ -65,8 +65,9 @@ export const eventSeedSchema = z.strictObject({
   needsJob: z.boolean().optional(),
   // Whether the person may ask the player to make something afterwards.
   canRequest: z.boolean().optional(),
-  // Whether one of the player's spells may turn up as the Skilled way through.
-  spellSolvable: z.boolean().optional(),
+  // A spell can only be the Skilled way through if it carries one of these tags. An empty list
+  // means no spell solves this kind of event. Left out, the seed's skill tags are used.
+  spellTags: z.array(z.string()).optional(),
 });
 export type EventSeed = z.infer<typeof eventSeedSchema>;
 

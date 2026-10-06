@@ -13,6 +13,7 @@ import {
   type SpellQuestion,
   type WrittenEvent,
 } from "../src/server/events/writer";
+import { createEvents } from "../src/server/events/service";
 import { createFakeClient } from "../src/server/llm/fake";
 import { eventThreshold, repBandFor } from "../src/server/progress";
 import type { Person } from "../src/server/store";
@@ -301,6 +302,34 @@ describe("a spell that solves the event", () => {
 
   it("is never asked about for a player with no learned spells", async () => {
     expect((await eventsFor([])).questions).toHaveLength(0);
+  });
+
+  // Asks for one test event of the given seed, with the spell look always on, and returns the spells put to the writer.
+  async function spellsAskedAbout(seedId: string, learned: string[]) {
+    const { writer, questions } = recordingWriter();
+    const game = newGame(1, writer);
+    for (const id of ["light", "mud", "life", "tree", "spellbook", ...learned]) game.store.addDiscovery("ann", id);
+    for (const id of learned) game.store.addLearned("ann", id);
+    const always = createEvents({ data, store: game.store, progress: game.progress, listDiscovered: game.combiner.listDiscovered, writer, random: () => 0.1 });
+    await always.test("ann", seedId);
+    return questions.flatMap((question) => question.spells.map((spell) => spell.id));
+  }
+
+  it("only puts forward spells whose tags fit the kind of event", async () => {
+    const known = ["spell-mending", "spell-fire-bolt", "spell-detect-magic"];
+    // A mess wants something practical. An inspection wants something that shows the truth.
+    expect(await spellsAskedAbout("not_my_mess", known)).toEqual(["spell-mending"]);
+    expect(await spellsAskedAbout("the_official", known)).toEqual(["spell-detect-magic"]);
+    // Nothing needs solving when two people simply meet.
+    expect(await spellsAskedAbout("meet_cute", known)).toEqual([]);
+    // A damage spell fits no seed at all.
+    for (const seedItem of data.eventSeeds) expect(await spellsAskedAbout(seedItem.id, ["spell-fire-bolt"]), seedItem.id).toEqual([]);
+  });
+
+  it("tags the everyday spells as practical and the will-bending ones as control", () => {
+    for (const id of ["mending", "prestidigitation", "light", "mage-hand"]) expect(data.spells.get(id)!.tags, id).toContain("utility");
+    for (const id of ["sleep", "hold-person", "charm-person", "command"]) expect(data.spells.get(id)!.tags, id).toContain("control");
+    expect(rules.spellCheck.blockedTags).toContain("control");
   });
 
   it("never offers a spell that bends someone's will, or one above the player's level", async () => {

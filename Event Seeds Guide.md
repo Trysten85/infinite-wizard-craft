@@ -33,8 +33,9 @@ Some events get better if the player knows a spell that solves them. Break somet
 
 - **When:** after the AI has written the event, and before the player sees it. It is a separate, second step, so the scene is never written around a spell.
 - **Who decides what:** the AI only answers one question: does one of these spells plainly solve this scene, and which one? It picks from the player's own list or says "none". The code owns the effect, which is the fixed **Skilled** profile: no gold lost, Shop Rep up, Fondness up.
-- **Which spells count:** spells the player has **learned** and is high enough level to cast. A spell that bends someone's will (anything tagged `control`, such as Charm Person) is never offered as a solution.
-- **Not every time:** the code only asks on some events (draft: 3 in 4), a seed can switch it off with `spell_solvable`, and the AI is told that most scenes have no fitting spell.
+- **Which spells count:** spells the player has **learned** and is high enough level to cast, **and that carry one of the seed's spell tags.** The code filters on tags before the AI is asked, so the AI only ever chooses among spells of the right kind: a mess wants a `utility` spell, an inspection wants a `knowledge` spell, and a damage spell fits nothing.
+- **Never:** a spell that bends someone's will (anything tagged `control`, such as Charm Person, Sleep, or Hold Person) is never offered as a solution.
+- **Not every time:** the code only asks on some events (draft: 3 in 4), a seed with no spell tags never asks, and the AI is told that most scenes have no fitting spell and that it must not invent a problem.
 - **How it shows:** the Skilled response names the spell, so the page can show which one. If the player's tags had already earned a Skilled response, the spell version replaces it. If the seed did not allow Skilled at all, the spell adds it. There are still never more than four responses.
 - **Fits:** something broke and the player knows Mending; a spill and Prestidigitation; something out of reach and Mage Hand. **Does not fit:** a nervous customer and Fire Bolt.
 
@@ -61,7 +62,7 @@ Each seed is a data entry (YAML or JSON):
 | stakes | Allowed sizes (S, M, L) |
 | response_types | Which of the 5 types the seed allows |
 | follow_up | none, possible, or likely, plus the kind of follow-up |
-| spell_solvable | Whether the second look for a spell runs for this seed (default yes) |
+| spell_tags | Tags a spell must carry to be offered as the Skilled way through. Empty means no spell solves this seed. Left out, the skill tags are used |
 | min_level, job_filter | Optional limits (most seeds have none) |
 
 ### Event kinds (closed list)
@@ -83,19 +84,19 @@ The AI must stay inside the mood tags. They steer the scene's feel, and the crit
 ## Starter seeds (10 + the Repeat)
 Premises are deliberately loose. The AI decides who, where, what, and how it feels.
 
-| # | Seed id | Kind | Premise | Mood | Tags | Skill tags | Types allowed | Follow-up | Spells that could solve it (examples) |
+| # | Seed id | Kind | Premise | Mood | Tags | Skill tags | Types allowed | Follow-up | Spell tags, and spells that could solve it |
 |---|---|---|---|---|---|---|---|---|---|
-| 1 | meet_cute | social | Someone new catches the player's eye at work, and the player has a chance to make an impression | warm, awkward | any job | brewing, knowledge, mind | Generous, Skilled, Fair, Avoid | likely | Prestidigitation for a small flourish; Light or Dancing Lights to set the mood |
-| 2 | my_fault | oopsy | The player's magic or work causes a small mess for someone nearby | awkward, silly | any caster | utility, healing, transform | Generous, Skilled, Avoid | possible | Mending to fix what broke; Prestidigitation to clean up the mess |
-| 3 | grand_guest | social | An important person visits and expects a lot | tense, proud | any job, level 2+ | court, knowledge, hospitality | Generous, Fair, Sharp | possible | Prestidigitation to warm, tidy, and season; Dancing Lights for the room |
-| 4 | small_thief | comic | A small animal or odd creature takes something it shouldn't | silly | any | animal, utility | Generous, Fair, Avoid | possible | Mage Hand to fetch it back; Speak with Animals or Animal Friendship to ask nicely |
-| 5 | town_needs | community | The town needs a favor with a deadline | warm, proud | any job, level 2+ | utility, crafting tags | Generous, Skilled, Avoid | possible | Mending, Light, Purify Food and Drink, or Create Food and Water, depending on the favor |
-| 6 | the_official | bureaucracy | Someone official checks on the player's work | tense, awkward | brewing, enchanting, trade | knowledge, protection | Fair, Generous, Sharp | possible | Detect Magic or Identify, to show the work is what it claims to be |
-| 7 | big_chance | opportunity | A big opportunity for the player's job appears | proud, tense | any job, level 2+ | job's own craft tags | Generous, Skilled, Fair, Avoid | likely | Whatever suits the job: Mending for a smith, Prestidigitation for a tea shop |
-| 8 | unhappy_someone | conflict | Someone is unhappy with the player, for a reason the story gives | tense, awkward | any | job's own craft tags | Generous, Skilled, Fair, Avoid | likely | Mending or Prestidigitation to put the thing right. Never a spell that changes their mind |
-| 9 | off_the_menu | trade | Someone asks for something unusual and the player picks their line | silly, mysterious | any job, level 2+ | job's own craft tags | Fair, Sharp, Avoid | possible | Identify, Detect Magic, or Prestidigitation |
-| 10 | not_my_mess | mishap | Someone else breaks, spills, or ruins something of the player's | awkward, warm | any | none | Generous, Fair, Sharp | possible | Mending, so nothing is lost; Prestidigitation for a spill |
-| 11 | repeat | (inherits) | A person the player has met before comes back | (inherits) | any | (inherits) | all 5 | per history | (inherits) |
+| 1 | meet_cute | social | Someone new catches the player's eye at work, and the player has a chance to make an impression | warm, awkward | any job | brewing, knowledge, mind | Generous, Skilled, Fair, Avoid | likely | None. Nothing here needs solving |
+| 2 | my_fault | oopsy | The player's magic or work causes a small mess for someone nearby | awkward, silly | any caster | utility, healing, transform | Generous, Skilled, Avoid | possible | `utility`, `healing`: Mending to fix what broke, Prestidigitation to clean up |
+| 3 | grand_guest | social | An important person visits and expects a lot | tense, proud | any job, level 2+ | court, knowledge, hospitality | Generous, Fair, Sharp | possible | `utility`: Prestidigitation to warm, tidy, and season; Dancing Lights for the room |
+| 4 | small_thief | comic | A small animal or odd creature takes something it shouldn't | silly | any | animal, utility | Generous, Fair, Avoid | possible | `utility`, `animal`: Mage Hand to fetch it back; Speak with Animals to ask nicely |
+| 5 | town_needs | community | The town needs a favor with a deadline | warm, proud | any job, level 2+ | utility, crafting tags | Generous, Skilled, Avoid | possible | `utility`, `healing`, `protection`: Mending, Light, Purify Food and Drink, or Create Food and Water |
+| 6 | the_official | bureaucracy | Someone official checks on the player's work | tense, awkward | brewing, enchanting, trade | knowledge, protection | Fair, Generous, Sharp | possible | `knowledge`: Detect Magic or Identify, to show the work is what it claims to be |
+| 7 | big_chance | opportunity | A big opportunity for the player's job appears | proud, tense | any job, level 2+ | job's own craft tags | Generous, Skilled, Fair, Avoid | likely | The job's own wanted tags: whatever spell suits the trade |
+| 8 | unhappy_someone | conflict | Someone is unhappy with the player, for a reason the story gives | tense, awkward | any | job's own craft tags | Generous, Skilled, Fair, Avoid | likely | `utility`, `healing`: Mending or Prestidigitation to put the thing right. Never a spell that changes their mind |
+| 9 | off_the_menu | trade | Someone asks for something unusual and the player picks their line | silly, mysterious | any job, level 2+ | job's own craft tags | Fair, Sharp, Avoid | possible | `knowledge`, `utility`: Identify, Detect Magic, or Prestidigitation |
+| 10 | not_my_mess | mishap | Someone else breaks, spills, or ruins something of the player's | awkward, warm | any | none | Generous, Fair, Sharp | possible | `utility`: Mending, so nothing is lost; Prestidigitation for a spill |
+| 11 | repeat | (inherits) | A person the player has met before comes back | (inherits) | any | (inherits) | all 5 | per history | `utility`, `healing`, `knowledge` |
 
 ### More seed ideas for later (not in the starter set)
 a rival's friendly challenge, a lost item with no owner, a festival booth, a rumor about the player, a stranger asking for directions, a sudden shortage of an ingredient, a traveling merchant, a rainstorm, a surprise visit from family.
@@ -162,6 +163,7 @@ Every event writes a record, so Repeats and the AI both have something to work f
 
 ## Notes for Claude Code
 - Store seeds as data files with the fields above. Effects by response type live in the config file, so tuning needs no code change. The AI prompt never contains numbers.
+- Spell tags live on the seed. The tags on the spells themselves come from `data/srd/overrides.json`: everyday spells are tagged `utility`, and will-bending ones `control`.
 - The second look for a spell is its own model call with its own schema: one spell id from the player's list or "none", plus the response line and outcome. The response line must name the spell. The effect is always the Skilled profile.
 - Validate the AI's output with a schema: scene text, a list of responses each with a `type` from the allowed set, outcome text per response, any new NPC (name, role, trait tags, facts). Reject and reroll on a missing, extra, or mislabeled response.
 - The critic pass checks tone, mood match, no numbers, consistency with NPC facts, and that each response really fits its type (a "Generous" response must actually be generous).

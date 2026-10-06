@@ -174,6 +174,7 @@ export function createModelEventWriter(deps: {
     "You are given a finished scene and the spells the player knows.",
     "Decide whether one of those spells would plainly solve the problem in the scene, as an ordinary, everyday use of that spell.",
     "Most scenes have no such spell. Answer none unless the fit is obvious to anyone.",
+    "The problem must already be in the scene as written. Never invent a problem for a spell to solve.",
     "A spell never forces anyone to do, think, or feel anything, and never harms anyone.",
     "Fits: something is broken and the player knows Mending. A spill or a stain and the player knows Prestidigitation. Something out of reach and the player knows Mage Hand.",
     "Does not fit: a nervous customer and Fire Bolt. A missing delivery and Light.",
