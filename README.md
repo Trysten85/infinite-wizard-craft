@@ -7,6 +7,7 @@ Design: `Infinite Wizard Craft.md`. Build order: `Infinite Wizard Craft Phase Gu
 Needs Node 22+ and Ollama on the host PC (reached at `http://192.168.56.1:11434`).
 
 ```
+cd ~/Documents/"Infinite Spell Craft"
 npm install
 npm run dev        # game server on :3001, web page on http://localhost:5173
 npm test           # rule tests
@@ -14,6 +15,18 @@ npm run typecheck
 ```
 
 Override the model or address with `OLLAMA_MODEL` and `OLLAMA_URL`.
+
+## Comparing models
+
+```
+npm run eval -- gemma3:12b gpt-oss:20b
+```
+
+Runs each model through the same fixed set of the game's real prompts (combinations, the storybook
+menu, events, the spell look, parting lines) on a throwaway save, and writes a side-by-side report
+to `var/eval/<date>/report.md`. Each model must already be pulled in Ollama on the host PC. Nothing
+in the game or the saved game is changed. To play with a different model afterwards, start the
+server with `OLLAMA_MODEL=<name> npm run dev`.
 
 ## Recipe key
 

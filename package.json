@@ -15,7 +15,8 @@
     "craft": "tsx src/tools/craft.ts",
     "path": "tsx src/tools/path.ts",
     "key": "tsx src/tools/key.ts",
-    "events": "tsx src/tools/events.ts"
+    "events": "tsx src/tools/events.ts",
+    "eval": "tsx src/tools/eval.ts"
   },
   "dependencies": {
     "@hono/node-server": "^2.1.3",
