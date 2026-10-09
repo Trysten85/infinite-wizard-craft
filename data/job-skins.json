@@ -1,0 +1,178 @@
+[
+  {
+    "job": "farmer",
+    "flavor": "Seasons, markets, enormous vegetables",
+    "subjects": ["A crate of turnips for the market", "An enormous pumpkin for the fair", "Eggs for the inn on Crumb Lane", "A hedge that keeps the goats in"],
+    "base": {"name": "Seed or animal", "staples": [{"id": "seed-potatoes", "name": "Seed potatoes", "tags": ["plant"]}], "from": {"kinds": ["material"], "tags": ["plant", "animal"]}},
+    "method": {"name": "Method", "staples": [{"id": "plant", "name": "Plant", "tags": ["utility"]}, {"id": "tend", "name": "Tend", "tags": ["healing"]}, {"id": "harvest", "name": "Harvest", "tags": ["industrial"]}, {"id": "graft", "name": "Graft", "tags": ["transform"], "rank": "journeyman"}]},
+    "touch": {"name": "Touch", "staples": [{"id": "water-charm", "name": "A water charm", "tags": ["liquid"]}, {"id": "compost-trick", "name": "A compost trick", "tags": ["enhance"], "rank": "master"}], "from": {"kinds": ["spell", "material"], "tags": ["liquid", "healing", "enhance"]}}
+  },
+  {
+    "job": "hunter",
+    "flavor": "Finds, trails, rare materials",
+    "subjects": ["Mushrooms for the inn's stew", "A trail to the old well", "Whatever has been at the hen house", "A basket of something from the far ridge"],
+    "base": {"name": "Terrain", "staples": [{"id": "near-woods", "name": "The near woods", "tags": ["plant"]}], "from": {"kinds": ["material"], "tags": ["plant", "animal", "mineral"]}},
+    "method": {"name": "Method", "staples": [{"id": "track", "name": "Track", "tags": ["animal"]}, {"id": "gather", "name": "Gather", "tags": ["utility"]}, {"id": "map", "name": "Map", "tags": ["knowledge"]}, {"id": "wait-quietly", "name": "Wait quietly", "tags": ["control"], "rank": "journeyman"}]},
+    "touch": {"name": "Tool or charm", "staples": [{"id": "sturdy-snare", "name": "A sturdy snare", "tags": ["damage"]}, {"id": "lucky-charm", "name": "A lucky charm", "tags": ["enhance"], "rank": "master"}], "from": {"kinds": ["spell", "material"], "tags": ["damage", "utility", "enhance"]}}
+  },
+  {
+    "job": "carpenter",
+    "flavor": "Chairs, doors, shelves, and signs",
+    "subjects": ["A chair that does not wobble", "A door for the hen house", "Shelves for the tea shop", "A sign for Thimble Row"],
+    "base": {"name": "Timber", "staples": [{"id": "pine-boards", "name": "Pine boards", "tags": ["plant"]}], "from": {"kinds": ["material"], "tags": ["plant", "metal"]}},
+    "method": {"name": "Method", "staples": [{"id": "measure", "name": "Measure twice", "tags": ["knowledge"]}, {"id": "saw", "name": "Saw", "tags": ["industrial"]}, {"id": "join", "name": "Join", "tags": ["utility"]}, {"id": "carve", "name": "Carve", "tags": ["enhance"], "rank": "journeyman"}]},
+    "touch": {"name": "Finish", "staples": [{"id": "coat-of-wax", "name": "A coat of wax", "tags": ["protection"]}, {"id": "hidden-drawer", "name": "A hidden drawer", "tags": ["mind"], "rank": "master"}], "from": {"kinds": ["spell", "material"], "tags": ["protection", "enhance", "metal"]}}
+  },
+  {
+    "job": "blacksmith",
+    "flavor": "Hinges, tools, gates, gear",
+    "subjects": ["A gate hinge that does not squeak", "Horseshoes for a particular dragon", "A kettle for the tea shop", "A latch for the goose pen"],
+    "base": {"name": "Metal", "staples": [{"id": "scrap-iron", "name": "Scrap iron", "tags": ["metal"]}], "from": {"kinds": ["material"], "tags": ["metal", "mineral"]}},
+    "method": {"name": "Method", "staples": [{"id": "heat", "name": "Heat", "tags": ["energy"]}, {"id": "hammer", "name": "Hammer", "tags": ["forging"]}, {"id": "quench", "name": "Quench", "tags": ["liquid"]}, {"id": "fold", "name": "Fold", "tags": ["enhance"], "rank": "journeyman"}]},
+    "touch": {"name": "Finish", "staples": [{"id": "good-polish", "name": "A good polish", "tags": ["industrial"]}, {"id": "makers-mark", "name": "A maker's mark", "tags": ["rare"], "rank": "master"}], "from": {"kinds": ["spell", "material"], "tags": ["protection", "enchanting", "rare"]}}
+  },
+  {
+    "job": "herbalist",
+    "flavor": "Remedies for small, ordinary troubles",
+    "subjects": ["Something for a sneeze", "A poultice for sore feet", "A sachet to keep the moths off", "A tonic for a tired mule"],
+    "base": {"name": "Leaf or root", "staples": [{"id": "garden-mint", "name": "Garden mint", "tags": ["plant"]}], "from": {"kinds": ["material"], "tags": ["plant", "reagent"]}},
+    "method": {"name": "Method", "staples": [{"id": "dry", "name": "Dry", "tags": ["energy"]}, {"id": "grind", "name": "Grind", "tags": ["industrial"]}, {"id": "label", "name": "Label", "tags": ["knowledge"]}, {"id": "steep", "name": "Steep", "tags": ["liquid"], "rank": "journeyman"}]},
+    "touch": {"name": "Touch", "staples": [{"id": "soothing-sprig", "name": "A sprig of something soothing", "tags": ["healing"]}, {"id": "biting-leaf", "name": "A leaf that bites back", "tags": ["toxic"], "rank": "master"}], "from": {"kinds": ["spell", "material"], "tags": ["healing", "toxic", "liquid"]}}
+  },
+  {
+    "job": "merchant",
+    "flavor": "Odd requests, honest scales, and remembering how people take their tea",
+    "subjects": ["A wedding present on a budget", "Supplies for a long cart ride", "A gift for someone who has everything", "Something the inspector will not look at twice"],
+    "base": {"name": "Goods", "staples": [{"id": "odds-and-ends", "name": "Odds and ends", "tags": ["utility"]}], "from": {"kinds": ["material"], "tags": ["metal", "mineral", "plant", "rare"]}},
+    "method": {"name": "Method", "staples": [{"id": "stock", "name": "Stock", "tags": ["industrial"]}, {"id": "haggle", "name": "Haggle", "tags": ["mind"]}, {"id": "pitch", "name": "Pitch", "tags": ["court"]}, {"id": "appraise", "name": "Appraise", "tags": ["knowledge"], "rank": "journeyman"}]},
+    "touch": {"name": "Touch", "staples": [{"id": "free-sample", "name": "A free sample", "tags": ["enhance"]}, {"id": "under-the-counter", "name": "Something from under the counter", "tags": ["rare"], "rank": "master"}], "from": {"kinds": ["spell", "material"], "tags": ["rare", "enhance", "mind"]}}
+  },
+  {
+    "job": "scribe",
+    "flavor": "Forms, letters, notices, and minutes",
+    "subjects": ["A form for the Office of Reasonable Enchantments", "A letter to a difficult aunt", "A notice about the goose", "The minutes of a very long meeting"],
+    "base": {"name": "Document", "staples": [{"id": "plain-paper", "name": "Plain paper", "tags": ["knowledge"]}], "from": {"kinds": ["material"], "tags": ["plant", "animal"]}},
+    "method": {"name": "Method", "staples": [{"id": "copy", "name": "Copy", "tags": ["utility"]}, {"id": "draft", "name": "Draft", "tags": ["mind"]}, {"id": "stamp", "name": "Stamp", "tags": ["court"]}, {"id": "illuminate", "name": "Illuminate", "tags": ["enhance"], "rank": "journeyman"}]},
+    "touch": {"name": "Touch", "staples": [{"id": "tidy-hand", "name": "Very tidy handwriting", "tags": ["control"]}, {"id": "official-seal", "name": "An official seal", "tags": ["licensed"], "rank": "master"}], "from": {"kinds": ["spell", "material"], "tags": ["mind", "court", "knowledge"]}}
+  },
+  {
+    "job": "soldier",
+    "flavor": "Fences, lost sheep, parades, and the night watch",
+    "subjects": ["A lost sheep on the north road", "The fence along the turnip field", "A parade that must not be rained on", "Night watch at the mill"],
+    "base": {"name": "Kit", "staples": [{"id": "issued-kit", "name": "Issued kit", "tags": ["metal"]}], "from": {"kinds": ["material"], "tags": ["metal", "mineral"]}},
+    "method": {"name": "Method", "staples": [{"id": "patrol", "name": "Patrol", "tags": ["protection"]}, {"id": "drill", "name": "Drill", "tags": ["control"]}, {"id": "mend", "name": "Mend", "tags": ["utility"]}, {"id": "scout", "name": "Scout", "tags": ["knowledge"], "rank": "journeyman"}]},
+    "touch": {"name": "Touch", "staples": [{"id": "firm-shove", "name": "A shove in the right place", "tags": ["damage"]}, {"id": "borrowed-shield", "name": "A borrowed shield", "tags": ["enhance"], "rank": "master"}], "from": {"kinds": ["spell", "material"], "tags": ["damage", "protection", "energy"]}}
+  },
+  {
+    "job": "spy",
+    "flavor": "Small mysteries, and who knew what before whom",
+    "subjects": ["Whose pie won the fair, before the judges say", "Where the neighbor's cat goes at night", "What the inspector had for lunch", "Who keeps moving the scarecrow"],
+    "base": {"name": "Rumor", "staples": [{"id": "market-gossip", "name": "Market gossip", "tags": ["knowledge"]}], "from": {"kinds": ["material", "spell"], "tags": ["mind", "knowledge", "court"]}},
+    "method": {"name": "Method", "staples": [{"id": "listen", "name": "Listen", "tags": ["mind"]}, {"id": "follow", "name": "Follow", "tags": ["underground"]}, {"id": "ask-nicely", "name": "Ask nicely", "tags": ["utility"]}, {"id": "blend-in", "name": "Blend in", "tags": ["transform"], "rank": "journeyman"}]},
+    "touch": {"name": "Touch", "staples": [{"id": "well-placed-pie", "name": "A pie for the right person", "tags": ["plant"]}, {"id": "palace-friend", "name": "A friend at the palace", "tags": ["court"], "rank": "master"}], "from": {"kinds": ["spell", "material"], "tags": ["mind", "court", "control"]}}
+  },
+  {
+    "job": "tea-shop-owner",
+    "flavor": "Customers' moods, regulars' favorites",
+    "subjects": ["A pot for a nervous goat owner", "The usual, for a regular who never says what it is", "Something dignified for a wedding", "A cup for a rainy afternoon"],
+    "base": {"name": "Leaf", "staples": [{"id": "house-leaf", "name": "House leaf", "tags": ["plant"]}], "from": {"kinds": ["material"], "tags": ["plant", "liquid"]}},
+    "method": {"name": "Method", "staples": [{"id": "steep", "name": "Steep", "tags": ["liquid"]}, {"id": "blend", "name": "Blend", "tags": ["utility"]}, {"id": "brew", "name": "Brew", "tags": ["brewing"]}, {"id": "age", "name": "Age", "tags": ["enhance"], "rank": "journeyman"}]},
+    "touch": {"name": "Touch", "staples": [{"id": "spoon-of-honey", "name": "A spoon of honey", "tags": ["healing"]}, {"id": "rare-petal", "name": "A rare petal", "tags": ["rare"], "rank": "master"}], "from": {"kinds": ["spell", "material"], "tags": ["healing", "rare", "mind"]}}
+  },
+  {
+    "job": "wizard",
+    "flavor": "Lost cats, cold soup, and other small emergencies",
+    "subjects": ["A lost cat, last seen on a roof", "Soup that has gone cold", "A draft under the door", "A lantern that will not stay lit"],
+    "base": {"name": "Spell or material", "staples": [{"id": "pinch-of-chalk", "name": "A pinch of chalk", "tags": ["mineral"]}], "from": {"kinds": ["spell", "material"], "tags": ["energy", "utility", "transform", "mineral"]}},
+    "method": {"name": "Method", "staples": [{"id": "consult-the-book", "name": "Consult the book", "tags": ["knowledge"]}, {"id": "wave-the-hands", "name": "Wave the hands", "tags": ["energy"]}, {"id": "mutter", "name": "Mutter", "tags": ["utility"]}, {"id": "draw-a-circle", "name": "Draw a circle", "tags": ["protection"], "rank": "journeyman"}]},
+    "touch": {"name": "Touch", "staples": [{"id": "pointed-hat", "name": "The pointed hat", "tags": ["enhance"]}, {"id": "framed-license", "name": "The framed license", "tags": ["licensed"], "rank": "master"}], "from": {"kinds": ["spell", "material"], "tags": ["protection", "transform", "knowledge"]}}
+  },
+  {
+    "job": "alchemist",
+    "flavor": "Tonics for ordinary troubles",
+    "subjects": ["A tonic for hiccups", "Something to settle a goose", "A polish that works on brass and on moods", "A remedy for a very mild curse"],
+    "base": {"name": "Herb or reagent", "staples": [{"id": "dried-nettle", "name": "Dried nettle", "tags": ["plant"]}], "from": {"kinds": ["material"], "tags": ["plant", "reagent", "liquid"]}},
+    "method": {"name": "Method", "staples": [{"id": "mix", "name": "Mix", "tags": ["brewing"]}, {"id": "distill", "name": "Distill", "tags": ["liquid"]}, {"id": "simmer", "name": "Simmer", "tags": ["energy"]}, {"id": "age", "name": "Age", "tags": ["enhance"], "rank": "journeyman"}]},
+    "touch": {"name": "Touch", "staples": [{"id": "soothing-drop", "name": "A drop of something soothing", "tags": ["healing"]}, {"id": "humming-stopper", "name": "A stopper that hums", "tags": ["enchanting"], "rank": "master"}], "from": {"kinds": ["spell", "material"], "tags": ["healing", "reagent", "transform"]}}
+  },
+  {
+    "job": "runesmith",
+    "flavor": "Ironwork with something to say",
+    "subjects": ["A kettle that remembers how you like it", "A lock that only opens for kindness", "A horseshoe with a blessing on it", "A bell that rings one particular note"],
+    "base": {"name": "Metal", "staples": [{"id": "iron-blank", "name": "An iron blank", "tags": ["metal"]}], "from": {"kinds": ["material"], "tags": ["metal", "mineral"]}},
+    "method": {"name": "Method", "staples": [{"id": "etch", "name": "Etch", "tags": ["enchanting"]}, {"id": "heat", "name": "Heat", "tags": ["energy"]}, {"id": "hammer", "name": "Hammer", "tags": ["forging"]}, {"id": "check-the-spelling", "name": "Check the spelling", "tags": ["knowledge"], "rank": "journeyman"}]},
+    "touch": {"name": "Rune", "staples": [{"id": "ward-word", "name": "A ward word", "tags": ["protection"]}, {"id": "kettle-word", "name": "A word the kettle likes", "tags": ["mind"], "rank": "master"}], "from": {"kinds": ["spell", "material"], "tags": ["protection", "enhance", "knowledge"]}}
+  },
+  {
+    "job": "enchanter",
+    "flavor": "Gear that needs a little extra",
+    "subjects": ["A broom with opinions about corners", "A lantern that knows when it is dark", "A cloak that stays dry", "A teapot that keeps itself warm"],
+    "base": {"name": "Item", "staples": [{"id": "ordinary-spoon", "name": "An ordinary spoon", "tags": ["metal"]}], "from": {"kinds": ["material"], "tags": ["metal", "mineral", "reagent"]}},
+    "method": {"name": "Method", "staples": [{"id": "bind", "name": "Bind", "tags": ["enchanting"]}, {"id": "etch", "name": "Etch", "tags": ["industrial"]}, {"id": "soak", "name": "Soak", "tags": ["liquid"]}, {"id": "coax", "name": "Coax", "tags": ["mind"], "rank": "journeyman"}]},
+    "touch": {"name": "Touch", "staples": [{"id": "tidy-charm", "name": "A tidy little charm", "tags": ["enhance"]}, {"id": "crystal-setting", "name": "A crystal setting", "tags": ["rare"], "rank": "master"}], "from": {"kinds": ["spell", "material"], "tags": ["enhance", "utility", "protection"]}}
+  },
+  {
+    "job": "battle-mage",
+    "flavor": "Spell-for-hire jobs: lanterns, wards, repairs",
+    "subjects": ["The watch fires along the wall", "A parade that wants dry weather", "A stuck gate at the north tower", "Lanterns for the harvest dance"],
+    "base": {"name": "Spell", "staples": [{"id": "warm-spark", "name": "A warm spark", "tags": ["energy"]}], "from": {"kinds": ["spell"], "tags": ["energy", "damage", "protection", "area"]}},
+    "method": {"name": "Contract", "staples": [{"id": "lanterns", "name": "Light the lanterns", "tags": ["utility"]}, {"id": "wards", "name": "Set the wards", "tags": ["protection"]}, {"id": "repairs", "name": "Mend the wall", "tags": ["industrial"]}, {"id": "clear-the-snow", "name": "Clear the snow", "tags": ["area"], "rank": "journeyman"}]},
+    "touch": {"name": "Flourish", "staples": [{"id": "crisp-salute", "name": "A crisp salute", "tags": ["control"]}, {"id": "show-thunder", "name": "A bit of thunder, for show", "tags": ["damage"], "rank": "master"}], "from": {"kinds": ["spell", "material"], "tags": ["damage", "control", "area"]}}
+  },
+  {
+    "job": "court-mage",
+    "flavor": "Paperwork and polite advice",
+    "subjects": ["Seating for a banquet with two feuding uncles", "The weather for a royal picnic", "A speech nobody will mind", "Which hat goes with the occasion"],
+    "base": {"name": "Document or topic", "staples": [{"id": "polite-memo", "name": "A polite memo", "tags": ["court"]}], "from": {"kinds": ["material", "spell"], "tags": ["court", "knowledge", "mind"]}},
+    "method": {"name": "Method", "staples": [{"id": "advise", "name": "Advise", "tags": ["knowledge"]}, {"id": "draft", "name": "Draft", "tags": ["utility"]}, {"id": "ceremony", "name": "Hold a ceremony", "tags": ["faith"]}, {"id": "consult-precedent", "name": "Consult precedent", "tags": ["mind"], "rank": "journeyman"}]},
+    "touch": {"name": "Touch", "staples": [{"id": "point-of-protocol", "name": "A point of protocol", "tags": ["control"]}, {"id": "ward-on-the-chair", "name": "A ward on the good chair", "tags": ["protection"], "rank": "master"}], "from": {"kinds": ["spell", "material"], "tags": ["protection", "mind", "enhance"]}}
+  },
+  {
+    "job": "hermit-wizard",
+    "flavor": "Rare visitors, woodland neighbors, and a kettle",
+    "subjects": ["A visitor who walked a long way with a question", "A badger with a sore paw", "A path that keeps moving", "Tea for exactly one"],
+    "base": {"name": "Find", "staples": [{"id": "doorstep-moss", "name": "Moss from the doorstep", "tags": ["plant"]}], "from": {"kinds": ["material"], "tags": ["plant", "animal", "mineral"]}},
+    "method": {"name": "Method", "staples": [{"id": "forage", "name": "Forage", "tags": ["utility"]}, {"id": "kettle-on", "name": "Put the kettle on", "tags": ["liquid"]}, {"id": "ponder", "name": "Ponder", "tags": ["knowledge"]}, {"id": "ask-the-owl", "name": "Ask the owl", "tags": ["animal"], "rank": "journeyman"}]},
+    "touch": {"name": "Touch", "staples": [{"id": "word-with-a-tree", "name": "A quiet word with a tree", "tags": ["healing"]}, {"id": "change-of-shape", "name": "A change of shape", "tags": ["transform"], "rank": "master"}], "from": {"kinds": ["spell", "material"], "tags": ["healing", "transform", "knowledge"]}}
+  },
+  {
+    "job": "necromancer",
+    "flavor": "Old graves, polite ghosts, and excellent records",
+    "subjects": ["A ghost who has lost her spectacles", "A headstone with the wrong date on it", "A pantry that keeps spoiling", "A message for a great-aunt who is still particular"],
+    "base": {"name": "Keepsake", "staples": [{"id": "graveyard-flowers", "name": "Graveyard flowers", "tags": ["plant"]}], "from": {"kinds": ["material"], "tags": ["animal", "plant", "mineral"]}},
+    "method": {"name": "Method", "staples": [{"id": "tend-the-plot", "name": "Tend the plot", "tags": ["utility"]}, {"id": "call-politely", "name": "Call politely", "tags": ["summon"]}, {"id": "keep-records", "name": "Keep the records", "tags": ["knowledge"]}, {"id": "small-gathering", "name": "Hold a small gathering", "tags": ["underground"], "rank": "journeyman"}]},
+    "touch": {"name": "Touch", "staples": [{"id": "tea-for-ghosts", "name": "Tea for the ghosts", "tags": ["liquid"]}, {"id": "cold-candle", "name": "A candle that burns cold", "tags": ["energy"], "rank": "master"}], "from": {"kinds": ["spell", "material"], "tags": ["summon", "toxic", "protection"]}}
+  },
+  {
+    "job": "healer",
+    "flavor": "Scrapes, sniffles, and soup",
+    "subjects": ["A scraped knee and a brave face", "A cold that has overstayed its welcome", "A goose with a sore foot", "Someone who only needs a sit down"],
+    "base": {"name": "Remedy", "staples": [{"id": "clean-bandages", "name": "Clean bandages", "tags": ["healing"]}], "from": {"kinds": ["material"], "tags": ["plant", "liquid", "reagent"]}},
+    "method": {"name": "Method", "staples": [{"id": "mend", "name": "Mend", "tags": ["utility"]}, {"id": "soothe", "name": "Soothe", "tags": ["mind"]}, {"id": "prescribe-soup", "name": "Prescribe soup", "tags": ["liquid"]}, {"id": "wrap-it-up", "name": "Wrap it up warm", "tags": ["protection"], "rank": "journeyman"}]},
+    "touch": {"name": "Touch", "staples": [{"id": "warm-windowsill", "name": "A warm windowsill", "tags": ["energy"]}, {"id": "healing-word", "name": "A healing word", "tags": ["enhance"], "rank": "master"}], "from": {"kinds": ["spell", "material"], "tags": ["healing", "protection", "plant"]}}
+  },
+  {
+    "job": "magical-scholar",
+    "flavor": "Footnotes, and why things work",
+    "subjects": ["Why the kettle spell also works on soup", "A footnote that contradicts another footnote", "A book that will not stay shut", "The proper name for a very small ward"],
+    "base": {"name": "Text", "staples": [{"id": "borrowed-book", "name": "A borrowed book", "tags": ["knowledge"]}], "from": {"kinds": ["spell", "material"], "tags": ["knowledge", "mind", "reagent"]}},
+    "method": {"name": "Method", "staples": [{"id": "read", "name": "Read", "tags": ["mind"]}, {"id": "cross-reference", "name": "Cross-reference", "tags": ["utility"]}, {"id": "footnote", "name": "Add a footnote", "tags": ["court"]}, {"id": "test-carefully", "name": "Test it, carefully", "tags": ["protection"], "rank": "journeyman"}]},
+    "touch": {"name": "Touch", "staples": [{"id": "strong-tea", "name": "A strong cup of tea", "tags": ["plant"]}, {"id": "margin-note", "name": "A margin note in an old hand", "tags": ["rare"], "rank": "master"}], "from": {"kinds": ["spell", "material"], "tags": ["protection", "energy", "transform"]}}
+  },
+  {
+    "job": "professor",
+    "flavor": "Lectures, lost chalk, and the next lot",
+    "subjects": ["A class that has not done the reading", "An apprentice who keeps turning the chalk blue", "A lecture the dean will sit in on", "The week of examinations"],
+    "base": {"name": "Lesson", "staples": [{"id": "box-of-chalk", "name": "A box of chalk", "tags": ["mineral"]}], "from": {"kinds": ["spell", "material"], "tags": ["knowledge", "mind", "mineral"]}},
+    "method": {"name": "Method", "staples": [{"id": "lecture", "name": "Lecture", "tags": ["knowledge"]}, {"id": "demonstrate", "name": "Demonstrate", "tags": ["energy"]}, {"id": "mark-papers", "name": "Mark the papers", "tags": ["court"]}, {"id": "encourage", "name": "Encourage", "tags": ["enhance"], "rank": "journeyman"}]},
+    "touch": {"name": "Touch", "staples": [{"id": "gold-star", "name": "A gold star", "tags": ["metal"]}, {"id": "old-story", "name": "A story from the old days", "tags": ["mind"], "rank": "master"}], "from": {"kinds": ["spell", "material"], "tags": ["enhance", "utility", "mind"]}}
+  },
+  {
+    "job": "back-room-apothecary",
+    "flavor": "Odd requests and rare finds, all of them invented and harmless",
+    "subjects": ["A definitely-legal hiccup elixir", "Something for a customer who was never here", "A glow tonic, unlicensed and harmless", "A refill, no questions"],
+    "base": {"name": "Goods", "staples": [{"id": "unlabeled-bottles", "name": "Unlabeled bottles", "tags": ["contraband"]}], "from": {"kinds": ["material"], "tags": ["reagent", "toxic", "plant", "liquid"]}},
+    "method": {"name": "Method", "staples": [{"id": "stock", "name": "Stock", "tags": ["industrial"]}, {"id": "haggle", "name": "Haggle", "tags": ["mind"]}, {"id": "pitch", "name": "Pitch", "tags": ["underground"]}, {"id": "relabel", "name": "Relabel", "tags": ["knowledge"], "rank": "journeyman"}]},
+    "touch": {"name": "Touch", "staples": [{"id": "free-sample", "name": "A free sample", "tags": ["brewing"]}, {"id": "a-wink", "name": "A wink", "tags": ["control"], "rank": "master"}], "from": {"kinds": ["spell", "material"], "tags": ["brewing", "toxic", "mind"]}}
+  }
+]

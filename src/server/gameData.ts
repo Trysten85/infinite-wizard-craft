@@ -2,32 +2,43 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { z } from "zod";
 import {
+  QUALITIES,
+  RANKS,
+  SHIFT_SLOTS,
   balanceSchema,
+  comboExampleSchema,
   comboKey,
   comboSchema,
   entrySchema,
   eventSeedSchema,
   jobSchema,
+  jobSkinSchema,
   ladderSchema,
   questSchema,
   schoolSchema,
+  shiftTextSchema,
   spellEntryId,
   spellMaterialSchema,
   spellRecipeSchema,
   spellSchema,
+  storybookItemSchema,
   tagSchema,
   type Balance,
   type Combo,
+  type ComboExample,
   type Entry,
   type EventSeed,
   type GameEntry,
   type Job,
+  type JobSkin,
   type Ladder,
   type Quest,
   type School,
+  type ShiftText,
   type Spell,
   type SpellMaterial,
   type SpellRecipe,
+  type StorybookItem,
   type Tag,
 } from "../shared/schema";
 
@@ -38,10 +49,16 @@ export type GameData = {
   entries: Map<string, GameEntry>;
   spells: Map<string, Spell>;
   jobs: Map<string, Job>;
+  // How each job's work shift looks, by job id, and the plain words shifts are written in.
+  jobSkins: Map<string, JobSkin>;
+  shiftText: ShiftText;
   quests: Quest[];
   eventSeeds: EventSeed[];
-  // Well-known fairy-tale creatures and objects a magical combination may produce.
-  storybook: string[];
+  // Well-known fairy-tale creatures, objects, and wonders a magical combination may produce,
+  // each with what it can come from.
+  storybook: StorybookItem[];
+  // Good combinations to show the model: the hand-picked ones, then the hand-written recipes.
+  comboExamples: ComboExample[];
   // comboKey -> what the pair makes, and anything else the player must have discovered first
   combos: Map<string, Recipe>;
 };
@@ -68,6 +85,12 @@ export function tierForDepth(depth: number, balance: Balance): number {
 // Learning a spell costs gold by tier, counting a cantrip as one tier.
 export function learnCostForTier(tier: number, balance: Balance): number {
   return (tier + 1) * balance.learnCostPerTier;
+}
+
+// The level a player must reach before they can learn a spell of this tier.
+export function levelForSpellTier(tier: number, balance: Balance): number {
+  const table = balance.spellLevelByTier;
+  return table[Math.min(tier, table.length - 1)]!;
 }
 
 export function xpForTier(tier: number, balance: Balance): number {
@@ -103,6 +126,22 @@ export function computeDepths(
   return depths;
 }
 
+// The hand-written recipes that make plain things, with the reason written beside each, are good
+// examples in their own right. Recipes for schools, spells, and jobs are not: those are not
+// things the model is ever asked to make.
+function recipesAsExamples(combos: Combo[], entries: Map<string, GameEntry>): ComboExample[] {
+  const plain = (id: string) => ["element", "material", "focus"].includes(entries.get(id)?.kind ?? "");
+  return combos
+    .filter((combo) => combo.logic && [...combo.inputs, combo.result].every(plain))
+    .map((combo) => ({
+      inputs: [entries.get(combo.inputs[0])!.name, entries.get(combo.inputs[1])!.name],
+      result: entries.get(combo.result)!.name,
+      why: combo.logic![0]!.toLowerCase() + combo.logic!.slice(1),
+      kind: "ordinary" as const,
+      authored: true,
+    }));
+}
+
 export function buildGameData(raw: {
   balance: Balance;
   tags: Tag[];
@@ -114,9 +153,12 @@ export function buildGameData(raw: {
   spellRecipes?: SpellRecipe[];
   spellMaterials?: SpellMaterial[];
   jobs?: Job[];
+  jobSkins?: JobSkin[];
+  shiftText?: ShiftText;
   quests?: Quest[];
   eventSeeds?: EventSeed[];
-  storybook?: string[];
+  storybook?: StorybookItem[];
+  comboExamples?: ComboExample[];
 }): GameData {
   const { balance, tags, schools, combos, spells = [], ladders = [], spellRecipes = [], spellMaterials = [], jobs = [], quests = [] } = raw;
   const eventSeeds = raw.eventSeeds ?? [];
@@ -309,13 +351,61 @@ export function buildGameData(raw: {
     for (const from of lower) recipes.push({ inputs: [from.id, key.id], result: spellEntryId(spell.id), needs: [] });
   }
 
+  const questIds = new Set<string>();
   for (const quest of quests) {
+    if (questIds.has(quest.id)) problems.push(`duplicate quest id "${quest.id}"`);
+    questIds.add(quest.id);
+    if (quest.level > balance.levels.cap) problems.push(`quest "${quest.id}" opens at level ${quest.level}, past the cap`);
+    if (quest.done.type === "level" && quest.done.level > balance.levels.cap) {
+      problems.push(`quest "${quest.id}" asks for level ${quest.done.level}, past the cap`);
+    }
     if (quest.done.type === "has-entry" && !entryIds.has(quest.done.entry)) {
       problems.push(`quest "${quest.id}" asks for unknown entry "${quest.done.entry}"`);
     }
-    if (quest.done.type === "has-tag" && !tagMap.has(quest.done.tag)) {
+    if ((quest.done.type === "has-tag" || quest.done.type === "tag-count") && !tagMap.has(quest.done.tag)) {
       problems.push(`quest "${quest.id}" asks for unknown tag "${quest.done.tag}"`);
     }
+  }
+
+  // Work shifts. A skin for a job this game does not have is simply left out, so a game built
+  // from fewer jobs still loads. A misspelled job shows up as that job having no skin.
+  const jobSkins = (raw.jobSkins ?? []).filter((skin) => jobs.some((job) => job.id === skin.job));
+  const skinned = new Set<string>();
+  for (const skin of jobSkins) {
+    const label = `skin for job "${skin.job}"`;
+    if (skinned.has(skin.job)) problems.push(`job "${skin.job}" has two skins`);
+    skinned.add(skin.job);
+    const stapleIds = new Set<string>();
+    for (const slot of SHIFT_SLOTS) {
+      for (const staple of skin[slot].staples) {
+        if (stapleIds.has(staple.id)) problems.push(`${label} uses the id "${staple.id}" twice`);
+        stapleIds.add(staple.id);
+      }
+      for (const tag of [...skin[slot].staples.flatMap((staple) => staple.tags), ...(skin[slot].from?.tags ?? [])]) {
+        if (!tagMap.has(tag)) problems.push(`${label} uses unknown tag "${tag}"`);
+      }
+      // Nobody may be left with an empty slot, whatever their rank.
+      if (slot !== "touch" && skin[slot].staples.every((staple) => staple.rank)) problems.push(`${label} has nothing in its ${slot} slot for a beginner`);
+    }
+  }
+  if (raw.jobSkins) {
+    for (const job of jobs) if (!skinned.has(job.id)) problems.push(`job "${job.id}" has no skin in data/job-skins.json`);
+  }
+  if (raw.shiftText) {
+    for (const tag of Object.keys(raw.shiftText.tagWords)) {
+      if (!tagMap.has(tag)) problems.push(`the shift text has words for unknown tag "${tag}"`);
+    }
+    for (const tag of tagMap.keys()) {
+      if (!raw.shiftText.tagWords[tag]) problems.push(`the shift text has no words for tag "${tag}"`);
+    }
+  }
+  const { qualities, ranks } = balance.shifts;
+  if (qualities.some((quality, index) => quality.id !== QUALITIES[index] || quality.from < (qualities[index - 1]?.from ?? -Infinity))) {
+    problems.push(`shift qualities must be ${QUALITIES.join(", ")}, each starting at a higher score than the last`);
+  }
+  if (qualities[0]!.from > 0) problems.push("the lowest shift quality must start at a score of 0, so that every shift earns one");
+  if (ranks.some((rank, index) => rank.id !== RANKS[index] || rank.shifts < (ranks[index - 1]?.shifts ?? 0)) || ranks[0]!.shifts !== 0) {
+    problems.push(`shift ranks must be ${RANKS.join(", ")}, starting at 0 shifts and each needing more than the last`);
   }
 
   for (const seed of eventSeeds) {
@@ -340,9 +430,35 @@ export function buildGameData(raw: {
   for (const entry of entries) {
     const depth = depths.get(entry.id)!;
     const tier = derivedTier.has(entry.id) ? tierForDepth(depth, balance) : entry.tier;
-    const learnCost = entry.kind === "spell" ? { learnCost: learnCostForTier(tier, balance) } : {};
-    entryMap.set(entry.id, { ...entry, tier, depth, xp: xpForTier(tier, balance), ...learnCost });
+    const learning = entry.kind === "spell" ? { learnCost: learnCostForTier(tier, balance), learnLevel: levelForSpellTier(tier, balance) } : {};
+    entryMap.set(entry.id, { ...entry, tier, depth, xp: xpForTier(tier, balance), ...learning });
   }
+
+  // A quest must not ask for more than the game holds. Materials are left out: the model makes
+  // more of those. This waits until here because a job's tier comes from its depth.
+  const findable = [...entryMap.values()].filter((entry) => !balance.startingEntries.includes(entry.id));
+  const spellsInPlay = findable.filter((entry) => entry.kind === "spell");
+  const beyond: string[] = [];
+  for (const quest of quests) {
+    const done = quest.done;
+    if ((done.type === "has-kind" || done.type === "kind-count") && done.kind !== "material") {
+      const need = done.type === "kind-count" ? done.count : 1;
+      const minTier = done.type === "kind-count" ? (done.tier ?? 0) : 0;
+      const have = findable.filter((entry) => entry.kind === done.kind && entry.tier >= minTier).length;
+      if (have < need) beyond.push(`quest "${quest.id}" asks for ${need} of kind "${done.kind}", and the game has ${have}`);
+    }
+    if (done.type === "learned-tier" && !spellsInPlay.some((spell) => spell.tier === done.tier)) {
+      beyond.push(`quest "${quest.id}" asks for a tier ${done.tier} spell, and none is in play`);
+    }
+    if (done.type === "learned-schools" && new Set(spellsInPlay.map((spell) => spell.school)).size < done.count) {
+      beyond.push(`quest "${quest.id}" asks for spells from ${done.count} schools, and fewer have spells in play`);
+    }
+    if (done.type === "learned-count" && spellsInPlay.length < done.count) {
+      beyond.push(`quest "${quest.id}" asks for ${done.count} learned spells, and the game has ${spellsInPlay.length}`);
+    }
+  }
+  if (beyond.length > 0) throw new Error(`game data is invalid:\n- ${beyond.join("\n- ")}`);
+
   return {
     balance,
     tags: tagMap,
@@ -350,9 +466,12 @@ export function buildGameData(raw: {
     entries: entryMap,
     spells: spellMap,
     jobs: new Map(jobs.map((job) => [job.id, job])),
+    jobSkins: new Map(jobSkins.map((skin) => [skin.job, skin])),
+    shiftText: raw.shiftText ?? { tagWords: {}, results: { meh: ["It works."], good: ["It does the job."], great: ["The customer smiles."], perfect: ["It is worth talking about."] } },
     quests,
     eventSeeds,
     storybook: raw.storybook ?? [],
+    comboExamples: [...(raw.comboExamples ?? []), ...recipesAsExamples(combos, entryMap)],
     combos: comboMap,
   };
 }
@@ -370,9 +489,12 @@ export function readGameFiles(rootDir: string) {
     spellRecipes: readOptional(join(rootDir, SPELL_RECIPES_FILE), z.array(spellRecipeSchema)),
     spellMaterials: readOptional(join(rootDir, SPELL_MATERIALS_FILE), z.array(spellMaterialSchema)),
     jobs: readJson(join(rootDir, "data/jobs.json"), z.array(jobSchema)),
+    jobSkins: readJson(join(rootDir, "data/job-skins.json"), z.array(jobSkinSchema)),
+    shiftText: readJson(join(rootDir, "data/shift-text.json"), shiftTextSchema),
     quests: readJson(join(rootDir, "data/quests.json"), z.array(questSchema)),
     eventSeeds: readJson(join(rootDir, "data/event-seeds.json"), z.array(eventSeedSchema)),
-    storybook: readJson(join(rootDir, "data/storybook.json"), z.array(z.string().regex(/^[A-Z][A-Za-z'-]*( [A-Z][A-Za-z'-]*)?$/, "one or two capitalised words"))),
+    storybook: readJson(join(rootDir, "data/storybook.json"), z.array(storybookItemSchema)),
+    comboExamples: readJson(join(rootDir, "data/combo-examples.json"), z.array(comboExampleSchema)),
   };
 }
 

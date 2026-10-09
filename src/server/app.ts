@@ -11,6 +11,7 @@ const playerSchema = z.string().regex(/^[A-Za-z0-9_-]{1,24}$/);
 const combineBodySchema = z.object({ a: idSchema, b: idSchema });
 const learnBodySchema = z.object({ spell: idSchema });
 const buyBodySchema = z.object({ slot: z.number().int().min(0) });
+const jobBodySchema = z.object({ job: idSchema });
 const respondBodySchema = z.object({ type: responseTypeSchema, beat: z.number().int().min(1).optional() });
 const testEventBodySchema = z.object({ seed: z.string().optional() });
 
@@ -114,6 +115,19 @@ export function createApp(combiner: Combiner, services?: { progress: ProgressSer
         const learned = progress.learn(request.player, request.body.spell);
         events?.prepare(request.player);
         return c.json({ ...learned, progress: progress.getProgress(request.player) });
+      } catch (err) {
+        return refuse(c, err);
+      }
+    });
+
+    // Takes up a job the player has discovered. It is theirs until they take up another.
+    app.post("/api/players/:player/job", async (c) => {
+      const request = await read(c, jobBodySchema);
+      if (!request) return invalid(c);
+      try {
+        const { rewards } = progress.chooseJob(request.player, request.body.job);
+        events?.prepare(request.player);
+        return c.json({ rewards, progress: progress.getProgress(request.player) });
       } catch (err) {
         return refuse(c, err);
       }

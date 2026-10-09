@@ -15,7 +15,10 @@ export type ModelCall = {
 
 export type LedgerReason = "quest" | "discovery" | "learn" | "shop" | "event" | "request" | "gift";
 
-export type PlayerStats = { rep: number; eventPoints: number; lastLevel: number };
+// `bonusXp` makes up the difference when a change to the game's numbers would otherwise have
+// taken away a level the player had already reached.
+// `job` is the job the player has taken up, or null if they have not chosen one.
+export type PlayerStats = { rep: number; eventPoints: number; lastLevel: number; bonusXp: number; job: string | null };
 
 export type Pronoun = "she" | "he" | "they";
 
@@ -193,6 +196,9 @@ export function openStore(path: string) {
   // Columns added since the first saved games were made.
   const personColumns = db.prepare("PRAGMA table_info(people)").all().map((row) => row.name as string);
   if (!personColumns.includes("pronoun")) db.exec("ALTER TABLE people ADD COLUMN pronoun TEXT");
+  const statColumns = db.prepare("PRAGMA table_info(player_stats)").all().map((row) => row.name as string);
+  if (!statColumns.includes("bonus_xp")) db.exec("ALTER TABLE player_stats ADD COLUMN bonus_xp INTEGER NOT NULL DEFAULT 0");
+  if (!statColumns.includes("job")) db.exec("ALTER TABLE player_stats ADD COLUMN job TEXT");
 
   function transaction<T>(fn: () => T): T {
     db.exec("BEGIN");
@@ -247,6 +253,12 @@ export function openStore(path: string) {
         }
         db.prepare("INSERT INTO combos (key, a, b, result_id) VALUES (?, ?, ?, ?)").run(key, a, b, entry.id);
       });
+    },
+
+    // The first pair that made a generated entry, for telling the model what a thing is.
+    getMakers(resultId: string): [string, string] | undefined {
+      const row = db.prepare("SELECT a, b FROM combos WHERE result_id = ? ORDER BY created_at, rowid LIMIT 1").get(resultId);
+      return row ? [row.a as string, row.b as string] : undefined;
     },
 
     listEntries(): GameEntry[] {
@@ -392,18 +404,24 @@ export function openStore(path: string) {
     },
 
     getStats(player: string): PlayerStats {
-      const row = db.prepare("SELECT rep, event_points, last_level FROM player_stats WHERE player = ?").get(player);
+      const row = db.prepare("SELECT rep, event_points, last_level, bonus_xp, job FROM player_stats WHERE player = ?").get(player);
       return row
-        ? { rep: row.rep as number, eventPoints: row.event_points as number, lastLevel: row.last_level as number }
-        : { rep: 0, eventPoints: 0, lastLevel: 1 };
+        ? { rep: row.rep as number, eventPoints: row.event_points as number, lastLevel: row.last_level as number, bonusXp: row.bonus_xp as number, job: (row.job as string | null) ?? null }
+        : { rep: 0, eventPoints: 0, lastLevel: 1, bonusXp: 0, job: null };
     },
 
     // Adds to a player's running totals. `lastLevel` is set outright when given.
-    changeStats(player: string, change: { rep?: number; eventPoints?: number; lastLevel?: number }): void {
+    // Records the job a player has taken up. It stays theirs until they take up another.
+    setJob(player: string, jobId: string): void {
+      db.prepare("INSERT OR IGNORE INTO player_stats (player) VALUES (?)").run(player);
+      db.prepare("UPDATE player_stats SET job = ? WHERE player = ?").run(jobId, player);
+    },
+
+    changeStats(player: string, change: { rep?: number; eventPoints?: number; lastLevel?: number; bonusXp?: number }): void {
       db.prepare("INSERT OR IGNORE INTO player_stats (player) VALUES (?)").run(player);
       db.prepare(
-        "UPDATE player_stats SET rep = rep + ?, event_points = event_points + ?, last_level = COALESCE(?, last_level) WHERE player = ?",
-      ).run(change.rep ?? 0, change.eventPoints ?? 0, change.lastLevel ?? null, player);
+        "UPDATE player_stats SET rep = rep + ?, event_points = event_points + ?, bonus_xp = bonus_xp + ?, last_level = COALESCE(?, last_level) WHERE player = ?",
+      ).run(change.rep ?? 0, change.eventPoints ?? 0, change.bonusXp ?? 0, change.lastLevel ?? null, player);
     },
 
     addPerson(player: string, person: Pick<Person, "name" | "role" | "traits" | "facts"> & { pronoun?: Pronoun | null }, day: number): Person {
@@ -491,6 +509,12 @@ export function openStore(path: string) {
           sceneSummary: row.scene_summary as string,
           outcomeSummary: (row.outcome_summary as string | null) ?? null,
         }));
+    },
+
+    // How many events a player has seen through to the end.
+    countResolvedEvents(player: string): number {
+      const row = db.prepare("SELECT COUNT(*) AS n FROM events WHERE player = ? AND state = 'resolved'").get(player);
+      return row!.n as number;
     },
 
     // Replaces what is stored for an event still in progress, as its conversation moves on.

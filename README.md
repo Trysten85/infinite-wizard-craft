@@ -104,15 +104,42 @@ The server owns gold, XP, level, quests, and learned spells. They are saved per 
 | `GET /api/players/:player/shop` | `{ slots, restockIn }` |
 | `POST /api/players/:player/shop/buy` with `{ slot }` | `{ entry, rewards, progress, shop }` |
 
-- `progress` is `{ xp, level, levelInto, levelSpan, gold, learned, quests }`. Each quest has a
-  `state` of `done`, `active`, or `upcoming`.
-- `rewards` is `{ gold, quests }`: what the player earned by that action, for toasts.
-- Every spell entry has `learnCost`, the gold it takes to learn, wherever the entry appears
-  (the player's entries, a combine result, a shop slot). The learn route also returns the `cost` paid.
+- `progress` is `{ xp, level, levelInto, levelSpan, gold, learned, quests }`.
+- Each quest is `{ id, title, detail, track, level, gold, xp, state, progress? }`. `track` is `main`
+  or `side`. `state` is `done`, `active` (the next main quest), `upcoming` (open), or `locked`
+  (opens at `level`). `progress` is `{ have, need }`, only on a quest that counts something.
+- `rewards` is `{ gold, quests }`: what the player earned by that action, for toasts. Each quest in
+  it is `{ id, title, gold, xp }`.
+- Every spell entry has `learnCost`, the gold it takes to learn, and `learnLevel`, the level it
+  takes, wherever the entry appears (the player's entries, a combine result, a shop slot). The
+  learn route also returns the `cost` paid.
 - Each shop slot is `{ slot, type, reason, entry, price, sold }`. `type` is `random` or `tailored`,
   and `reason` says why a tailored item was picked. `restockIn` counts new discoveries to go.
 - The types are exported from `src/shared/schema.ts`: `Progress`, `Rewards`, `ShopSlot`, `ShopView`.
-- More error codes: `not-enough-gold` and `sold-out` (both 400).
+- More error codes: `not-enough-gold`, `sold-out`, and `level-too-low` (all 400).
+
+### Quests, XP, and levels
+
+- XP comes from first discoveries (`discoveryXpByTier` in `config/balance.json`) and from quests.
+  Going from level N to N + 1 takes N times `levels.xpStep`.
+- The 40 quests are in `data/quests.json`: 20 `main`, worked through in order, and 20 `side`.
+  Each has a `done` condition, which is data (the kinds are listed in `questSchema`), and pays
+  `gold` and `xp`.
+- A quest pays once its condition is met and the player has reached its `level`. What the player
+  did earlier still counts. Quests pay about two fifths of the XP each level takes, and a test
+  holds them to that.
+- A quest that says "Make" has `made: true` in its condition: only things the player made by
+  combining count, and anything bought or given is left out. A test holds every such quest to it.
+- "Reach level N" quests pay gold and no XP. Only three quests have anything to do with events,
+  and they only count how many the player has seen through.
+- A spell can be learned once the player reaches `spellLevelByTier` for its tier: cantrips at
+  level 1, then levels 2, 3, and 5 for tiers 1 to 3.
+- A level once reached is kept. If these numbers change under a saved player, the XP they are
+  short of their old level is made up once (`player_stats.bonus_xp`).
+
+```
+npm run pace    # XP and hours each level should take, and how fast saved players have gone
+```
 
 **For the page to switch over:** stop working out XP, level, gold, and quests in
 `web/src/progress.ts` and `web/src/quests.ts` and read `progress` instead; call the learn route
@@ -191,6 +218,12 @@ Jobs are in `data/jobs.json`. Each is discovered by combining its two `inputs`, 
   first job quest should point at (Wizard); a discovered job also appears among the
   player's entries with kind `job`.
 - `orAnySpellTagged` adds recipes: a Healer is a Herbalist plus any healing spell in play.
+- **Taking up a job.** Discovering a job does not make it the player's. `POST
+  /api/players/:player/job` with `{ job }` takes up a job the player has discovered and returns
+  `{ rewards, progress }`. `progress.job` is `{ id, name }`, or `null` before one is chosen. It is
+  saved, and stays theirs until they take up a different one. Events (which seeds can fire, the
+  Skilled response, what the writer is told the player does) and the shop's job slot go by this
+  job only. An undiscovered job, or anything that is not a job, is refused with 400.
 - `wantedTags` is for score, which is not built yet.
 - A job combined with anything that has no hand-written recipe returns `no-result`.
 
@@ -198,6 +231,35 @@ Jobs are in `data/jobs.json`. Each is discovered by combining its two `inputs`, 
 npm run path -- blacksmith    # how something is made, worked back to the starting elements
 npm run path -- jobs          # every job with the length of its chain
 ```
+
+### Work shifts (rules and data)
+
+A job's shift is one order from its board, filled by picking a **Base**, a **Method**, and an
+optional **Touch**. The design is in `Jobs Guide.txt`. This part is the rules and the content;
+saving shifts and serving them to the page is the shift service's job.
+
+- **Skins** are in `data/job-skins.json`, one per job. A skin names the three slots, lists the
+  job's own *staples* for each (always on offer, so nobody has an empty slot), and says which
+  of the player's things fit a slot (`from`: kinds and tags). A staple with a `rank` opens at
+  that rank. A new job only needs a skin.
+- **Orders** (`stockOrder` in `src/server/shifts/orders.ts`) ask for two tags, or up to three
+  from Journeyman, and have a tier at or one under what the player's level allows. The tags are
+  taken one from each slot, so some choice always covers them all.
+- **Options** (`optionsFor`) are the staples for the player's rank plus what they have
+  discovered that fits. A spell fits only once learned and castable. Nothing is used up.
+- **Quality** (`src/shared/shifts.ts`, which the page can import too): the score is the share
+  of the order's tags covered, plus `tierBonus` when the best Base or Touch meets the order's
+  tier, plus the rank's bonus. That gives Meh, Good, Great, or Perfect, moved at most one step
+  by luck and never below Meh. `previewRange` gives the likeliest result and the range before
+  the player confirms.
+- **Pay** (`payFor`): gold and XP by the order's tier, scaled by quality. Great and Perfect
+  also raise standing.
+- **Ranks** come from shifts done in that job and are never lost: Apprentice, Journeyman at 8,
+  Master at 20. A build score is not asked for yet (`score: null`).
+- **Timing**: one shift opens every 10 discoveries made by combining, counted the way the shop
+  counts toward a restock. The first is open as soon as a job is taken up (`shiftIn`).
+- Order and result text is plain for now, from `data/shift-text.json`. Every number is under
+  `shifts` in `config/balance.json`.
 
 ## Drafting spell recipes
 
@@ -224,15 +286,52 @@ Set `status` to `ok` to make a row live, by hand or with `approve`. Re-running `
 
 ## How new combinations are named
 
-- An ordinary pair makes an ordinary, real-world thing with a plain name (Water + Sand = Beach).
-- A pair with magic in it may make a storybook thing (Clay + Life = Golem). Magic is in play when
-  an ingredient is one of `generation.wonderInputs` in `config/balance.json`, a focus, or itself a
-  storybook result.
-- For a magical pair the model picks from the fixed list in `data/storybook.json`, or says none.
-  Edit that list to turn the fantasy up or down.
-- One thing can be made several ways. But when a new pair lands on something another pair
-  already makes, the model is asked once more whether something else fits just as well. If it
-  gives the same answer again, that answer stands.
+A small model is poor at inventing the right answer in one go, better at choosing from a short
+list, and best when code has already cut the list down. So a new combination is named in steps
+(`src/server/comboGenerator.ts`), and code does as much of the deciding as it can
+(`src/server/comboContext.ts`).
+
+1. **Is magic in play?** Code decides. It is when an ingredient is one of
+   `generation.wonderInputs`, a focus, or itself a storybook result.
+2. **Storybook.** For a magical pair, code looks up which things in `data/storybook.json` one
+   ingredient *makes* (`from`) and the other *wakes* (`wokenBy`). A tree and Life: Treant, Dryad.
+   The model chooses one from that closed list, or declines them all. A tree and anything else is
+   never a Treant.
+3. **Ideas.** Otherwise the model answers three plain questions about the pair, each with its
+   reason before its name: what the two make, where they are found together, and a thing with
+   both in it. The first answer the game's rules allow is taken. If another pair already makes
+   that thing and one of the other answers is new, the new one is taken instead.
+   - The model is shown what each model-made ingredient was made from, and a few examples from
+     `data/combo-examples.json` and the hand-written recipes, chosen to resemble the pair.
+   - A magical pair that makes nothing from the storybook makes an **everyday thing touched by
+     magic**: a plain name, with one small enchantment in its description.
+4. **Describe.** The description and tags are written for the chosen name.
+
+| To change | Edit |
+|---|---|
+| Which fairy-tale things exist, what each is made of, and what wakes it | `data/storybook.json` |
+| The examples shown to the model | `data/combo-examples.json` |
+| How many examples, storybook things offered, and tags; the temperatures | `generation` in `config/balance.json` |
+
+- `generation.pick` adds a step where the model judges between the three ideas. It is off: at
+  low effort the model judges poorly and it doubles the wait. Try it with `npm run bench -- --pick`.
+- `generation.charmedCarriesMagic` decides whether an everyday thing touched by magic counts as
+  magical itself. Off, the magic fades unless a magical ingredient is added again.
+- A name that is only the two ingredients run together (Bloodfire from Blood and Fire) is refused.
+
+### Measuring it
+
+```
+npm run bench                  # every pair in data/combo-bench.json, graded
+npm run bench -- sand spirit   # only pairs that use one of these things
+```
+
+Runs each pair on a throwaway save and writes `var/bench/<date>/report.md`, beside the last full
+run. Each pair in `data/combo-bench.json` lists answers that are `good` and answers that are
+`bad`. Anything else is graded by the model itself, thinking harder than it does in the game, and
+comes out as plausible or doubtful. That grade is rough: read the report, and move answers onto
+the lists to settle them. The report also shows what the model suggested for each pair and how
+long each step took. Run it before and after changing a prompt, the storybook, or a setting.
 
 ## Blocklist
 
@@ -280,4 +379,5 @@ npm run cache -- list            # every cached combo and what it made
 npm run cache -- delete fire+mud # delete one; also removes anything built from it
 npm run cache -- calls           # recent model calls with tokens and latency
 npm run cache -- revoice         # rewrite cached descriptions in the current voice (names stay; a backup is kept)
+npm run cache -- review          # have the model grade every cached combo and list the doubtful ones
 ```

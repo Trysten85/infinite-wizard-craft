@@ -5,7 +5,7 @@ import { tierForDepth, xpForTier, type GameData } from "./gameData";
 import type { Store } from "./store";
 import { endsCleanly } from "./voice";
 
-export type RuleCode = "rule" | "no-focus" | "missing-needs" | "no-result" | "not-enough-gold" | "sold-out";
+export type RuleCode = "rule" | "no-focus" | "missing-needs" | "no-result" | "not-enough-gold" | "sold-out" | "level-too-low" | "no-job" | "shift-not-ready";
 
 // Thrown when the player asks for something the rules don't allow.
 export class RuleError extends Error {
@@ -18,6 +18,29 @@ export class RuleError extends Error {
 }
 
 const NAME_PATTERN = /^[A-Za-z][A-Za-z '’-]*$/;
+
+// A made-up word that is only the two ingredients' names run together: Bloodfire from Blood and
+// Fire, Mindbook from Mind and Spellbook. Real compounds are left alone: a Sandcastle from Sand
+// and Water has a castle in it that neither ingredient supplied.
+export function isWeld(name: string, a: string, b: string): boolean {
+  const letters = (text: string) => text.toLowerCase().replace(/[^a-z]/g, "");
+  const word = letters(name);
+  if (name.trim().includes(" ")) return false;
+  const madeOf = (first: string, second: string) =>
+    letters(first).length >= 3 &&
+    [word.startsWith(letters(first)) ? word.slice(letters(first).length) : null, word.endsWith(letters(first)) ? word.slice(0, -letters(first).length) : null].some(
+      (rest) => rest !== null && rest.length >= 3 && letters(second).includes(rest),
+    );
+  return madeOf(a, b) || madeOf(b, a);
+}
+
+// An ingredient's own name with a new ending: Salted or Salty from Salt, Sands from Sand. That
+// describes the ingredient. It is not a new thing.
+export function isInflection(name: string, a: string, b: string): boolean {
+  const letters = (text: string) => text.toLowerCase().replace(/[^a-z]/g, "");
+  const word = letters(name);
+  return !name.trim().includes(" ") && [a, b].map(letters).some((base) => base.length >= 3 && word.startsWith(base) && word.length - base.length <= 2);
+}
 
 export type Combiner = ReturnType<typeof createCombiner>;
 
@@ -37,8 +60,13 @@ export function createCombiner(deps: {
   // Two players making the same new combo at once share one model call and one result.
   const inFlight = new Map<string, Promise<GameEntry>>();
 
+  // A saved entry's XP is worked out again from its tier, so it follows the balance file as it
+  // stands now and not as it stood when the entry was first made.
   function getEntry(id: string): GameEntry | undefined {
-    return data.entries.get(id) ?? store.getEntry(id);
+    const authored = data.entries.get(id);
+    if (authored) return authored;
+    const saved = store.getEntry(id);
+    return saved && { ...saved, xp: xpForTier(saved.tier, data.balance) };
   }
 
   function discoveredIds(player: string): string[] {
@@ -59,6 +87,8 @@ export function createCombiner(deps: {
       if (draft.name.trim().split(/\s+/).length > 2) return "Use a plainer name: one everyday word, two at most.";
       const id = slugify(draft.name);
       if (id === a.id || id === b.id) return `The result cannot be one of the inputs ("${draft.name}").`;
+      if (isWeld(draft.name, a.name, b.name)) return `"${draft.name}" is only the two names stuck together. Name a real thing.`;
+      if (isInflection(draft.name, a.name, b.name)) return `"${draft.name}" is only an ingredient's name with a new ending. Name the new thing the two make.`;
       // Hand-written entries are progression. The model may not hand them out through other combos.
       if (data.entries.has(id)) return `"${draft.name}" already exists and is made another way.`;
       // The reason never names the blocked term, so the list itself is never shown to the model.
@@ -71,17 +101,7 @@ export function createCombiner(deps: {
       if (/[0-9!]/.test(draft.description)) return "The description must not contain digits or exclamation marks.";
       return null;
     };
-    let draft = await generate(a, b, reject);
-    // Making one thing several ways is fine, but a model that reaches for the same answer every
-    // time is asked once more whether something else fits. If it says the same again, that stands.
-    const repeated = store.getEntry(slugify(draft.name));
-    if (repeated) {
-      try {
-        draft = await generate(a, b, reject, repeated.name);
-      } catch (err) {
-        console.error(`Second look at ${a.name} + ${b.name} failed, keeping ${repeated.name}:`, err instanceof Error ? err.message : err);
-      }
-    }
+    const draft = await generate(a, b, reject);
     const name = draft.name[0]!.toUpperCase() + draft.name.slice(1);
     const id = slugify(name);
 
@@ -106,7 +126,7 @@ export function createCombiner(deps: {
       };
     }
     store.saveGenerated(key, a.id, b.id, entry, draft.missingTag);
-    return store.getEntry(id)!;
+    return getEntry(id)!;
   }
 
   async function combine(player: string, aId: string, bId: string): Promise<CombineResult> {
@@ -132,7 +152,7 @@ export function createCombiner(deps: {
     } else if (isAuthoredOnly(a) || isAuthoredOnly(b)) {
       throw new RuleError("Nothing comes of it yet.", "no-result");
     } else if (cachedId) {
-      entry = store.getEntry(cachedId)!;
+      entry = getEntry(cachedId)!;
       origin = "cached";
     } else {
       let pending = inFlight.get(key);

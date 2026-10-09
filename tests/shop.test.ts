@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createApp } from "../src/server/app";
 import { buildPath } from "../src/server/paths";
+import { xpToReach } from "../src/server/progress";
 import type { ShopSlot } from "../src/shared/schema";
 import { data, newGame, TO_FIRE_BOLT } from "./helpers";
 
@@ -108,8 +109,9 @@ describe("buying", () => {
     expect(entry.id).toBe(slot.entry.id);
     expect(combiner.listDiscovered("ann").map((item) => item.id)).toContain(entry.id);
     const after = progress.getProgress("ann");
-    expect(after.xp).toBe(before.xp + entry.xp);
-    // The only gold that can arrive with a purchase is a quest it happens to complete.
+    // The only gold and extra XP that can arrive with a purchase is a quest it happens to complete.
+    const questXp = rewards.quests.reduce((total, quest) => total + quest.xp, 0);
+    expect(after.xp).toBe(before.xp + entry.xp + questXp);
     const questGold = rewards.quests.reduce((total, quest) => total + quest.gold, 0);
     expect(rewards.gold).toBe(questGold);
     expect(after.gold).toBe(before.gold - slot.price + questGold);
@@ -143,22 +145,34 @@ describe("tailored slots", () => {
     expect(pick?.entry.id).toBe("tree");
   });
 
-  it("stock what the player's newest job wants", () => {
+  it("stock what the job the player has taken up wants", () => {
     const game = newGame();
     for (const id of ["person", "forge", "farmer", "blacksmith"]) game.store.addDiscovery("ann", id);
-    const pick = tailored(game).find((slot) => slot.reason === "Stock for a Blacksmith.");
-    const wanted = data.jobs.get("blacksmith")!.wantedTags;
+    // Farmer was discovered first, and Blacksmith last. It is the one taken up that counts.
+    game.progress.chooseJob("ann", "farmer");
+    const pick = tailored(game).find((slot) => slot.reason.startsWith("Stock for a"));
+    expect(pick?.reason).toBe("Stock for a Farmer.");
+    const wanted = data.jobs.get("farmer")!.wantedTags;
     expect(pick?.entry.tags.some((tag) => wanted.includes(tag))).toBe(true);
+  });
+
+  it("stock nothing for a job the player has only discovered", () => {
+    const game = newGame();
+    for (const id of ["person", "forge", "farmer", "blacksmith"]) game.store.addDiscovery("ann", id);
+    expect(tailored(game).some((slot) => slot.reason.startsWith("Stock for a"))).toBe(false);
   });
 
   it("offer a spell the player could cast now, from a school they have learned from", async () => {
     const game = newGame();
     await game.play("ann", TO_FIRE_BOLT);
     game.progress.learn("ann", "spell-fire-bolt");
+    // The evocation cantrips and Burning Hands are each one free move away by now, so the first
+    // spell worth stocking is a second-tier one, which takes level three.
+    game.store.changeStats("ann", { bonusXp: xpToReach(3, data.balance) });
     game.store.setShop("ann", -100, []);
     const pick = tailored(game).find((slot) => slot.reason === "A spell you could cast now.");
     expect(pick?.entry).toMatchObject({ kind: "spell", school: "evocation" });
-    expect(pick!.entry.tier).toBeLessThanOrEqual(game.progress.getProgress("ann").level);
+    expect(pick!.entry.learnLevel).toBeLessThanOrEqual(game.progress.getProgress("ann").level);
   });
 
   it("never tailor a slot to something the player can make for free in one move", async () => {
@@ -196,8 +210,15 @@ describe("the routes", () => {
 
     const combined = (await (await app.request("/api/players/ann/combine", post({ a: "fire", b: "air" }))).json()) as Record<string, any>;
     expect(combined).toMatchObject({ entry: { id: "light" }, origin: "authored", firstDiscovery: true });
-    expect(combined.rewards).toEqual({ gold: 6, quests: [{ id: "first-combine", title: "Combine two elements", gold: 5 }] });
-    expect(combined.progress.gold).toBe(6);
+    // Light is both a first discovery and a new element.
+    expect(combined.rewards).toEqual({
+      gold: 11,
+      quests: [
+        { id: "first-combine", title: "Combine two elements", gold: 5, xp: 20 },
+        { id: "new-element", title: "Find a new element", gold: 5, xp: 25 },
+      ],
+    });
+    expect(combined.progress.gold).toBe(11);
   });
 
   it("serve the shelf, sell from it, and refuse what the rules refuse", async () => {

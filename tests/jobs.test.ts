@@ -1,9 +1,15 @@
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { createApp } from "../src/server/app";
 import { createCombiner } from "../src/server/combiner";
+import { eligibleSeeds, snapshotPlayer } from "../src/server/events/picker";
+import { createCannedEventWriter } from "../src/server/events/writer";
 import { buildGameData, loadGameData, readGameFiles } from "../src/server/gameData";
 import { buildPath } from "../src/server/paths";
 import { openStore } from "../src/server/store";
+import { newGame } from "./helpers";
 
 const data = loadGameData(process.cwd());
 const jobs = [...data.jobs.values()];
@@ -79,5 +85,109 @@ describe("jobs", () => {
     expect(body.jobs).toHaveLength(22);
     expect(body.jobs.find((job) => job.id === "spy")).toEqual({ id: "spy", magic: false, hint: "Someone who likes the shade and listens well. Curtains are involved.", starter: false });
     expect(body.jobs.find((job) => job.id === "wizard")).toMatchObject({ starter: true });
+  });
+});
+
+describe("taking up a job", () => {
+  const post = (body: unknown) => ({ method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  // A player who has discovered two jobs, Farmer first and Blacksmith second.
+  function withTwoJobs() {
+    const game = newGame();
+    for (const id of ["person", "forge", "farmer", "blacksmith"]) game.store.addDiscovery("ann", id);
+    return game;
+  }
+
+  it("is not done for the player: discovering a job is not choosing it", () => {
+    const game = withTwoJobs();
+    expect(game.progress.getProgress("ann").job).toBeNull();
+    expect(newGame().progress.getProgress("ann").job).toBeNull();
+  });
+
+  it("is kept from then on, whatever jobs are discovered afterwards", () => {
+    const game = withTwoJobs();
+    expect(game.progress.chooseJob("ann", "farmer").job).toEqual({ id: "farmer", name: "Farmer" });
+    expect(game.progress.getProgress("ann").job).toEqual({ id: "farmer", name: "Farmer" });
+    game.store.addDiscovery("ann", "herb");
+    game.store.addDiscovery("ann", "herbalist");
+    expect(game.progress.getProgress("ann").job).toEqual({ id: "farmer", name: "Farmer" });
+    // Another player's choice is their own.
+    expect(game.progress.getProgress("bob").job).toBeNull();
+  });
+
+  it("can be changed by taking up a different job", () => {
+    const game = withTwoJobs();
+    game.progress.chooseJob("ann", "farmer");
+    game.progress.chooseJob("ann", "blacksmith");
+    expect(game.progress.getProgress("ann").job).toEqual({ id: "blacksmith", name: "Blacksmith" });
+  });
+
+  it("is refused for a job the player has not discovered, and for anything that is not a job", () => {
+    const game = withTwoJobs();
+    expect(() => game.progress.chooseJob("ann", "wizard")).toThrow(/only take up a job you have discovered/);
+    expect(() => game.progress.chooseJob("ann", "forge")).toThrow(/only take up a job/);
+    expect(() => game.progress.chooseJob("ann", "no-such-job")).toThrow(/only take up a job/);
+    expect(game.progress.getProgress("ann").job).toBeNull();
+  });
+
+  it("is what events go by: a job only discovered opens no job events and lends no skill", () => {
+    const game = withTwoJobs();
+    const discovered = game.combiner.listDiscovered("ann");
+    const before = snapshotPlayer(data, discovered, 3, game.progress.getProgress("ann").job?.id ?? null);
+    expect(before.job).toBeNull();
+    game.progress.chooseJob("ann", "farmer");
+    const after = snapshotPlayer(data, discovered, 3, game.progress.getProgress("ann").job?.id ?? null);
+    expect(after.job).toMatchObject({ id: "farmer", wantedTags: data.jobs.get("farmer")!.wantedTags });
+    const needJob = data.eventSeeds.filter((seed) => seed.needsJob).map((seed) => seed.id);
+    expect(needJob.length).toBeGreaterThan(0);
+    for (const id of needJob) {
+      expect(eligibleSeeds(data.eventSeeds, before).map((seed) => seed.id)).not.toContain(id);
+      expect(eligibleSeeds(data.eventSeeds, { ...after, hasSpell: true }).map((seed) => seed.id)).toContain(id);
+    }
+    // A job id that is not among the player's discoveries counts for nothing.
+    expect(snapshotPlayer(data, discovered, 3, "wizard").job).toBeNull();
+  });
+
+  it("is told to the event writer as the player's trade", async () => {
+    const briefs: { player: { job: string | null } }[] = [];
+    const canned = createCannedEventWriter();
+    const game = newGame(1, { ...canned, write: (brief) => (briefs.push(brief), canned.write(brief)) });
+    for (const id of ["person", "forge", "farmer", "blacksmith"]) game.store.addDiscovery("ann", id);
+    await game.events.test("ann", "small_thief");
+    game.progress.chooseJob("ann", "farmer");
+    await game.events.test("ann", "small_thief");
+    expect(briefs.map((brief) => brief.player.job)).toEqual([null, "Farmer"]);
+  });
+
+  it("has a route, which answers with where the player now stands", async () => {
+    const game = withTwoJobs();
+    const app = createApp(game.combiner, { progress: game.progress, shop: game.shop, events: game.events });
+    const before = (await (await app.request("/api/players/ann")).json()) as Record<string, any>;
+    expect(before.progress.job).toBeNull();
+
+    const taken = await app.request("/api/players/ann/job", post({ job: "blacksmith" }));
+    expect(taken.status).toBe(200);
+    const body = (await taken.json()) as Record<string, any>;
+    expect(body.progress.job).toEqual({ id: "blacksmith", name: "Blacksmith" });
+    expect(body.rewards).toMatchObject({ gold: expect.any(Number), quests: expect.any(Array) });
+    expect(((await (await app.request("/api/players/ann")).json()) as Record<string, any>).progress.job).toEqual({ id: "blacksmith", name: "Blacksmith" });
+
+    const refused = await app.request("/api/players/ann/job", post({ job: "wizard" }));
+    expect(refused.status).toBe(400);
+    expect(((await refused.json()) as Record<string, any>).error).toMatch(/only take up a job you have discovered/);
+    expect((await app.request("/api/players/ann/job", post({}))).status).toBe(400);
+  });
+
+  it("survives the server being restarted", () => {
+    const dir = mkdtempSync(join(tmpdir(), "iwc-job-"));
+    const path = join(dir, "game.db");
+    const first = openStore(path);
+    first.addDiscovery("ann", "farmer");
+    first.setJob("ann", "farmer");
+    first.close();
+    const second = openStore(path);
+    expect(second.getStats("ann").job).toBe("farmer");
+    expect(second.getStats("bob").job).toBeNull();
+    second.close();
+    rmSync(dir, { recursive: true });
   });
 });

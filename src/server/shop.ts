@@ -1,6 +1,6 @@
 import type { GameEntry, Rewards, ShopSlot, ShopView } from "../shared/schema";
 import { RuleError } from "./combiner";
-import type { GameData } from "./gameData";
+import { levelForSpellTier, type GameData } from "./gameData";
 import { buildPath } from "./paths";
 import { repBandFor, type ProgressService } from "./progress";
 import type { Store } from "./store";
@@ -77,9 +77,10 @@ export function createShop(deps: {
     return options.sort((a, b) => weight(a.goal) - weight(b.goal) || a.entry.depth - b.entry.depth)[0];
   }
 
-  // Something a good build for the player's newest job wants. Before any job, a step toward the starter job.
-  function forJob(discovered: GameEntry[], have: Set<string>, available: GameEntry[]): Pick | undefined {
-    const newestJob = discovered.filter((entry) => entry.kind === "job").at(-1);
+  // Something a good build for the job the player has taken up wants. Before they have taken
+  // one up, a step toward the starter job.
+  function forJob(player: string, have: Set<string>, available: GameEntry[]): Pick | undefined {
+    const newestJob = progress.getProgress(player).job;
     if (newestJob) {
       const wanted = new Set(data.jobs.get(newestJob.id)!.wantedTags);
       const score = (entry: GameEntry) => entry.tags.filter((tag) => wanted.has(tag)).length;
@@ -100,7 +101,7 @@ export function createShop(deps: {
     const { level, learned } = progress.getProgress(player);
     const schools = new Set(learned.map((id) => data.entries.get(id)?.school));
     const spells = available
-      .filter((entry) => entry.kind === "spell" && schools.has(entry.school) && entry.tier <= level)
+      .filter((entry) => entry.kind === "spell" && schools.has(entry.school) && levelForSpellTier(entry.tier, data.balance) <= level)
       .sort((a, b) => a.tier - b.tier);
     const lowest = spells.filter((spell) => spell.tier === spells[0]!.tier);
     if (lowest.length > 0) return { entry: pickRandom(lowest)!, reason: "A spell you could cast now." };
@@ -132,7 +133,7 @@ export function createShop(deps: {
     const worthSelling = () => available.filter((entry) => !canMakeNow(entry, have, hasFocus));
     const tailored = [
       () => nextStep(discovered, have, worthSelling()),
-      () => forJob(discovered, have, worthSelling()),
+      () => forJob(player, have, worthSelling()),
       () => forLevel(player, discovered, worthSelling()),
     ];
     const picks: (Pick | undefined)[] = [];

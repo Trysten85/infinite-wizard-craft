@@ -1,14 +1,24 @@
 import { describe, expect, it } from "vitest";
-import { levelFor } from "../src/server/progress";
+import { levelFor, xpToReach } from "../src/server/progress";
 import { data, newGame, TO_FIRE_BOLT } from "./helpers";
+
+const step = data.balance.levels.xpStep;
+const quest = (id: string) => data.quests.find((item) => item.id === id)!;
+// A quest as it appears among the rewards for an action.
+const paid = (id: string) => ({ id, title: quest(id).title, gold: quest(id).gold, xp: quest(id).xp });
 
 describe("levels", () => {
   it("take more XP each time and stop at the cap", () => {
-    expect(levelFor(0, data.balance)).toEqual({ level: 1, into: 0, span: 100 });
-    expect(levelFor(99, data.balance).level).toBe(1);
-    expect(levelFor(100, data.balance)).toEqual({ level: 2, into: 0, span: 200 });
-    expect(levelFor(350, data.balance)).toEqual({ level: 3, into: 50, span: 300 });
-    expect(levelFor(1_000_000, data.balance).level).toBe(data.balance.levels.cap);
+    expect(levelFor(0, data.balance)).toEqual({ level: 1, into: 0, span: step });
+    expect(levelFor(step - 1, data.balance).level).toBe(1);
+    expect(levelFor(step, data.balance)).toEqual({ level: 2, into: 0, span: 2 * step });
+    expect(levelFor(3 * step + 50, data.balance)).toEqual({ level: 3, into: 50, span: 3 * step });
+    expect(levelFor(100_000_000, data.balance).level).toBe(data.balance.levels.cap);
+  });
+
+  it("are reached at a running total of XP", () => {
+    expect([1, 2, 3, 4].map((level) => xpToReach(level, data.balance))).toEqual([0, step, 3 * step, 6 * step]);
+    for (const level of [2, 3, 4, 5]) expect(levelFor(xpToReach(level, data.balance), data.balance)).toMatchObject({ level, into: 0 });
   });
 });
 
@@ -17,16 +27,20 @@ describe("progress", () => {
     const { progress } = newGame();
     const state = progress.getProgress("ann");
     expect(state).toMatchObject({ xp: 0, level: 1, gold: 0, learned: [] });
-    expect(state.quests.map((quest) => quest.state)).toEqual(["active", ...Array(6).fill("upcoming")]);
+    // The first main quest is the one to work on. The rest of level one is open, and the rest waits.
+    expect(state.quests.map((item) => item.state)).toEqual(data.quests.map((item, index) => (index === 0 ? "active" : item.level === 1 ? "upcoming" : "locked")));
   });
 
   it("pays XP, a little gold, and a quest for the first discovery, exactly once", async () => {
     const { progress, play } = newGame();
     await play("ann", [["fire", "air"]]);
-    expect(progress.settle("ann")).toEqual({ gold: 6, quests: [{ id: "first-combine", title: "Combine two elements", gold: 5 }] });
+    // Light is a first discovery and a new element, so two quests come with it.
+    const gold = 1 + quest("first-combine").gold + quest("new-element").gold;
+    expect(progress.settle("ann")).toEqual({ gold, quests: [paid("first-combine"), paid("new-element")] });
     expect(progress.settle("ann")).toEqual({ gold: 0, quests: [] });
     await play("ann", [["fire", "air"]]);
-    expect(progress.getProgress("ann")).toMatchObject({ xp: data.entries.get("light")!.xp, gold: 6 });
+    const xp = data.entries.get("light")!.xp + quest("first-combine").xp + quest("new-element").xp;
+    expect(progress.getProgress("ann")).toMatchObject({ xp, gold });
   });
 
   it("pays more gold for a deeper discovery", async () => {
@@ -42,18 +56,24 @@ describe("progress", () => {
   it("marks quests done in order as the player meets them", async () => {
     const { progress, play } = newGame();
     await play("ann", TO_FIRE_BOLT);
-    const states = Object.fromEntries(progress.getProgress("ann").quests.map((quest) => [quest.id, quest.state]));
-    expect(states).toMatchObject({ "first-combine": "done", "first-focus": "done", "first-cantrip": "done", "first-learned": "active", component: "upcoming" });
-    // Sand is a reagent: a component for a higher spell.
-    await play("ann", [["earth", "air"]]);
-    expect(progress.getProgress("ann").quests.find((quest) => quest.id === "component")!.state).toBe("done");
+    const states = Object.fromEntries(progress.getProgress("ann").quests.map((item) => [item.id, item.state]));
+    expect(states).toMatchObject({
+      "first-combine": "done",
+      "first-focus": "done",
+      "first-school": "done",
+      "first-cantrip": "done",
+      "first-learned": "active",
+      "level-two": "upcoming",
+      "fifteen-things": "upcoming",
+      component: "locked",
+    });
   });
 
   it("credits a player from before gold existed, once", () => {
     const { progress, store } = newGame();
     for (const id of ["light", "mud", "life"]) store.addDiscovery("old-timer", id);
     const first = progress.getProgress("old-timer").gold;
-    expect(first).toBe(3 + 5);
+    expect(first).toBe(3 + quest("first-combine").gold + quest("new-element").gold);
     expect(progress.getProgress("old-timer").gold).toBe(first);
   });
 });
@@ -66,8 +86,8 @@ describe("learning a spell", () => {
     const { spell, cost, rewards } = progress.learn("ann", "spell-fire-bolt");
     expect(spell.name).toBe("Fire Bolt");
     expect(cost).toBe(10);
-    expect(rewards.quests.map((quest) => quest.id)).toEqual(["first-learned"]);
-    expect(progress.getProgress("ann")).toMatchObject({ gold: before - cost + 20, learned: ["spell-fire-bolt"] });
+    expect(rewards.quests).toEqual([paid("first-learned")]);
+    expect(progress.getProgress("ann")).toMatchObject({ gold: before - cost + quest("first-learned").gold, learned: ["spell-fire-bolt"] });
   });
 
   it("puts the price on every spell entry, so it can be shown before learning", async () => {

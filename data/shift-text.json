@@ -1,0 +1,60 @@
+{
+  "tagWords": {
+    "damage": "some force",
+    "healing": "something soothing",
+    "protection": "protection",
+    "control": "a firm hand",
+    "enhance": "an improvement",
+    "utility": "something practical",
+    "knowledge": "know-how",
+    "mind": "a clear head",
+    "energy": "energy",
+    "summon": "something fetched",
+    "transform": "a change of shape",
+    "area": "room to spread",
+    "explosive": "a bit of a bang",
+    "metal": "metal",
+    "mineral": "stone or mineral",
+    "plant": "something green",
+    "animal": "something from an animal",
+    "liquid": "something wet",
+    "reagent": "a spell component",
+    "toxic": "something that bites back",
+    "rare": "something rare",
+    "forging": "forge work",
+    "brewing": "brewing",
+    "enchanting": "an enchantment",
+    "licensed": "the proper paperwork",
+    "contraband": "discretion",
+    "faith": "a little faith",
+    "underground": "a quiet word",
+    "court": "good manners",
+    "industrial": "sturdy workmanship"
+  },
+  "results": {
+    "meh": [
+      "It works. Nobody claps.",
+      "It does what was asked, in the way a wet sock keeps a foot covered.",
+      "The customer says it is fine, twice, and looks at it a third time on the way out.",
+      "Done. The less said about the middle part, the better."
+    ],
+    "good": [
+      "It does the job, and the job stays done.",
+      "The customer nods, pays, and does not come back with it.",
+      "Solid work. It will not be the talk of the town, and it will not need mending.",
+      "Exactly what was asked for, which is rarer than it sounds."
+    ],
+    "great": [
+      "The customer smiles before remembering to haggle.",
+      "It is good enough that someone asks who made it.",
+      "A proper piece of work. The customer carries it out with both hands.",
+      "Better than asked. The customer pretends not to notice, badly."
+    ],
+    "perfect": [
+      "The customer goes quiet, which in this town is high praise.",
+      "It is worth talking about, and by supper people are.",
+      "Nobody could have done it better, and the goose next door agrees.",
+      "The customer leaves to fetch a friend, to show them."
+    ]
+  }
+}

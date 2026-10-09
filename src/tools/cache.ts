@@ -3,14 +3,20 @@
 //   npm run cache -- delete fire+mud
 //   npm run cache -- calls
 //   npm run cache -- revoice     rewrite every cached description in the current voice guide
+//   npm run cache -- review      have the model grade every cached combo and list the doubtful ones
 import { copyFileSync, existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { z } from "zod";
 import { loadBlocklist } from "../server/blocklist";
+import { goesWith } from "../server/cacheReview";
+import { createMadeFrom, thingLine } from "../server/comboContext";
+import { createComboGrader } from "../server/comboGrader";
 import { loadGameData } from "../server/gameData";
 import { generateValidated, GenerationError } from "../server/llm/generate";
 import { createModelClient, readModelConfig } from "../server/llm/config";
+import { createOllamaClient } from "../server/llm/ollama";
 import { openStore } from "../server/store";
+import { slugify } from "../shared/schema";
 import { createVoiceCheck, endsCleanly } from "../server/voice";
 
 const dbPath = join(process.cwd(), "var/game.db");
@@ -45,6 +51,48 @@ if (command === "list") {
         (call.error ? `  ${call.error}` : ""),
     );
   }
+} else if (command === "review") {
+  // Nothing is changed here. The list is for a person to act on, one delete at a time.
+  const root = process.cwd();
+  const data = loadGameData(root);
+  const settings = readModelConfig(root);
+  const madeFrom = createMadeFrom(data, store);
+  const grade = createComboGrader({
+    client: createOllamaClient({ baseUrl: settings.url, model: settings.model, think: settings.effort.combos ? "medium" : undefined, keepAlive: settings.keepAlive, timeoutMs: 90_000 }),
+    log: () => {},
+  });
+  const find = (id: string) => data.entries.get(id) ?? store.getEntry(id);
+  const combos = store.listCombos();
+  // A fairy-tale name from the storybook list is a real name, whatever the grader makes of it.
+  const storybook = new Set(data.storybook.map((item) => slugify(item.name)));
+  const invented: string[] = [];
+  const doubtful: string[] = [];
+  for (const combo of combos) {
+    const [a, b, result] = [find(combo.a), find(combo.b), store.getEntry(combo.resultId)];
+    if (!a || !b || !result) continue;
+    const graded = await grade({ a: thingLine(a, madeFrom(a.id)), b: thingLine(b, madeFrom(b.id)), result: result.name, description: result.description }).catch(() => null);
+    if (!graded) continue;
+    const realName = graded.realName || storybook.has(result.id);
+    process.stdout.write(graded.makesSense && realName ? "." : "?");
+    if (graded.makesSense && realName) continue;
+    const others = goesWith(combos, combo.key).filter((id) => id !== combo.resultId).map((id) => store.getEntry(id)?.name ?? id);
+    const ways = combos.filter((item) => item.resultId === combo.resultId).length;
+    (realName ? doubtful : invented).push(
+      [
+        `${a.name} + ${b.name} = ${result.name}`,
+        `    ${graded.why}`,
+        ways > 1
+          ? `    ${result.name} is made ${ways} ways, so deleting this pair removes only the pair.`
+          : `    Deleting it removes ${result.name} from the game and from players' discoveries${others.length > 0 ? `, and with it: ${others.join(", ")}` : ""}.`,
+        `    npm run cache -- delete ${combo.key}`,
+      ].join("\n"),
+    );
+  }
+  console.log(`\n\nOf ${combos.length} cached combinations, ${invented.length} have a made-up name and ${doubtful.length} more look doubtful.`);
+  console.log("The grader is strict and often wrong about sense. Treat the second list as things to look at, not things to delete.");
+  if (invented.length > 0) console.log(`\n== Made-up names\n\n${invented.join("\n\n")}`);
+  if (doubtful.length > 0) console.log(`\n== Doubtful sense\n\n${doubtful.join("\n\n")}`);
+  console.log("\nNothing was changed. Back up var/game.db before deleting anything.");
 } else if (command === "revoice") {
   // Names, tags, and recipes stay exactly as they are. Only the wording changes.
   const root = process.cwd();

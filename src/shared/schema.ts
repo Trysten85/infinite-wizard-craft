@@ -30,10 +30,11 @@ export const entrySchema = z.strictObject({
 export type Entry = z.infer<typeof entrySchema>;
 
 // An entry at runtime. Depth and XP are computed by code, never written by hand or by the model.
-// A spell also carries what it costs to learn, so the page can show the price before asking.
+// A spell also carries what it costs to learn and the level it takes, so the page can show both
+// before asking.
 // A model-made entry is marked `wonder` when it came from a storybook combination, so that what
 // is made from it stays in that register too.
-export type GameEntry = Entry & { depth: number; xp: number; learnCost?: number; wonder?: boolean };
+export type GameEntry = Entry & { depth: number; xp: number; learnCost?: number; learnLevel?: number; wonder?: boolean };
 
 export const RESPONSE_TYPES = ["generous", "skilled", "fair", "sharp", "avoid"] as const;
 export const responseTypeSchema = z.enum(RESPONSE_TYPES);
@@ -110,26 +111,62 @@ export const jobSchema = z.strictObject({
 });
 export type Job = z.infer<typeof jobSchema>;
 
+const questKindSchema = z.enum(["element", "material", "focus", "school", "spell", "job"]);
+const countSchema = z.number().int().min(1);
+// With `made`, only things the player made by combining count. Anything bought or given is left out.
+const madeSchema = z.boolean().optional();
+
 // A quest is done when its condition is met. Conditions are data, so quests never need code.
+// Everything a condition counts leaves out the starting entries.
 export const questSchema = z.strictObject({
   id: idSchema,
   title: z.string().min(1),
   detail: z.string().min(1),
+  // Main quests are one chain, worked through in order. Side quests are open all at once.
+  track: z.enum(["main", "side"]),
+  // The quest pays once the player has reached this level, however early its condition was met.
+  level: z.number().int().min(1),
   gold: z.number().int().min(0),
+  xp: z.number().int().min(0),
   done: z.discriminatedUnion("type", [
     // Anything at all beyond the starting entries.
     z.strictObject({ type: z.literal("discovered-any") }),
-    z.strictObject({ type: z.literal("has-kind"), kind: z.enum(["material", "focus", "school", "spell", "job"]) }),
-    z.strictObject({ type: z.literal("has-entry"), entry: idSchema }),
-    z.strictObject({ type: z.literal("learned-count"), count: z.number().int().min(1) }),
-    z.strictObject({ type: z.literal("level"), level: z.number().int().min(1) }),
+    z.strictObject({ type: z.literal("discovered-count"), count: countSchema }),
+    z.strictObject({ type: z.literal("has-kind"), kind: questKindSchema, made: madeSchema }),
+    // This many things of one kind. With `tier`, only those of that tier or higher count.
+    z.strictObject({ type: z.literal("kind-count"), kind: questKindSchema, count: countSchema, tier: z.number().int().min(0).optional() }),
+    z.strictObject({ type: z.literal("has-entry"), entry: idSchema, made: madeSchema }),
     z.strictObject({ type: z.literal("has-tag"), tag: z.string() }),
+    z.strictObject({ type: z.literal("tag-count"), tag: z.string(), count: countSchema }),
+    // Something this many combos from the starting entries.
+    z.strictObject({ type: z.literal("depth"), depth: countSchema, made: madeSchema }),
+    z.strictObject({ type: z.literal("learned-count"), count: countSchema }),
+    // A learned spell of exactly this tier.
+    z.strictObject({ type: z.literal("learned-tier"), tier: z.number().int().min(0) }),
+    // Learned spells from this many different schools.
+    z.strictObject({ type: z.literal("learned-schools"), count: countSchema }),
+    z.strictObject({ type: z.literal("level"), level: z.number().int().min(1) }),
+    // Events seen through to their end, whatever the player chose.
+    z.strictObject({ type: z.literal("events"), count: countSchema }),
+    // Things bought from the shop.
+    z.strictObject({ type: z.literal("bought"), count: countSchema }),
   ]),
 });
 export type Quest = z.infer<typeof questSchema>;
 
-// "active" is the quest to work on next: the first one not yet done.
-export type QuestProgress = { id: string; title: string; detail: string; gold: number; state: "done" | "active" | "upcoming" };
+// "active" is the quest to work on next: the first main quest not yet done. "locked" quests open
+// at a level the player has not reached. `progress` is only set for a quest that counts something.
+export type QuestProgress = {
+  id: string;
+  title: string;
+  detail: string;
+  track: Quest["track"];
+  level: number;
+  gold: number;
+  xp: number;
+  state: "done" | "active" | "upcoming" | "locked";
+  progress?: { have: number; need: number };
+};
 
 // Something a person from an event has asked the player to make.
 export type RequestView = { id: number; from: string; ask: string; entry: { id: string; name: string }; gold: number; state: "open" | "done" };
@@ -187,11 +224,18 @@ export type Standing = {
   // An event is waiting, or will be once this many more points are earned.
   eventReady: boolean;
   eventIn: number;
+  // The job the player has taken up, or null before they choose one. The server always sends
+  // this. Events and the shop go by it, not by whichever job was discovered last.
+  job?: { id: string; name: string } | null;
+  // A shift is open, or will be after this many more discoveries. Sent once shifts are served.
+  shiftReady?: boolean;
+  shiftIn?: number;
 };
 export type PlayerProgress = Progress & Standing;
 
-// What a player just earned, for the page to announce.
-export type Rewards = { gold: number; quests: { id: string; title: string; gold: number }[] };
+// What a player just earned, for the page to announce. A filled request is listed among the
+// quests, and pays no XP.
+export type Rewards = { gold: number; quests: { id: string; title: string; gold: number; xp: number }[] };
 
 export type ShopSlot = {
   slot: number;
@@ -266,6 +310,50 @@ export const comboSchema = z.strictObject({
 });
 export type Combo = z.infer<typeof comboSchema>;
 
+// Work shifts. A job's shift is one order filled by picking a Base, a Method, and an optional
+// Touch. Code owns everything that has consequences: the order's tags and tier, the quality, the pay.
+export const QUALITIES = ["meh", "good", "great", "perfect"] as const;
+export type QualityId = (typeof QUALITIES)[number];
+export const RANKS = ["apprentice", "journeyman", "master"] as const;
+export type RankId = (typeof RANKS)[number];
+export const SHIFT_SLOTS = ["base", "method", "touch"] as const;
+export type ShiftSlot = (typeof SHIFT_SLOTS)[number];
+
+// Something a job always has to hand for a slot. With `rank`, only from that rank up.
+const stapleSchema = z.strictObject({
+  id: idSchema,
+  name: z.string().min(1),
+  tags: z.array(z.string()).min(1).max(3),
+  rank: z.enum(RANKS).optional(),
+});
+// One slot of a job's shift: its staples, and which of the player's own things fit it. A spell
+// only fits once it is learned and the player's level can cast it.
+const skinSlotSchema = z.strictObject({
+  name: z.string().min(1),
+  staples: z.array(stapleSchema).min(1),
+  from: z.strictObject({ kinds: z.array(z.enum(["element", "material", "spell"])).min(1), tags: z.array(z.string()).min(1) }).optional(),
+});
+// How one job's shift looks: the same engine with different names. A new job only needs one of these.
+export const jobSkinSchema = z.strictObject({
+  job: idSchema,
+  // What this job's orders tend to be about. For the writer, once the model writes orders.
+  flavor: z.string().min(1),
+  // What an order is for. Each one starts a sentence.
+  subjects: z.array(z.string().min(1)).min(3),
+  base: skinSlotSchema,
+  method: skinSlotSchema,
+  touch: skinSlotSchema,
+});
+export type JobSkin = z.infer<typeof jobSkinSchema>;
+
+// The plain words orders and results are written in until the model writes them.
+export const shiftTextSchema = z.strictObject({
+  // A short noun phrase for each tag, to follow "It calls for".
+  tagWords: z.record(z.string(), z.string().min(1)),
+  results: z.record(z.enum(QUALITIES), z.array(z.string().min(1)).min(1)),
+});
+export type ShiftText = z.infer<typeof shiftTextSchema>;
+
 export const balanceSchema = z.strictObject({
   startingEntries: z.array(idSchema).min(1),
   depthPerTier: z.number().int().min(1),
@@ -276,6 +364,9 @@ export const balanceSchema = z.strictObject({
   levels: z.strictObject({ xpStep: z.number().int().min(1), cap: z.number().int().min(1) }),
   // Learning a spell costs this much gold per tier, counting a cantrip as one tier.
   learnCostPerTier: z.number().int().min(0),
+  // The level a player must reach to learn, and so to cast, a spell of each tier. A tier past
+  // the end of the list takes the last level in it.
+  spellLevelByTier: z.array(z.number().int().min(1)).min(1),
   // Gold for a first discovery made by combining, by the entry's tier.
   discoveryGoldByTier: z.array(z.number().int().min(0)).min(1),
   shop: z.strictObject({
@@ -331,29 +422,133 @@ export const balanceSchema = z.strictObject({
     // A person whose fondness reaches this far either way has had their story.
     settledAt: z.number().int().min(1),
   }),
+  shifts: z.strictObject({
+    // A shift opens after this many new discoveries made by combining, counted the way the shop
+    // counts toward a restock. The first one is open as soon as a job is taken up.
+    every: z.number().int().min(1),
+    // How many orders the board holds.
+    board: z.number().int().min(1),
+    // A shift's score is the share of the order's tags the chosen inputs cover, plus this when
+    // the best input's tier meets the order's tier, plus the rank's bonus.
+    tierBonus: z.number().min(0),
+    // Lowest first. A quality applies from its `from` score upward. `gold` and `xp` multiply the pay.
+    qualities: z
+      .array(z.strictObject({ id: z.enum(QUALITIES), name: z.string().min(1), from: z.number(), gold: z.number().min(0), xp: z.number().min(0), rep: z.number().int() }))
+      .length(QUALITIES.length),
+    // The chance a result lands one step below or above what the score says. Never below the lowest.
+    variance: z.strictObject({ down: z.number().min(0).max(1), up: z.number().min(0).max(1) }),
+    // What a Good shift pays, by the order's tier.
+    pay: z.strictObject({ goldByTier: z.array(z.number().int().min(0)).min(1), xpByTier: z.array(z.number().int().min(0)).min(1) }),
+    // Lowest first. A rank is held from `shifts` completed in that job, and is never lost.
+    // `score` is the build score it will also ask for once score exists: null means not asked.
+    // `orderTags` is the most tags an order asks for at that rank.
+    ranks: z
+      .array(z.strictObject({ id: z.enum(RANKS), name: z.string().min(1), shifts: z.number().int().min(0), score: z.number().nullable(), bonus: z.number().min(0), orderTags: z.number().int().min(1) }))
+      .length(RANKS.length),
+  }),
   generation: z.strictObject({
+    // How many times a call is tried again when its answer breaks a rule.
     maxAttempts: z.number().int().min(1),
+    // How freely the description is written.
     temperature: z.number().min(0).max(2),
+    // A new combination is named in steps: the model suggests a few ideas, each with a reason,
+    // and then picks the one that makes most sense. How freely the ideas are thought up.
+    ideasTemperature: z.number().min(0).max(2),
+    // Whether the model is always asked, in a separate call, to judge between the ideas. A small
+    // model judges poorly at low effort, so this is off: the first usable idea is taken, and the
+    // model is asked only when that idea is something another pair already makes.
+    pick: z.boolean(),
+    // How many example combinations, chosen to resemble the pair, are shown with it.
+    examples: z.number().int().min(0),
+    // The most storybook things put forward for one magical pair.
+    storybookOffered: z.number().int().min(0),
+    // The most tags a model-made thing may carry.
+    maxTags: z.number().int().min(0).max(MAX_TAGS),
     // Combining with one of these may make a storybook thing (a golem, a ghost). Anything else
     // makes an ordinary real-world thing.
     wonderInputs: z.array(idSchema),
+    // A magical pair that makes an everyday thing gives it a touch of magic. Whether that thing
+    // then counts as magical itself. Off, the magic fades unless a magical ingredient is added again.
+    charmedCarriesMagic: z.boolean(),
   }),
 });
 export type Balance = z.infer<typeof balanceSchema>;
 
+// The shift numbers the page needs to preview a result. Sent with the board.
+export type ShiftRules = Balance["shifts"];
+
+// One thing the player can put in a slot: a staple of the job (`own`), or something of theirs.
+// A staple's id starts with "staple:", so it can never be mistaken for an entry.
+export type ShiftOption = { id: string; name: string; tags: string[]; tier: number; own: boolean };
+
+// An order on the board. `tags` is what it asks for and `tier` how demanding it is.
+export type ShiftOrder = { id: number; text: string; tags: string[]; tier: number };
+
+// A player's rank in one job, and how far the next one is. `next` is null at the top.
+export type RankView = { id: RankId; name: string; shifts: number; next: { name: string; shifts: number } | null };
+
+// Everything the page needs to show a shift. `job` is null until the player takes one up, and
+// then the rest is empty. `shiftIn` counts the discoveries still to make before `ready`.
+export type ShiftBoard = {
+  job: { id: string; name: string } | null;
+  rank: RankView | null;
+  ready: boolean;
+  shiftIn: number;
+  // The job's names for the three slots.
+  slots: Record<ShiftSlot, string>;
+  orders: ShiftOrder[];
+  options: Record<ShiftSlot, ShiftOption[]>;
+  rules: ShiftRules;
+};
+
+// How a shift went. `rankUp` is set when this shift earned a new rank.
+export type ShiftResult = {
+  order: ShiftOrder;
+  quality: { id: QualityId; name: string };
+  line: string;
+  gold: number;
+  xp: number;
+  rep: number;
+  rankUp: RankView | null;
+};
+
+// A storybook creature, object, or wonder a magical combination may produce.
+// `from` is what it is made of: entry ids, or single words of an id. One of them must be in the
+// pair, so a Treant is only ever on offer when a tree, a marsh, or the like is involved.
+// `wokenBy` is the magic that makes it: the waking forces and foci. A Treant is a tree woken by
+// Life. When the pair has both, the thing is a strong fit and is put first.
+export const storybookItemSchema = z.strictObject({
+  name: z.string().regex(/^[A-Z][A-Za-z'-]*( [A-Z][A-Za-z'-]*)?$/, "one or two capitalised words"),
+  from: z.array(z.string().regex(/^[a-z]+$/, "single lowercase words")).min(1),
+  wokenBy: z.array(idSchema),
+});
+export type StorybookItem = z.infer<typeof storybookItemSchema>;
+
+// A combination known to be good, shown to the model when it resembles the pair in hand.
+// "charmed" is an everyday thing that came out of a magical pair. (Storybook results are not
+// here: the storybook list itself says what makes each of them.)
+export const comboExampleSchema = z.strictObject({
+  inputs: z.tuple([z.string().min(1), z.string().min(1)]),
+  result: z.string().min(1),
+  why: z.string().min(1),
+  kind: z.enum(["ordinary", "charmed"]),
+});
+export type ComboExample = z.infer<typeof comboExampleSchema> & { authored?: boolean };
+
 // What the model is allowed to write for a new combo. Everything else is filled in by code.
-export function comboDraftSchema(tags: Iterable<Tag>) {
+export function comboDraftSchema(tags: Iterable<Tag>, maxTags = MAX_TAGS) {
   const allowed = [...tags].filter((tag) => tag.assignedBy === "model").map((tag) => tag.id);
   return z.strictObject({
     name: z.string().min(1).max(40),
     // Roomy on purpose. A tight limit cuts the model off mid-sentence.
     description: z.string().min(1).max(500),
-    tags: z.array(z.enum(allowed as [string, ...string[]])).max(MAX_TAGS),
+    tags: z.array(z.enum(allowed as [string, ...string[]])).max(maxTags),
     // One word for what the vocabulary lacked. A hint for human review, never used as a tag.
     missingTag: z.string().max(20).nullable(),
   });
 }
-// `storybook` is set by code, never by the model: the name was chosen from the storybook list.
+// `storybook` is set by code, never by the model: the result is a magical thing, so what is made
+// from it may be magical too.
 export type ComboDraft = { name: string; description: string; tags: string[]; missingTag: string | null; storybook?: boolean };
 
 export type CombineResult = {

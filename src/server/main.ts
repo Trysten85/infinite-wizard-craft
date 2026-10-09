@@ -3,7 +3,9 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { createApp } from "./app";
 import { loadBlocklist } from "./blocklist";
+import { slugify } from "../shared/schema";
 import { createCombiner } from "./combiner";
+import { createMadeFrom } from "./comboContext";
 import { createComboGenerator } from "./comboGenerator";
 import { createEvents } from "./events/service";
 import { createModelEventWriter } from "./events/writer";
@@ -38,6 +40,9 @@ const generate = createComboGenerator({
   balance: data.balance,
   storybook: data.storybook,
   reservedIds: new Set(data.entries.keys()),
+  examples: data.comboExamples,
+  madeFrom: createMadeFrom(data, store),
+  exists: (name) => store.getEntry(slugify(name)) !== undefined,
 });
 const blocklist = loadBlocklist(join(root, "Blocklist.md"));
 if (blocklist.size === 0) console.warn("Blocklist.md not found or empty: generated names are not being checked against it.");

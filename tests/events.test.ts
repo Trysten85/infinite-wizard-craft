@@ -19,7 +19,7 @@ import {
 import { createEvents } from "../src/server/events/service";
 import { createFakeClient } from "../src/server/llm/fake";
 import { GenerationError } from "../src/server/llm/generate";
-import { eventThreshold, repBandFor } from "../src/server/progress";
+import { eventThreshold, repBandFor, xpToReach } from "../src/server/progress";
 import type { Person } from "../src/server/store";
 import { RESPONSE_TYPES, type ResponseType, type Stakes } from "../src/shared/schema";
 import { data, newGame, TO_FIRE_BOLT } from "./helpers";
@@ -153,19 +153,24 @@ describe("earning an event", () => {
     const { progress, play, store } = newGame();
     expect(progress.getProgress("ann")).toMatchObject({ eventReady: false, eventIn: 15 });
     await play("ann", [["fire", "air"]]);
-    // One discovery, plus the first tutorial quest.
-    expect(progress.getProgress("ann").eventIn).toBe(15 - 1 - 2);
+    // One discovery, plus the first two tutorial quests: Light is also a new element.
+    expect(progress.getProgress("ann").eventIn).toBe(15 - 1 - 2 - 2);
     await play("ann", TO_FIRE_BOLT.slice(1, 6));
     progress.settle("ann");
     const before = store.getStats("ann").eventPoints;
     await play("ann", [TO_FIRE_BOLT[6]!]);
     progress.settle("ann");
-    // Fire Bolt: a discovery, the cantrip quest, and with it level two and that quest.
-    expect(store.getStats("ann").eventPoints - before).toBe(1 + 2 + 3 + 2);
+    // Fire Bolt: a discovery, and the cantrip quest.
+    expect(store.getStats("ann").eventPoints - before).toBe(1 + 2);
     const learnedAt = store.getStats("ann").eventPoints;
     progress.learn("ann", "spell-fire-bolt");
     expect(store.getStats("ann").eventPoints - learnedAt).toBe(1 + 2);
     expect(progress.getProgress("ann").eventReady).toBe(true);
+    // Level two, and the quest for reaching it.
+    const levelAt = store.getStats("ann").eventPoints;
+    store.changeStats("ann", { bonusXp: xpToReach(2, data.balance) });
+    progress.settle("ann");
+    expect(store.getStats("ann").eventPoints - levelAt).toBe(3 + 2);
   });
 
   it("does not count things bought in the shop", () => {
@@ -574,7 +579,8 @@ describe("what a person leaves behind", () => {
     const result = await game.events.respond("ann", helpful(heart));
     expect(result.gift).toEqual({ id: wanted.id, name: wanted.name });
     expect(game.combiner.listDiscovered("ann").map((entry) => entry.id)).toContain(wanted.id);
-    expect(game.progress.getProgress("ann").xp).toBe(before.xp + wanted.xp);
+    const questXp = result.rewards.quests.reduce((total, quest) => total + quest.xp, 0);
+    expect(game.progress.getProgress("ann").xp).toBe(before.xp + wanted.xp + questXp);
     expect(game.store.getLedgerRefs("ann", "discovery")).not.toContain(wanted.id);
     const questPoints = result.rewards.quests.length * rules.points.quest;
     expect(game.store.getStats("ann").eventPoints - before.points).toBe(questPoints);
@@ -607,7 +613,7 @@ describe("what a person leaves behind", () => {
     store.addLedger("ann", 0, "shop", "glass");
     store.addDiscovery("ann", "glass");
     const rewards = progress.settle("ann");
-    expect(rewards.quests).toContainEqual({ id: "request-1", title: "A favor for Pim Kettlebrook", gold: 30 });
+    expect(rewards.quests).toContainEqual({ id: "request-1", title: "A favor for Pim Kettlebrook", gold: 30, xp: 0 });
     const after = progress.getProgress("ann");
     expect(after.requests[0]!.state).toBe("done");
     expect(after.gold - before.gold).toBe(30 + rewards.quests.filter((quest) => quest.id !== "request-1").reduce((sum, quest) => sum + quest.gold, 0));
@@ -693,6 +699,8 @@ describe("a spell that solves the event", () => {
     const game = newGame(1, writer);
     for (const id of ["light", "mud", "life", "tree", "spellbook", ...learned]) game.store.addDiscovery("ann", id);
     for (const id of learned) game.store.addLearned("ann", id);
+    // Level two, so that a first-tier spell is one the player can cast.
+    game.store.changeStats("ann", { bonusXp: xpToReach(2, data.balance) });
     const always = createEvents({ data, store: game.store, progress: game.progress, listDiscovered: game.combiner.listDiscovered, writer, random: () => 0.1 });
     await always.test("ann", seedId);
     await always.respond("ann", "fair");
@@ -757,6 +765,7 @@ describe("a long run of events", () => {
     const { writer, briefs } = recordingWriter();
     const game = newGame(3, writer);
     for (const id of ["light", "mud", "life", "tree", "spellbook", "evocation", "spell-fire-bolt", "person", "forge", "blacksmith"]) game.store.addDiscovery("ann", id);
+    game.progress.chooseJob("ann", "blacksmith");
     for (let round = 0; round < 40; round++) {
       game.store.changeStats("ann", { eventPoints: 20 });
       await game.events.current("ann");

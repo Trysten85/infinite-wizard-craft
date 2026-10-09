@@ -1,7 +1,7 @@
 import { RESPONSE_TYPES, type EventOutcome, type EventSeed, type EventView, type GameEntry, type HintView, type RequestView, type ResponseType, type Rewards, type Stakes } from "../../shared/schema";
 import { RuleError } from "../combiner";
 import { GenerationError } from "../llm/generate";
-import type { GameData } from "../gameData";
+import { levelForSpellTier, type GameData } from "../gameData";
 import { buildPath } from "../paths";
 import { eventThreshold, repBandFor, type ProgressService } from "../progress";
 import type { Person, Store, StoredEvent } from "../store";
@@ -187,7 +187,7 @@ export function createEvents(deps: {
     const blocked = new Set(rules.spellCheck.blockedTags);
     const fits = new Set(spellTags);
     const spells = discovered
-      .filter((entry) => learned.has(entry.id) && entry.tier <= level)
+      .filter((entry) => learned.has(entry.id) && levelForSpellTier(entry.tier, data.balance) <= level)
       .filter((entry) => entry.tags.some((tag) => fits.has(tag)) && !entry.tags.some((tag) => blocked.has(tag)))
       .map((entry) => ({ id: entry.id, name: entry.name, school: data.entries.get(entry.school ?? "")?.name ?? "", tags: entry.tags }));
     if (spells.length === 0) return null;
@@ -202,9 +202,9 @@ export function createEvents(deps: {
   // Returns the new event's id, or undefined if no seed suits the player.
   async function writeArrival(player: string, forcedSeed?: string, state: "writing" | "pending" = "pending"): Promise<number | undefined> {
     const discovered = listDiscovered(player);
-    const { level } = progress.getProgress(player);
+    const { level, job } = progress.getProgress(player);
     const stats = store.getStats(player);
-    const snapshot = snapshotPlayer(data, discovered, level);
+    const snapshot = snapshotPlayer(data, discovered, level, job?.id ?? null);
     const history = store.listEvents(player);
     const day = history.length + 1;
     const people = store.listPeople(player);
@@ -270,8 +270,8 @@ export function createEvents(deps: {
   async function writeHeart(player: string, event: StoredEvent, payload: Payload, person: Person, opening: Choice): Promise<HeartDraft> {
     const { seed } = payload;
     const discovered = listDiscovered(player);
-    const { level } = progress.getProgress(player);
-    const snapshot = snapshotPlayer(data, discovered, level);
+    const { level, job } = progress.getProgress(player);
+    const snapshot = snapshotPlayer(data, discovered, level, job?.id ?? null);
     const skillTags = skillTagsFor(seed, snapshot);
     const responseTypes = offeredTypes(seed.responseTypes, skillTags, snapshot, person.fondness);
     const payoff = planPayoff(player, snapshot, discovered, seed, event.stakes as Stakes, skillTags);
@@ -553,7 +553,8 @@ export function createEvents(deps: {
         if (introduced) store.deletePerson(introduced.id);
       }
       // With no seed named, one is picked the usual way from those the player qualifies for.
-      const qualifying = eligibleSeeds(data.eventSeeds, snapshotPlayer(data, listDiscovered(player), progress.getProgress(player).level));
+      const standing = progress.getProgress(player);
+      const qualifying = eligibleSeeds(data.eventSeeds, snapshotPlayer(data, listDiscovered(player), standing.level, standing.job?.id ?? null));
       const seed = seedId ?? weightedPick(qualifying.map((item) => ({ item: item.id, weight: 1 })), random())!;
       const eventId = await writeArrival(player, seed);
       // The test event is shown as soon as it has arrived. Its second beats follow behind it.

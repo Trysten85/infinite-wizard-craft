@@ -5,7 +5,7 @@ import type { Person } from "../store";
 // What the picker needs to know about a player. Worked out from their discoveries.
 export type PlayerSnapshot = {
   level: number;
-  // The player's newest job, until choosing a main job exists.
+  // The job the player has taken up, if any.
   job: { id: string; name: string; wantedTags: string[] } | null;
   // Every tag on anything the player has discovered.
   tags: Set<string>;
@@ -17,15 +17,15 @@ export type PlayerSnapshot = {
 // The last few events, oldest first, as far as the picker cares.
 export type RecentEvent = { seedId: string; kind: string; mood: string[]; personId: number };
 
-export function snapshotPlayer(data: GameData, discovered: GameEntry[], level: number): PlayerSnapshot {
+// `jobId` is the job the player has taken up. One they have merely discovered does not count.
+export function snapshotPlayer(data: GameData, discovered: GameEntry[], level: number, jobId: string | null): PlayerSnapshot {
   const starting = new Set(data.balance.startingEntries);
   const counts = new Map<string, number>();
   for (const entry of discovered) {
     if (starting.has(entry.id)) continue;
     for (const tag of entry.tags) counts.set(tag, (counts.get(tag) ?? 0) + 1);
   }
-  const newestJob = discovered.filter((entry) => entry.kind === "job").at(-1);
-  const job = newestJob && data.jobs.get(newestJob.id);
+  const job = jobId !== null && discovered.some((entry) => entry.id === jobId) ? data.jobs.get(jobId) : undefined;
   return {
     level,
     job: job ? { id: job.id, name: job.name, wantedTags: job.wantedTags } : null,

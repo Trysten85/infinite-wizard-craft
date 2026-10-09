@@ -9,6 +9,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { loadBlocklist } from "../server/blocklist";
 import { createCombiner } from "../server/combiner";
+import { createMadeFrom } from "../server/comboContext";
 import { createComboGenerator } from "../server/comboGenerator";
 import { findInventedNames, renderEvalReport, type EvalCase, type EvalRun } from "../server/evalReport";
 import { createEvents } from "../server/events/service";
@@ -18,7 +19,7 @@ import { createModelClient, readModelConfig } from "../server/llm/config";
 import { createOllamaClient, type ThinkLevel } from "../server/llm/ollama";
 import { createProgress } from "../server/progress";
 import { openStore } from "../server/store";
-import type { EventView, GameEntry } from "../shared/schema";
+import { slugify, type EventView, type GameEntry } from "../shared/schema";
 
 const root = process.cwd();
 const settings = readModelConfig(root);
@@ -62,7 +63,7 @@ async function runModel(spec: string): Promise<EvalRun> {
   const one = createOllamaClient({ baseUrl, model, timeoutMs: 300_000, think });
   const client = spec === AS_PLAYED ? createModelClient(settings, "events") : one;
   const store = openStore(":memory:");
-  const generate = createComboGenerator({ client: spec === AS_PLAYED ? createModelClient(settings, "combos") : one, log: store.logModelCall, voice, tags: data.tags.values(), balance: data.balance, storybook: data.storybook, reservedIds: new Set(data.entries.keys()) });
+  const generate = createComboGenerator({ client: spec === AS_PLAYED ? createModelClient(settings, "combos") : one, log: store.logModelCall, voice, tags: data.tags.values(), balance: data.balance, storybook: data.storybook, reservedIds: new Set(data.entries.keys()), examples: data.comboExamples, madeFrom: createMadeFrom(data, store), exists: (name) => store.getEntry(slugify(name)) !== undefined });
   const combiner = createCombiner({ data, store, generate, blocklist });
   const progress = createProgress({ data, store, listDiscovered: combiner.listDiscovered });
   const writer = createModelEventWriter({ client, log: store.logModelCall, voice, blocklist });
@@ -152,7 +153,7 @@ async function runModel(spec: string): Promise<EvalRun> {
   }
   console.log(` ${model} done`);
 
-  const known = [...[...data.entries.values()].map((entry) => entry.name), ...data.storybook, ...people, "Mending", "Prestidigitation"];
+  const known = [...[...data.entries.values()].map((entry) => entry.name), ...data.storybook.map((item) => item.name), ...people, "Mending", "Prestidigitation"];
   const calls = store.listModelCalls(1000).reverse().map((call) => ({ purpose: call.purpose, ok: call.ok, latencyMs: call.latencyMs, error: call.error }));
   const label = spec === AS_PLAYED ? `${model} as played (${settings.effort.combos ?? "no"} effort for combinations, ${settings.effort.events ?? "no"} for events)` : spec;
   return { model: label, cases, calls, inventedNames: findInventedNames(eventText.join(" "), known), seconds: (Date.now() - started) / 1000 };
