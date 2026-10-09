@@ -6,10 +6,13 @@ import type { ModelCall } from "./store";
 import { createVoiceCheck } from "./voice";
 
 // Writes the words for a combo nobody has made before. `reject` lets the caller apply game rules.
+// `alreadyMade` is for a second look: the name of the result this pair first gave, when another
+// pair makes that thing already. The model is asked to give something else if anything fits as well.
 export type ComboGenerator = (
   a: GameEntry,
   b: GameEntry,
   reject: (draft: ComboDraft) => string | null,
+  alreadyMade?: string,
 ) => Promise<ComboDraft>;
 
 // Code, not the model, decides when magic is in play. A storybook result is only on the table
@@ -72,13 +75,18 @@ export function createComboGenerator(deps: {
 
   // For a magical pair, the model is shown a fixed menu of storybook things and may pick one.
   // Choosing from a list is something a small model does well; inventing a fitting name is not.
-  async function pickStorybook(a: GameEntry, b: GameEntry): Promise<string | null> {
+  async function pickStorybook(a: GameEntry, b: GameEntry, alreadyMade?: string): Promise<string | null> {
     if (menu.length === 0 || !isWonderPair(a, b, deps.balance)) return null;
     try {
       const { choice } = await generateValidated(deps.client, deps.log, {
         purpose: "combo-storybook",
         system: menuSystem,
-        prompt: `Combine these two:\n1. ${describe(a)}\n2. ${describe(b)}`,
+        prompt: [
+          `Combine these two:\n1. ${describe(a)}\n2. ${describe(b)}`,
+          ...(alreadyMade && menu.includes(alreadyMade)
+            ? [`${alreadyMade} is already made from other things. Pick it again only if it is plainly the best fit for these two. Otherwise pick something else that fits, or "${NONE}".`]
+            : []),
+        ].join("\n\n"),
         schema: z.strictObject({ choice: z.enum([NONE, ...menu]) }),
         maxAttempts: 2,
         temperature: 0,
@@ -96,9 +104,9 @@ export function createComboGenerator(deps: {
     "Like this: Water + Sand = Beach. Fire + Fire = Bonfire. Air + Air = Wind. Earth + Earth = Hill. Steam + Air = Cloud. Mud + Fire = Brick. Metal + Tree = Axe.",
   ].join("\n");
 
-  return async (a, b, reject) => {
+  return async (a, b, reject, alreadyMade) => {
     const pair = `Combine these two:\n1. ${describe(a)}\n2. ${describe(b)}`;
-    const storybook = await pickStorybook(a, b);
+    const storybook = await pickStorybook(a, b, alreadyMade);
     // A storybook pick that the game's rules refuse (a name already made another way, say) falls
     // back to an ordinary result instead of failing the combination.
     if (storybook && reject({ name: storybook, description: "A thing.", tags: [], missingTag: null }) === null) {
@@ -116,7 +124,12 @@ export function createComboGenerator(deps: {
     return generateValidated(deps.client, deps.log, {
       purpose: "combo",
       system,
-      prompt: `${pair}\n\n${ORDINARY_NOTE}`,
+      prompt: [
+        pair,
+        ORDINARY_NOTE,
+        // A storybook name is no use here: the note above has just ruled those out.
+        ...(alreadyMade && !menu.includes(alreadyMade) ? [`${alreadyMade} is already made from other things. If a different thing fits these two just as well, give that instead. If ${alreadyMade} is plainly the right answer, give it again.`] : []),
+      ].join("\n\n"),
       schema,
       reject: (draft) => reject(draft) ?? voiceCheck(draft.description, draft.name),
       maxAttempts: deps.balance.generation.maxAttempts,

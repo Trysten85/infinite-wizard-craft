@@ -85,6 +85,30 @@ describe("naming a new combination", () => {
   });
 });
 
+describe("a second look at a repeat", () => {
+  it("tells the menu pick that the thing is already made, and to choose it again only if it is the best fit", async () => {
+    const { client, generate } = generatorWith([JSON.stringify({ choice: "none" }), draft("Statue")]);
+    const result = await generate(clay, entry("life"), () => null, "Golem");
+    expect(result.name).toBe("Statue");
+    expect(client.requests[0]!.prompt).toContain("Golem is already made from other things. Pick it again only if it is plainly the best fit");
+    // With no storybook pick, the ordinary prompt has ruled fairy-tale things out and does not bring one up.
+    expect(client.requests[1]!.prompt).not.toContain("Golem");
+  });
+
+  it("tells an ordinary pair the same, in the ordinary prompt", async () => {
+    const { client, generate } = generatorWith([draft("Shore")]);
+    await generate(entry("sand"), entry("water"), () => null, "Beach");
+    expect(client.requests[0]!.prompt).toContain("Beach is already made from other things. If a different thing fits these two just as well, give that instead.");
+    expect(client.requests[0]!.prompt).toContain("give it again");
+  });
+
+  it("says nothing of the kind the first time", async () => {
+    const { client, generate } = generatorWith([JSON.stringify({ choice: "Golem" }), draft("Golem")]);
+    await generate(clay, entry("life"), () => null);
+    for (const request of client.requests) expect(request.prompt).not.toContain("already made");
+  });
+});
+
 describe("the storybook menu", () => {
   it("is a list of well-known names, none of them already something else in the game", () => {
     expect(data.storybook.length).toBeGreaterThan(50);

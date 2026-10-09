@@ -28,7 +28,7 @@ const rules = data.balance.events;
 const seed = (id: string) => data.eventSeeds.find((item) => item.id === id)!;
 const novice: PlayerSnapshot = { level: 1, job: null, tags: new Set(), topTags: [], hasSpell: false };
 const smith: PlayerSnapshot = { level: 3, job: { id: "blacksmith", name: "Blacksmith", wantedTags: ["forging", "metal"] }, tags: new Set(["metal", "forging", "brewing"]), topTags: ["metal", "brewing"], hasSpell: true };
-const person = (overrides: Partial<Person>): Person => ({ id: 1, name: "Pim", role: "neighbor", traits: ["shy"], facts: [], fondness: 0, status: "active", firstDay: 1, lastDay: 1, flag: null, flagDay: null, ...overrides });
+const person = (overrides: Partial<Person>): Person => ({ id: 1, name: "Pim", pronoun: null, role: "neighbor", traits: ["shy"], facts: [], fondness: 0, status: "active", firstDay: 1, lastDay: 1, flag: null, flagDay: null, ...overrides });
 
 // A writer that records every brief and every spell question it is given.
 function recordingWriter() {
@@ -310,22 +310,157 @@ describe("answering the wrong beat", () => {
   });
 });
 
-describe("writing ahead", () => {
-  it("has the second beat ready for whichever way the player first reacts", async () => {
+// A writer whose second beats wait until they are let through, to look at an event half-written.
+function heldWriter() {
+  const recording = recordingWriter();
+  let release = () => {};
+  const held = new Promise<void>((resolve) => (release = resolve));
+  const writer: EventWriter = {
+    ...recording.writer,
+    write: async (brief) => {
+      if (brief.stage === "heart") await held;
+      return recording.writer.write(brief);
+    },
+  };
+  return { ...recording, writer, release };
+}
+const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+describe("an event written ahead", () => {
+  // A player who has just earned an event, in a game that writes events the way the server does.
+  function due(writer: EventWriter, store?: ReturnType<typeof newGame>["store"]) {
+    const game = newGame(1, writer, { writeAhead: true, store });
+    if (!store) game.store.changeStats("ann", { eventPoints: 15 });
+    return game;
+  }
+
+  it("stays out of sight until all of it is written, and asking for it never waits", async () => {
+    const { writer, briefs, release } = heldWriter();
+    const game = due(writer);
+    expect(await game.events.current("ann")).toEqual({ event: null, eventIn: 0 });
+    while (game.store.listEvents("ann").length === 0) await tick();
+    // The person has arrived on paper, but the player has not been told.
+    expect(game.store.listEvents("ann")[0]!.state).toBe("writing");
+    expect(await game.events.current("ann")).toEqual({ event: null, eventIn: 0 });
+    expect(game.progress.getProgress("ann")).toMatchObject({ eventReady: false, eventIn: 0 });
+    expect(game.store.getStats("ann").eventPoints).toBe(15);
+    await expect(game.events.respond("ann", "fair")).rejects.toThrow(/Nothing is waiting/);
+
+    release();
+    await game.events.idle("ann");
+    expect(game.store.listEvents("ann")[0]!.state).toBe("pending");
+    expect(game.progress.getProgress("ann")).toMatchObject({ eventReady: true, eventIn: 0 });
+    // The points are spent when the event reaches the player.
+    expect(game.store.getStats("ann").eventPoints).toBe(0);
+    expect(briefs.map((brief) => brief.stage)).toEqual(["arrival", "heart", "heart"]);
+    expect(briefs.slice(1).map((brief) => brief.soFar!.choice).sort()).toEqual(["Be fair about it.", "Be generous about it."]);
+  });
+
+  it("is played through without the writer being asked for anything more", async () => {
+    const { writer, briefs, questions, partings } = recordingWriter();
+    const game = due(writer);
+    game.events.prepare("ann");
+    game.events.prepare("ann");
+    await game.events.idle("ann");
+    const written = [briefs.length, questions.length, partings.length];
+    const arrival = (await game.events.current("ann")).event!;
+    expect(arrival).toMatchObject({ beat: 1, beats: 2 });
+    const heart = (await game.events.respond("ann", "fair")).next!;
+    expect(heart.beat).toBe(2);
+    expect((await game.events.respond("ann", heart.responses[0]!.type)).next).toBeNull();
+    expect([briefs.length, questions.length, partings.length]).toEqual(written);
+    expect(game.store.listEvents("ann")).toHaveLength(1);
+    expect(game.store.listPeople("ann")[0]!.fondness).not.toBe(0);
+  });
+
+  it("is carried on from where it stopped if the writing was cut short", async () => {
+    // The first server writes the arrival and stops before the second beats.
+    const stuck = heldWriter();
+    const first = due(stuck.writer);
+    first.events.prepare("ann");
+    while (first.store.listEvents("ann").length === 0) await tick();
+
     const { writer, briefs } = recordingWriter();
-    const game = newGame(1, writer);
-    const ahead = createEvents({ data, store: game.store, progress: game.progress, listDiscovered: game.combiner.listDiscovered, writer, random: () => 0.5, writeAhead: true });
-    await ahead.test("ann", "small_thief");
-    // Asking again waits for the background writing to finish.
-    await ahead.current("ann");
-    await ahead.current("ann");
+    const second = due(writer, first.store);
+    expect(second.progress.getProgress("ann").eventReady).toBe(false);
+    second.events.prepare("ann");
+    await second.events.idle("ann");
+    expect(briefs.map((brief) => brief.stage)).toEqual(["heart", "heart"]);
+    expect(second.store.listEvents("ann")).toHaveLength(1);
+    expect((await second.events.current("ann")).event!.id).toBe(first.store.listEvents("ann")[0]!.id);
+  });
+
+  it("still turns up if one second beat cannot be written, and that beat is written when chosen", async () => {
+    const canned = createCannedEventWriter();
+    let failing = true;
+    const asked: string[] = [];
+    const writer: EventWriter = {
+      ...canned,
+      write: async (brief) => {
+        if (brief.stage === "heart") asked.push(brief.soFar!.choice);
+        if (failing && brief.soFar?.choice === "Be generous about it.") throw new GenerationError("nothing worked");
+        return canned.write(brief);
+      },
+    };
+    const game = due(writer);
+    game.events.prepare("ann");
+    await game.events.idle("ann");
+    // Tried twice, then left.
+    expect(asked.filter((choice) => choice === "Be generous about it.")).toHaveLength(2);
+    expect(game.progress.getProgress("ann").eventReady).toBe(true);
+    failing = false;
+    expect((await game.events.respond("ann", "generous")).next!.beat).toBe(2);
+    expect(asked.filter((choice) => choice === "Be generous about it.")).toHaveLength(3);
+  });
+
+  it("does not start a second event while one is being written or waiting", async () => {
+    const { writer, briefs } = recordingWriter();
+    const game = due(writer);
+    game.store.changeStats("ann", { eventPoints: 30 });
+    game.events.prepare("ann");
+    await game.events.idle("ann");
+    game.events.prepare("ann");
+    await game.events.idle("ann");
+    expect(briefs.filter((brief) => brief.stage === "arrival")).toHaveLength(1);
+    // Once it is over, the points left over bring the next one.
+    await game.events.respond("ann", "avoid");
+    game.events.prepare("ann");
+    await game.events.idle("ann");
+    expect(briefs.filter((brief) => brief.stage === "arrival")).toHaveLength(2);
+    expect(game.store.listEvents("ann").map((event) => event.state)).toEqual(["resolved", "pending"]);
+  });
+
+  it("lets a test event appear as soon as it has arrived, with its second beats following behind", async () => {
+    const { writer, briefs, release } = heldWriter();
+    const game = newGame(1, writer, { writeAhead: true });
+    const { event } = await game.events.test("ann", "small_thief");
+    expect(event).toMatchObject({ beat: 1 });
+    expect(briefs).toHaveLength(1);
+    release();
+    await game.events.idle("ann");
     const written = briefs.length;
     expect(briefs.filter((brief) => brief.stage === "heart").map((brief) => brief.soFar!.choice).sort()).toEqual(["Be fair about it.", "Be generous about it."]);
-    const reaction = await ahead.respond("ann", "fair");
+    const reaction = await game.events.respond("ann", "fair");
     expect(reaction.next).toMatchObject({ beat: 2 });
     // Nothing more had to be written when the player chose.
     expect(briefs).toHaveLength(written);
     expect(game.store.listPeople("ann")[0]!.fondness).toBe(1);
+  });
+
+  it("is reported by the routes only once it is waiting", async () => {
+    const { writer, release } = heldWriter();
+    const game = due(writer);
+    const app = createApp(game.combiner, { progress: game.progress, shop: game.shop, events: game.events });
+    // Loading the page is enough to start the writing.
+    const loading = (await (await app.request("/api/players/ann")).json()) as Record<string, any>;
+    expect(loading.progress).toMatchObject({ eventReady: false, eventIn: 0 });
+    expect(await (await app.request("/api/players/ann/event")).json()).toEqual({ event: null, eventIn: 0 });
+    release();
+    await game.events.idle("ann");
+    const ready = (await (await app.request("/api/players/ann")).json()) as Record<string, any>;
+    expect(ready.progress.eventReady).toBe(true);
+    const waiting = (await (await app.request("/api/players/ann/event")).json()) as Record<string, any>;
+    expect(waiting.event).toMatchObject({ beat: 1, beats: 2 });
   });
 });
 
@@ -443,6 +578,14 @@ describe("what a person leaves behind", () => {
     expect(game.store.getLedgerRefs("ann", "discovery")).not.toContain(wanted.id);
     const questPoints = result.rewards.quests.length * rules.points.quest;
     expect(game.store.getStats("ann").eventPoints - before.points).toBe(questPoints);
+  });
+
+  it("is dropped if the player came by the thing themselves before the visit ended", async () => {
+    const { game, heart, wanted } = await untilPayoff("hint");
+    game.store.addDiscovery("ann", wanted.id);
+    const result = await game.events.respond("ann", helpful(heart));
+    expect(result).toMatchObject({ request: null, hint: null, gift: null });
+    expect(game.progress.getProgress("ann").hints).toEqual([]);
   });
 
   it("is withheld from a player who was sharp or walked away", async () => {
@@ -656,7 +799,7 @@ describe("checking what the writer wrote", () => {
   const good: WrittenEvent = {
     scene: "A goose has your hammer. It is not giving it back.",
     sceneSummary: "A goose took the hammer.",
-    person: { name: "Pim Kettlebrook", role: "neighbor", traits: ["shy"], facts: ["owns the goose"] },
+    person: { name: "Pim Kettlebrook", pronoun: "they", role: "neighbor", traits: ["shy"], facts: ["owns the goose"] },
     responses: [
       { type: "generous", text: "Offer the goose a bun.", outcome: "The goose accepts." },
       { type: "fair", text: "Ask nicely.", outcome: "The goose considers it." },
@@ -681,6 +824,8 @@ describe("checking what the writer wrote", () => {
   it("rejects a missing or badly named new person, and a renamed returning one", () => {
     expect(checkWritten(brief, { ...good, person: null })).toMatch(/Invent the person/);
     expect(checkWritten(brief, { ...good, person: { ...good.person!, name: "odessa tuck" } })).toMatch(/capitalised/);
+    expect(checkWritten(brief, { ...good, person: { ...good.person!, name: "Milo" } })).toMatch(/first name and a last name/);
+    expect(checkWritten(brief, { ...good, person: { ...good.person!, name: "Auntie Wren" } })).toBeNull();
     expect(checkWritten(brief, { ...good, person: { ...good.person!, name: "Odessa Tuck" } })).toMatch(/already knows someone/);
     const returning: EventBrief = { ...brief, person: { returning: true, name: "Odessa Tuck", role: "baker", traits: [], facts: [], feeling: "fond", followUp: null, history: [] } };
     expect(checkWritten(returning, good)).toMatch(/already known/);
@@ -694,6 +839,15 @@ describe("checking what the writer wrote", () => {
     expect(checkWritten(brief, { ...good, scene: "She speaks of you with real fondness, and your reputation precedes you." })).toBeNull();
     expect(checkWritten(brief, { ...good, scene: "Velica has your hammer." }, { blocklist: createBlocklist(["Velica"]) })).toMatch(/not available/);
     expect(checkWritten(brief, good, { voiceCheck: (text) => (text.includes("goose has your hammer") ? "copied" : null) })).toBe("copied");
+  });
+
+  it("rejects a response told as 'I', which is the player's to do, not the writer's", () => {
+    expect(checkWritten(brief, withResponse(0, { text: "I offer the goose a bun." }))).toMatch(/Never 'I offer/);
+    expect(checkWritten(brief, withResponse(0, { text: "I'll fetch a bun for the goose." }))).toMatch(/Never 'I offer/);
+    expect(checkWritten(brief, withResponse(0, { text: "You offer the goose a bun." }))).toBeNull();
+    expect(checkWritten(brief, withResponse(0, { text: "Ignore the goose and say, 'I am busy.'" }))).toBeNull();
+    const question: SpellQuestion = { scene: "A cup lies in pieces.", personName: "Pim", spells: [{ id: "spell-mending", name: "Mending", school: "Transmutation", tags: ["utility"] }] };
+    expect(checkSpellAnswer(question, { spellId: "spell-mending", text: "I cast Mending on the cup.", outcome: "Good as new." })).toMatch(/Never 'I offer/);
   });
 
   it("rejects a line that stops mid-sentence, and leaves the model room to finish", async () => {
@@ -711,10 +865,33 @@ describe("checking what the writer wrote", () => {
     const arrival = renderBrief({ ...brief, stage: "arrival", soFar: null });
     expect(arrival).toContain("Write only the arrival");
     expect(arrival).toContain("Do not explain the problem yet");
+    expect(arrival).toContain("no response mentions the problem");
     const heart = renderBrief(brief);
     expect(heart).toContain("Pim came in looking worried.");
     expect(heart).toContain("What the player did: Ask what is wrong.");
     expect(heart).toContain("says what they are really after");
+    // The second part is held to the premise, so it cannot wander off to a different problem.
+    expect(heart).toContain("What comes out must be the premise itself: A small animal takes something.");
+    expect(arrival).not.toContain("must be the premise itself");
+  });
+
+  it("fixes a new person's pronoun, and tells the writer to keep to it when they are written again", async () => {
+    const client = createFakeClient([JSON.stringify({ ...good, person: { ...good.person!, pronoun: "she" } })]);
+    const written = await createModelEventWriter({ client, log: () => {}, voice: "v" }).write(brief);
+    expect(written.person!.pronoun).toBe("she");
+    expect(JSON.stringify(client.requests[0]!.jsonSchema)).toContain('"she","he","they"');
+    const known: EventBrief = { ...brief, person: { returning: true, name: "Pim Kettlebrook", pronoun: "she", role: "neighbor", traits: [], facts: [], feeling: "fond", followUp: null, history: [] } };
+    expect(renderBrief(known)).toContain('Always refer to them as "she".');
+    expect(renderBrief({ ...known, person: { ...known.person, pronoun: null } as EventBrief["person"] })).not.toContain("Always refer");
+  });
+
+  it("carries a person's pronoun from the arrival into the second beat", async () => {
+    const { writer, briefs } = recordingWriter();
+    const game = newGame(1, writer);
+    await game.events.test("ann", "small_thief");
+    expect(game.store.listPeople("ann")[0]!.pronoun).toBe("they");
+    await game.events.respond("ann", "fair");
+    expect(briefs[1]!.person).toMatchObject({ returning: true, pronoun: "they" });
   });
 
   it("is never told a number", () => {

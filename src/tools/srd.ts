@@ -6,7 +6,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { z } from "zod";
-import { createOllamaClient } from "../server/llm/ollama";
+import { createModelClient, readModelConfig } from "../server/llm/config";
 import { convertSpell, hasThinTags, overridesSchema, rawSpellSchema } from "../server/srd/convert";
 import {
   buildMaterialList,
@@ -105,10 +105,7 @@ async function runMaterials(): Promise<void> {
   if (todo.length > 0) {
     mkdirSync(join(root, "var"), { recursive: true });
     const store = openStore(join(root, "var/game.db"));
-    const client = createOllamaClient({
-      baseUrl: process.env.OLLAMA_URL ?? "http://192.168.56.1:11434",
-      model: process.env.OLLAMA_MODEL ?? "gemma3:12b",
-    });
+    const client = createModelClient(readModelConfig(root), "combos");
     for (const [index, phrase] of todo.entries()) {
       const materials = await extractMaterials(client, store.logModelCall, phrase);
       rows.push({

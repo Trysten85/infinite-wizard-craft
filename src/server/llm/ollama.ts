@@ -3,13 +3,15 @@ import type { LlmClient, LlmCompletion, LlmRequest } from "./types";
 export type ThinkLevel = "low" | "medium" | "high";
 
 // The JSON body for one chat call. Reasoning models take a `think` level; other models must not be sent one.
-export function chatBody(model: string, request: LlmRequest, think?: ThinkLevel) {
+// `keepAlive` is how long Ollama keeps the model loaded afterwards, such as "30m".
+export function chatBody(model: string, request: LlmRequest, extras: { think?: ThinkLevel; keepAlive?: string } = {}) {
   return {
     model,
     stream: false,
     format: request.jsonSchema,
     options: { temperature: request.temperature },
-    ...(think ? { think } : {}),
+    ...(extras.think ? { think: extras.think } : {}),
+    ...(extras.keepAlive ? { keep_alive: extras.keepAlive } : {}),
     messages: [
       { role: "system", content: request.system },
       { role: "user", content: request.prompt },
@@ -17,16 +19,16 @@ export function chatBody(model: string, request: LlmRequest, think?: ThinkLevel)
   };
 }
 
-export function createOllamaClient(options: { baseUrl: string; model: string; timeoutMs?: number; think?: ThinkLevel }): LlmClient {
-  const { baseUrl, model, timeoutMs = 60_000, think } = options;
+export function createOllamaClient(options: { baseUrl: string; model: string; timeoutMs?: number; think?: ThinkLevel; keepAlive?: string }): LlmClient {
+  const { baseUrl, model, timeoutMs = 60_000, think, keepAlive } = options;
   return {
     model,
     async complete(request: LlmRequest): Promise<LlmCompletion> {
       const response = await fetch(`${baseUrl}/api/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        signal: AbortSignal.timeout(timeoutMs),
-        body: JSON.stringify(chatBody(model, request, think)),
+        signal: request.signal ? AbortSignal.any([AbortSignal.timeout(timeoutMs), request.signal]) : AbortSignal.timeout(timeoutMs),
+        body: JSON.stringify(chatBody(model, request, { think, keepAlive })),
       });
       if (!response.ok) {
         throw new Error(`Ollama returned ${response.status}: ${await response.text()}`);

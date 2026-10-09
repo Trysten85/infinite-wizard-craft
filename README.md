@@ -14,7 +14,26 @@ npm test           # rule tests
 npm run typecheck
 ```
 
-Override the model or address with `OLLAMA_MODEL` and `OLLAMA_URL`.
+## The model
+
+`config/model.json` says which model the game uses and how:
+
+| Setting | What |
+|---|---|
+| `url` | Where Ollama answers. The host PC's address on the VirtualBox host-only network |
+| `model` | The model, which must already be pulled in Ollama |
+| `effort` | How hard a reasoning model thinks: `combos` for combinations, which the player waits on, and `events`, which are written out of sight. `low`, `medium`, `high`, or `null` for a model that does not reason |
+| `keepAlive` | How long Ollama keeps the model loaded after a call |
+| `timeoutSeconds` | How long one call may take before it is given up and tried again |
+| `background` | How event writing gives way to combinations (below) |
+
+Ollama answers one call at a time, so a combination would otherwise queue behind a whole event
+beat. Instead, event writing is cut short the moment a combination needs the model, and starts
+again once there have been `quietSeconds` without one. After giving way `giveWayTimes` times, a
+call runs to the end, so a busy player cannot put an event off forever.
+
+`OLLAMA_MODEL` and `OLLAMA_URL` override the file for one run. A different model is sent no
+effort level.
 
 ## Comparing models
 
@@ -25,8 +44,11 @@ npm run eval -- gemma3:12b gpt-oss:20b
 Runs each model through the same fixed set of the game's real prompts (combinations, the storybook
 menu, events, the spell look, parting lines) on a throwaway save, and writes a side-by-side report
 to `var/eval/<date>/report.md`. Each model must already be pulled in Ollama on the host PC. Nothing
-in the game or the saved game is changed. To play with a different model afterwards, start the
-server with `OLLAMA_MODEL=<name> npm run dev`.
+in the game or the saved game is changed. To play with a different model afterwards, change
+`model` in `config/model.json`.
+
+`npm run eval -- game` runs the model exactly as the game does, with the efforts from
+`config/model.json`. Use it after changing a prompt or a setting.
 
 ## Recipe key
 
@@ -43,6 +65,7 @@ approved, and by `npm run key`. A test fails if it falls out of step with the da
 |---|---|
 | `data/` | Game data: entries, combos, schools, ladders, spells, tag vocabulary (design notes in `Tag Guide.md`) |
 | `config/balance.json` | Every balance number |
+| `config/model.json` | Which model, and how hard it thinks for each job |
 | `prompts/voice.md` | Voice guide sent with every model call |
 | `src/shared/schema.ts` | Schemas for data files and model output |
 | `src/server/combiner.ts` | Combine rules |
@@ -106,7 +129,7 @@ player reacts, the person says what they are after, and the player answers.
 
 | Route | Returns |
 |---|---|
-| `GET /api/players/:player/event` | `{ event, eventIn }`. `event` is null until one is due |
+| `GET /api/players/:player/event` | `{ event, eventIn }`. `event` is null until one is waiting. Answers at once |
 | `POST /api/players/:player/event/respond` with `{ type, beat? }` | `{ outcome, effects, next, request, hint, gift, rewards, progress }` |
 | `POST /api/players/:player/event/test` with `{ seed? }` | `{ event, eventIn, seed }` |
 
@@ -128,11 +151,18 @@ player reacts, the person says what they are after, and the player answers.
 - `effects` is `{ gold, rep, fondness }`. Outcomes and effects are only returned by responding.
 - `progress` also carries `rep`, `repBand`, `requests`, `hints`, `eventReady`, and `eventIn`
   (the shared type is `PlayerProgress`).
-- **Timing:** each beat takes the model about 10 seconds to write. The server writes the first
-  beat as soon as an event is due, and the second beat while the player reads the first, so both
-  are usually ready. If the player answers before the second beat is written, the call waits.
-- **Test route:** writes a fresh event at once. It needs no points and spends none, and an event
-  already waiting is replaced. It is a real event: playing it changes gold, standing, and fondness.
+- **Timing:** an event is written whole, out of sight, before the player hears of it: the arrival,
+  and the second beat for both ways of carrying on. That takes a minute or two. Once it is
+  waiting, playing it never waits on the model.
+  - `progress.eventReady` is true only when an event is waiting. Every route that returns
+    `progress` carries it, so the page can show that someone has arrived after any action.
+  - `eventIn: 0` with `eventReady: false` means an event has been earned and is on its way.
+  - The points an event cost are spent when it appears, not when it is earned.
+  - If the server stops part-way through, the event is carried on from what was already written
+    the next time that player does anything.
+- **Test route:** writes a fresh event and returns it as soon as the arrival is written (the
+  second beats follow behind it, so answering straight away can wait). It needs no points and
+  spends none, and an event already waiting is replaced. It is a real event: playing it changes gold, standing, and fondness.
   Seed ids are in `data/event-seeds.json`, plus `repeat` to bring back someone the player has met.
 
 ```
@@ -200,6 +230,9 @@ Set `status` to `ok` to make a row live, by hand or with `approve`. Re-running `
   storybook result.
 - For a magical pair the model picks from the fixed list in `data/storybook.json`, or says none.
   Edit that list to turn the fantasy up or down.
+- One thing can be made several ways. But when a new pair lands on something another pair
+  already makes, the model is asked once more whether something else fits just as well. If it
+  gives the same answer again, that answer stands.
 
 ## Blocklist
 

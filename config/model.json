@@ -1,0 +1,8 @@
+{
+  "url": "http://192.168.56.1:11434",
+  "model": "gpt-oss:20b",
+  "effort": { "combos": "low", "events": "medium" },
+  "keepAlive": "30m",
+  "timeoutSeconds": { "combos": 60, "events": 120 },
+  "background": { "quietSeconds": 3, "giveWayTimes": 4 }
+}

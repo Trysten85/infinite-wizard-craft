@@ -12,7 +12,7 @@ import { assignKeys, candidatesFor, existingMatches, RANKED_BASE_COST } from "..
 import { classifyMaterial, draftMaterialRecipe, rankElements } from "../server/crafting/materials";
 import { loadGameData, readOptional, SPELL_MATERIALS_FILE, SPELL_RECIPES_FILE } from "../server/gameData";
 import { RECIPE_KEY_FILE, renderRecipeKey } from "../server/recipeKey";
-import { createOllamaClient } from "../server/llm/ollama";
+import { createModelClient, readModelConfig } from "../server/llm/config";
 import { openStore } from "../server/store";
 import {
   comboKey,
@@ -39,10 +39,7 @@ function writeRows(path: string, rows: unknown[]): void {
 function openModel() {
   mkdirSync(join(root, "var"), { recursive: true });
   const store = openStore(join(root, "var/game.db"));
-  const client = createOllamaClient({
-    baseUrl: process.env.OLLAMA_URL ?? "http://192.168.56.1:11434",
-    model: process.env.OLLAMA_MODEL ?? "gemma3:12b",
-  });
+  const client = createModelClient(readModelConfig(root), "combos");
   return { store, client, log: store.logModelCall };
 }
 

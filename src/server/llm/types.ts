@@ -5,6 +5,8 @@ export type LlmRequest = {
   // JSON schema the runtime must constrain the output to.
   jsonSchema: unknown;
   temperature: number;
+  // Lets the caller give up on the call part-way through.
+  signal?: AbortSignal;
 };
 
 export type LlmCompletion = {

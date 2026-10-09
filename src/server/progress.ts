@@ -35,8 +35,15 @@ export function discoveryGold(entry: GameEntry, balance: Balance): number {
 
 // Gold, XP, level, quests, and learned spells for each player. All of it is worked out from what
 // the player has discovered and from the gold ledger, so nothing here can drift out of step.
-export function createProgress(deps: { data: GameData; store: Store; listDiscovered: (player: string) => GameEntry[] }) {
-  const { data, store, listDiscovered } = deps;
+export function createProgress(deps: {
+  data: GameData;
+  store: Store;
+  listDiscovered: (player: string) => GameEntry[];
+  // When events are written whole before the player hears of them, one is "ready" only once it
+  // is waiting. Otherwise it is ready as soon as it is due, and written when the page asks for it.
+  eventsWrittenAhead?: boolean;
+}) {
+  const { data, store, listDiscovered, eventsWrittenAhead = false } = deps;
   const starting = new Set(data.balance.startingEntries);
 
   function measure(player: string) {
@@ -74,8 +81,10 @@ export function createProgress(deps: { data: GameData; store: Store; listDiscove
     const discovered = listDiscovered(player);
     // Things bought or given were not made by the player, so they pay no discovery gold or points.
     const bought = new Set([...store.getLedgerRefs(player, "shop"), ...store.getLedgerRefs(player, "gift")]);
+    // What has been paid already is read once. Asking the ledger about each thing in turn is slow.
+    const paid = new Set(store.getLedgerRefs(player, "discovery"));
     for (const entry of discovered) {
-      if (starting.has(entry.id) || bought.has(entry.id)) continue;
+      if (starting.has(entry.id) || bought.has(entry.id) || paid.has(entry.id)) continue;
       const gold = discoveryGold(entry, data.balance);
       if (store.addLedger(player, gold, "discovery", entry.id)) {
         rewards.gold += gold;
@@ -84,8 +93,9 @@ export function createProgress(deps: { data: GameData; store: Store; listDiscove
     }
     // A quest's gold can raise nothing that another quest checks, so one pass is enough.
     const state = measure(player);
+    const questsPaid = new Set(store.getLedgerRefs(player, "quest"));
     for (const quest of data.quests) {
-      if (isDone(quest, state) && store.addLedger(player, quest.gold, "quest", quest.id)) {
+      if (!questsPaid.has(quest.id) && isDone(quest, state) && store.addLedger(player, quest.gold, "quest", quest.id)) {
         rewards.gold += quest.gold;
         rewards.quests.push({ id: quest.id, title: quest.title, gold: quest.gold });
         earned += points.quest;
@@ -162,7 +172,7 @@ export function createProgress(deps: { data: GameData; store: Store; listDiscove
         recipe: hint.recipe,
         from: hint.fromName,
       })),
-      eventReady: eventIn === 0,
+      eventReady: eventsWrittenAhead ? waiting : eventIn === 0,
       eventIn,
     };
   }

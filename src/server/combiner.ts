@@ -71,7 +71,17 @@ export function createCombiner(deps: {
       if (/[0-9!]/.test(draft.description)) return "The description must not contain digits or exclamation marks.";
       return null;
     };
-    const draft = await generate(a, b, reject);
+    let draft = await generate(a, b, reject);
+    // Making one thing several ways is fine, but a model that reaches for the same answer every
+    // time is asked once more whether something else fits. If it says the same again, that stands.
+    const repeated = store.getEntry(slugify(draft.name));
+    if (repeated) {
+      try {
+        draft = await generate(a, b, reject, repeated.name);
+      } catch (err) {
+        console.error(`Second look at ${a.name} + ${b.name} failed, keeping ${repeated.name}:`, err instanceof Error ? err.message : err);
+      }
+    }
     const name = draft.name[0]!.toUpperCase() + draft.name.slice(1);
     const id = slugify(name);
 

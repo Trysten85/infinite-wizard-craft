@@ -4,7 +4,7 @@ import { createCannedEventWriter, type EventWriter } from "../src/server/events/
 import { loadGameData } from "../src/server/gameData";
 import { createProgress } from "../src/server/progress";
 import { createShop } from "../src/server/shop";
-import { openStore } from "../src/server/store";
+import { openStore, type Store } from "../src/server/store";
 
 export const data = loadGameData(process.cwd());
 
@@ -18,15 +18,17 @@ export function seeded(seed = 1): () => number {
 }
 
 // A whole game on an empty in-memory database. The model is never called.
-export function newGame(seed = 1, writer: EventWriter = createCannedEventWriter()) {
-  const store = openStore(":memory:");
+// `writeAhead` plays it the way the server does: events are written whole, out of sight.
+export function newGame(seed = 1, writer: EventWriter = createCannedEventWriter(), options: { writeAhead?: boolean; store?: Store } = {}) {
+  const { writeAhead = false } = options;
+  const store = options.store ?? openStore(":memory:");
   const generate = async () => {
     throw new Error("the model must not be called");
   };
   const combiner = createCombiner({ data, store, generate });
-  const progress = createProgress({ data, store, listDiscovered: combiner.listDiscovered });
+  const progress = createProgress({ data, store, listDiscovered: combiner.listDiscovered, eventsWrittenAhead: writeAhead });
   const shop = createShop({ data, store, progress, listDiscovered: combiner.listDiscovered, random: seeded(seed) });
-  const events = createEvents({ data, store, progress, listDiscovered: combiner.listDiscovered, writer, random: seeded(seed + 100) });
+  const events = createEvents({ data, store, progress, listDiscovered: combiner.listDiscovered, writer, random: seeded(seed + 100), writeAhead });
   // Plays the given combos in order for one player.
   async function play(player: string, steps: [string, string][]) {
     for (const [a, b] of steps) await combiner.combine(player, a, b);

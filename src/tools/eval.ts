@@ -2,7 +2,9 @@
 //   npm run eval -- gemma3:12b gpt-oss:20b
 // Each model must already be pulled in Ollama. A side-by-side report is written under var/eval/.
 // Add "@low", "@medium" or "@high" to a model name to set a reasoning model's effort (gpt-oss
-// defaults to low).
+// defaults to low). The word "game" stands for the model exactly as the game runs it, from
+// config/model.json: one effort for combinations and another for events.
+//   npm run eval -- game
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { loadBlocklist } from "../server/blocklist";
@@ -12,13 +14,16 @@ import { findInventedNames, renderEvalReport, type EvalCase, type EvalRun } from
 import { createEvents } from "../server/events/service";
 import { checkParting, createModelEventWriter, type PartingQuestion } from "../server/events/writer";
 import { loadGameData } from "../server/gameData";
+import { createModelClient, readModelConfig } from "../server/llm/config";
 import { createOllamaClient, type ThinkLevel } from "../server/llm/ollama";
 import { createProgress } from "../server/progress";
 import { openStore } from "../server/store";
 import type { EventView, GameEntry } from "../shared/schema";
 
 const root = process.cwd();
-const baseUrl = process.env.OLLAMA_URL ?? "http://192.168.56.1:11434";
+const settings = readModelConfig(root);
+const baseUrl = settings.url;
+const AS_PLAYED = "game";
 const data = loadGameData(root);
 const voice = readFileSync(join(root, "prompts/voice.md"), "utf8");
 const blocklist = loadBlocklist(join(root, "Blocklist.md"));
@@ -52,11 +57,12 @@ const showBeat = (view: EventView) =>
   [view.scene, "", ...view.responses.map((response) => `- (${response.type}${response.spell ? `, using ${response.spell.name}` : ""}) ${response.text}`)].join("\n");
 
 async function runModel(spec: string): Promise<EvalRun> {
-  const [model, effort] = spec.split("@") as [string, ThinkLevel | undefined];
+  const [model, effort] = (spec === AS_PLAYED ? [settings.model, undefined] : spec.split("@")) as [string, ThinkLevel | undefined];
   const think = effort ?? (model.startsWith("gpt-oss") ? "low" : undefined);
-  const client = createOllamaClient({ baseUrl, model, timeoutMs: 300_000, think });
+  const one = createOllamaClient({ baseUrl, model, timeoutMs: 300_000, think });
+  const client = spec === AS_PLAYED ? createModelClient(settings, "events") : one;
   const store = openStore(":memory:");
-  const generate = createComboGenerator({ client, log: store.logModelCall, voice, tags: data.tags.values(), balance: data.balance, storybook: data.storybook, reservedIds: new Set(data.entries.keys()) });
+  const generate = createComboGenerator({ client: spec === AS_PLAYED ? createModelClient(settings, "combos") : one, log: store.logModelCall, voice, tags: data.tags.values(), balance: data.balance, storybook: data.storybook, reservedIds: new Set(data.entries.keys()) });
   const combiner = createCombiner({ data, store, generate, blocklist });
   const progress = createProgress({ data, store, listDiscovered: combiner.listDiscovered });
   const writer = createModelEventWriter({ client, log: store.logModelCall, voice, blocklist });
@@ -148,12 +154,13 @@ async function runModel(spec: string): Promise<EvalRun> {
 
   const known = [...[...data.entries.values()].map((entry) => entry.name), ...data.storybook, ...people, "Mending", "Prestidigitation"];
   const calls = store.listModelCalls(1000).reverse().map((call) => ({ purpose: call.purpose, ok: call.ok, latencyMs: call.latencyMs, error: call.error }));
-  return { model: spec, cases, calls, inventedNames: findInventedNames(eventText.join(" "), known), seconds: (Date.now() - started) / 1000 };
+  const label = spec === AS_PLAYED ? `${model} as played (${settings.effort.combos ?? "no"} effort for combinations, ${settings.effort.events ?? "no"} for events)` : spec;
+  return { model: label, cases, calls, inventedNames: findInventedNames(eventText.join(" "), known), seconds: (Date.now() - started) / 1000 };
 }
 
 const models = process.argv.slice(2);
 if (models.length === 0) {
-  console.log("Usage: npm run eval -- <model> [<model> ...]   for example: npm run eval -- gemma3:12b gpt-oss:20b");
+  console.log("Usage: npm run eval -- <model> [<model> ...]   for example: npm run eval -- gemma3:12b gpt-oss:20b, or: npm run eval -- game");
   process.exit(0);
 }
 const installed = await fetch(`${baseUrl}/api/tags`)
@@ -164,7 +171,7 @@ if (!installed) {
   console.log(`Ollama is not answering at ${baseUrl}.`);
   process.exit(1);
 }
-const missing = models.map((spec) => spec.split("@")[0]!).filter((model) => !installed.includes(model));
+const missing = models.map((spec) => (spec === AS_PLAYED ? settings.model : spec.split("@")[0]!)).filter((model) => !installed.includes(model));
 if (missing.length > 0) {
   console.log(`Not pulled yet: ${missing.join(", ")}. On the host PC run:`);
   for (const model of missing) console.log(`  ollama pull ${model}`);

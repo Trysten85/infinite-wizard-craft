@@ -45,7 +45,7 @@ type Payload = {
   // The spell the Skilled response uses, when the writer judged that one of the player's fits.
   spell: { id: string; name: string } | null;
   // Second beats written ahead of time, one per way the player might first react, so that the
-  // conversation does not stall while the model writes.
+  // conversation never stalls while the model writes.
   drafts?: Partial<Record<ResponseType, HeartDraft>>;
 };
 type HeartDraft = Pick<Payload, "heart" | "responseTypes" | "payoff" | "spell" | "parting">;
@@ -66,17 +66,51 @@ export function createEvents(deps: {
   writer: EventWriter;
   // A number from 0 up to, not including, 1.
   random?: () => number;
-  // Write each event's second beat in the background as soon as its first is ready.
+  // Write each event whole, out of sight, before the player hears of it: the arrival, and the
+  // second beat for every way of carrying on. Playing it then never waits on the model. When
+  // this is off, an event is written a beat at a time, as the page asks for it.
   writeAhead?: boolean;
 }) {
   const { data, store, progress, listDiscovered, writer, random = Math.random, writeAhead = false } = deps;
   const rules = data.balance.events;
+  // The first reactions that lead on to a second beat. Turning the person away ends it at the door.
+  const carryOn = rules.openingTypes.filter((type) => type !== "avoid");
   // One piece of writing at a time per player, however many times the page asks.
   const writing = new Map<string, Promise<unknown>>();
   // Players whose answer is waiting on the writer. Writing ahead stands aside for them.
   const answering = new Set<string>();
+  // Writing going on out of sight, one job after another per player.
+  const jobs = new Map<string, Promise<void>>();
+  // Second beats that could not be written ahead, as "event:type". They are written when needed.
+  const gaveUp = new Set<string>();
 
   const pendingEvent = (player: string) => store.listEvents(player).find((event) => event.state === "pending");
+  // An event still being written out of sight.
+  const hiddenEvent = (player: string) => store.listEvents(player).find((event) => event.state === "writing");
+  const unresolved = (player: string, id: number) => store.listEvents(player).find((event) => event.id === id && event.state !== "resolved");
+
+  // Whether the player has earned their next event. Points are counted when progress is settled.
+  function isDue(player: string): boolean {
+    const stats = store.getStats(player);
+    return stats.eventPoints >= eventThreshold(stats.rep, data.balance);
+  }
+
+  // The points that brought an event are spent when it reaches the player. Anything over carries on.
+  function spendPoints(player: string): void {
+    const stats = store.getStats(player);
+    store.changeStats(player, { eventPoints: -Math.min(stats.eventPoints, eventThreshold(stats.rep, data.balance)) });
+  }
+
+  // Runs a job out of sight, after any already going for this player. A failure is only logged.
+  function inBackground(player: string, job: () => Promise<void>): void {
+    const next: Promise<void> = (jobs.get(player) ?? Promise.resolve())
+      .then(job)
+      .catch((err) => console.error(`Could not write ahead for ${player}:`, err instanceof Error ? err.message : err))
+      .finally(() => {
+        if (jobs.get(player) === next) jobs.delete(player);
+      });
+    jobs.set(player, next);
+  }
 
   // Runs one writing job for a player at a time. A second caller waits for the first.
   async function exclusively<T>(player: string, job: () => Promise<T>): Promise<T> {
@@ -101,6 +135,7 @@ export function createEvents(deps: {
     return {
       returning: true as const,
       name: person.name,
+      pronoun: person.pronoun,
       role: person.role,
       traits: person.traits,
       facts: person.facts,
@@ -163,7 +198,9 @@ export function createEvents(deps: {
 
   // Beat 1. Code picks the seed, the person, and the stakes; the writer has them arrive.
   // `forcedSeed` is for testing: that seed is used whatever the player's state, and no points are spent.
-  async function writeArrival(player: string, forcedSeed?: string): Promise<void> {
+  // An event stored as "writing" stays out of sight until the rest of it has been written.
+  // Returns the new event's id, or undefined if no seed suits the player.
+  async function writeArrival(player: string, forcedSeed?: string, state: "writing" | "pending" = "pending"): Promise<number | undefined> {
     const discovered = listDiscovered(player);
     const { level } = progress.getProgress(player);
     const stats = store.getStats(player);
@@ -224,10 +261,9 @@ export function createEvents(deps: {
     const person = returning ?? store.addPerson(player, arrival.person!, day);
     if (returning) store.updatePerson(returning.id, { lastDay: day, flag: null });
     const payload: Payload = { beat: 1, seed, arrival, openingTypes: rules.openingTypes, opening: null, heart: null, responseTypes: [], payoff: null, spell: null, parting: null };
-    const eventId = store.addEvent(player, { day, seedId: seed.id, kind: seed.kind, mood: seed.mood, personId: person.id, stakes, payload, sceneSummary: arrival.sceneSummary });
-    if (writeAhead) queueMicrotask(() => writeAheadFor(player, eventId));
-    // The points that brought this event are spent. Anything over carries to the next.
-    if (forcedSeed === undefined) store.changeStats(player, { eventPoints: -eventThreshold(stats.rep, data.balance) });
+    const eventId = store.addEvent(player, { day, seedId: seed.id, kind: seed.kind, mood: seed.mood, personId: person.id, stakes, payload, sceneSummary: arrival.sceneSummary }, state);
+    if (forcedSeed === undefined && state === "pending") spendPoints(player);
+    return eventId;
   }
 
   // Beat 2. The person says what they are after, in answer to how the player first reacted.
@@ -281,26 +317,67 @@ export function createEvents(deps: {
     return { heart, responseTypes: offered, payoff, spell: spell && { id: spell.id, name: spell.name }, parting };
   }
 
-  // Writes the second beat ahead of time for each way the player might first react, one at a time,
-  // while they are still reading the first. Whichever they choose is then usually ready.
-  function writeAheadFor(player: string, eventId: number): void {
-    for (const type of rules.openingTypes.filter((item) => item !== "avoid")) {
-      exclusively(player, async () => {
-        const event = pendingEvent(player);
+  // Writes the second beat ahead of time for each way the player might first react, one at a time.
+  // Each is its own turn at the writer, so an answer the player is waiting on can go in between.
+  async function writeDrafts(player: string, eventId: number): Promise<void> {
+    for (const type of carryOn) {
+      const write = async () => {
+        const event = unresolved(player, eventId);
         const payload = event?.payload as Payload | undefined;
         if (answering.has(player)) return;
-        if (!event || event.id !== eventId || !payload || payload.beat !== 1 || payload.drafts?.[type]) return;
+        if (!event || !payload || payload.beat !== 1 || payload.drafts?.[type]) return;
         const person = store.listPeople(player).find((item) => item.id === event.personId);
         const choice = payload.arrival.responses.find((item) => item.type === type);
         if (!person || !choice) return;
         const warmed = { ...person, fondness: person.fondness + Math.sign(rules.effects[type]!.fondness) };
         const draft = await writeHeart(player, event, payload, warmed, choice);
         // The event may have moved on while this was being written.
-        const latest = pendingEvent(player);
+        const latest = unresolved(player, eventId);
         const current = latest?.payload as Payload | undefined;
-        if (latest?.id === eventId && current?.beat === 1) store.updateEvent(eventId, { ...current, drafts: { ...current.drafts, [type]: draft } }, latest.sceneSummary);
-      }).catch((err) => console.error(`Could not write ahead for ${player}:`, err instanceof Error ? err.message : err));
+        if (latest && current?.beat === 1) store.updateEvent(eventId, { ...current, drafts: { ...current.drafts, [type]: draft } }, latest.sceneSummary);
+      };
+      // A beat the writer cannot manage is tried once more, then left to be written when needed.
+      for (let attempt = 1; attempt <= 2; attempt++) {
+        try {
+          await exclusively(player, write);
+          break;
+        } catch (err) {
+          if (!(err instanceof GenerationError)) throw err;
+          if (attempt === 2) {
+            gaveUp.add(`${eventId}:${type}`);
+            console.error(`Could not write ahead for ${player}:`, err.message);
+          }
+        }
+      }
     }
+  }
+
+  // Puts a hidden event in front of the player, once everything that can be written for it has been.
+  function show(player: string, eventId: number): boolean {
+    const event = hiddenEvent(player);
+    // Only one event is in front of the player at a time. A second waits its turn, still hidden.
+    if (!event || event.id !== eventId || pendingEvent(player)) return false;
+    const drafts = (event.payload as Payload).drafts ?? {};
+    if (carryOn.some((type) => !drafts[type] && !gaveUp.has(`${eventId}:${type}`))) return false;
+    store.showEvent(eventId);
+    spendPoints(player);
+    return true;
+  }
+
+  // Writes the player's next event from start to finish, out of sight, then shows it. If this is
+  // cut short, for instance by the server stopping, the next call carries on from what was written.
+  async function writeWhole(player: string): Promise<void> {
+    const started = Date.now();
+    if (!hiddenEvent(player)) {
+      await exclusively(player, async () => {
+        if (pendingEvent(player) || hiddenEvent(player) || !isDue(player)) return;
+        await writeArrival(player, undefined, "writing");
+      });
+    }
+    const hidden = hiddenEvent(player);
+    if (!hidden) return;
+    await writeDrafts(player, hidden.id);
+    if (show(player, hidden.id)) console.log(`An event is ready for ${player}, written in ${Math.round((Date.now() - started) / 1000)} seconds.`);
   }
 
   function toView(player: string, event: StoredEvent): EventView {
@@ -324,12 +401,16 @@ export function createEvents(deps: {
     };
   }
 
-  // The event waiting on the player, writing the next one first if it is due.
+  // The event waiting on the player. When events are written ahead this never waits: one that is
+  // due is started out of sight and turns up when it is ready. Otherwise a due event is written first.
   async function current(player: string): Promise<{ event: EventView | null; eventIn: number }> {
     progress.settle(player);
-    await exclusively(player, async () => {
-      if (!pendingEvent(player) && progress.getProgress(player).eventReady) await writeArrival(player);
-    });
+    if (writeAhead) prepare(player);
+    else {
+      await exclusively(player, async () => {
+        if (!pendingEvent(player) && isDue(player)) await writeArrival(player);
+      });
+    }
     const pending = pendingEvent(player);
     return { event: pending ? toView(player, pending) : null, eventIn: progress.getProgress(player).eventIn };
   }
@@ -362,7 +443,10 @@ export function createEvents(deps: {
     let hint: HintView | null = null;
     let gift: EventOutcome["gift"] = null;
     const parting = payload.parting;
-    if (payload.payoff && parting && person && HELPFUL.includes(choice.type)) {
+    // The event may have been written a while ago. What it planned to leave is dropped if the
+    // player has since come by that thing themselves.
+    const owned = payload.payoff !== null && listDiscovered(player).some((entry) => entry.id === payload.payoff!.entryId);
+    if (payload.payoff && parting && person && HELPFUL.includes(choice.type) && !owned) {
       const entry = data.entries.get(payload.payoff.entryId)!;
       const named = { id: entry.id, name: entry.name };
       if (payload.payoff.kind === "request") {
@@ -438,11 +522,20 @@ export function createEvents(deps: {
     for (const person of quietest.slice(0, extra)) store.updatePerson(person.id, { status: "dormant" });
   }
 
-  // Starts writing the next event, if one is due, without making anyone wait for it. The page
-  // usually finds it ready by the time it asks.
+  // Starts writing the next event, if one is due, without making anyone wait for it. Call it
+  // after anything that can earn points. An event left half-written is carried on from there.
   function prepare(player: string): void {
-    if (pendingEvent(player) || writing.has(player) || !progress.getProgress(player).eventReady) return;
-    current(player).catch((err) => console.error(`Could not write an event for ${player}:`, err instanceof Error ? err.message : err));
+    if (pendingEvent(player)) return;
+    if (writeAhead) {
+      if (!jobs.has(player) && (hiddenEvent(player) || isDue(player))) inBackground(player, () => writeWhole(player));
+    } else if (!writing.has(player) && isDue(player)) {
+      current(player).catch((err) => console.error(`Could not write an event for ${player}:`, err instanceof Error ? err.message : err));
+    }
+  }
+
+  // Resolves once nothing is being written out of sight for the player. For tests and tools.
+  async function idle(player: string): Promise<void> {
+    while (jobs.has(player)) await jobs.get(player);
   }
 
   // For testing: writes a fresh event right now, without waiting for points and without spending
@@ -462,11 +555,13 @@ export function createEvents(deps: {
       // With no seed named, one is picked the usual way from those the player qualifies for.
       const qualifying = eligibleSeeds(data.eventSeeds, snapshotPlayer(data, listDiscovered(player), progress.getProgress(player).level));
       const seed = seedId ?? weightedPick(qualifying.map((item) => ({ item: item.id, weight: 1 })), random())!;
-      await writeArrival(player, seed);
+      const eventId = await writeArrival(player, seed);
+      // The test event is shown as soon as it has arrived. Its second beats follow behind it.
+      if (writeAhead && eventId !== undefined) inBackground(player, () => writeDrafts(player, eventId));
       const written = pendingEvent(player);
       return { event: written ? toView(player, written) : null, eventIn: progress.getProgress(player).eventIn, seed: written?.seedId ?? seed };
     });
   }
 
-  return { current, respond, prepare, test };
+  return { current, respond, prepare, test, idle };
 }

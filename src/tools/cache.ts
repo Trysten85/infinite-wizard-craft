@@ -9,7 +9,7 @@ import { z } from "zod";
 import { loadBlocklist } from "../server/blocklist";
 import { loadGameData } from "../server/gameData";
 import { generateValidated, GenerationError } from "../server/llm/generate";
-import { createOllamaClient } from "../server/llm/ollama";
+import { createModelClient, readModelConfig } from "../server/llm/config";
 import { openStore } from "../server/store";
 import { createVoiceCheck, endsCleanly } from "../server/voice";
 
@@ -55,10 +55,7 @@ if (command === "list") {
   const blocklist = loadBlocklist(join(root, "Blocklist.md"));
   const voice = readFileSync(join(root, "prompts/voice.md"), "utf8");
   const voiceCheck = createVoiceCheck(voice);
-  const client = createOllamaClient({
-    baseUrl: process.env.OLLAMA_URL ?? "http://192.168.56.1:11434",
-    model: process.env.OLLAMA_MODEL ?? "gemma3:12b",
-  });
+  const client = createModelClient(readModelConfig(root), "combos");
   const nameOf = (id: string) => data.entries.get(id)?.name ?? store.getEntry(id)?.name ?? id;
   const madeFrom = new Map(store.listCombos().map((combo) => [combo.resultId, `${nameOf(combo.a)} + ${nameOf(combo.b)}`]));
   for (const entry of store.listEntries()) {

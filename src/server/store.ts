@@ -17,10 +17,14 @@ export type LedgerReason = "quest" | "discovery" | "learn" | "shop" | "event" | 
 
 export type PlayerStats = { rep: number; eventPoints: number; lastLevel: number };
 
-// Someone the player has met in an event. Name, role, traits, and facts are fixed once written.
+export type Pronoun = "she" | "he" | "they";
+
+// Someone the player has met in an event. Name, pronoun, role, traits, and facts are fixed once written.
 export type Person = {
   id: number;
   name: string;
+  // Null for someone met before pronouns were recorded.
+  pronoun: Pronoun | null;
   role: string;
   traits: string[];
   facts: string[];
@@ -43,7 +47,8 @@ export type StoredEvent = {
   stakes: string;
   // Everything the writer produced, plus the plan code made. Never sent back to the model whole.
   payload: unknown;
-  state: "pending" | "resolved";
+  // "writing" is an event still being written out of sight. The player cannot see it yet.
+  state: "writing" | "pending" | "resolved";
   chosen: string | null;
   effects: unknown;
   sceneSummary: string;
@@ -184,6 +189,10 @@ export function openStore(path: string) {
       error TEXT
     );
   `);
+
+  // Columns added since the first saved games were made.
+  const personColumns = db.prepare("PRAGMA table_info(people)").all().map((row) => row.name as string);
+  if (!personColumns.includes("pronoun")) db.exec("ALTER TABLE people ADD COLUMN pronoun TEXT");
 
   function transaction<T>(fn: () => T): T {
     db.exec("BEGIN");
@@ -397,11 +406,12 @@ export function openStore(path: string) {
       ).run(change.rep ?? 0, change.eventPoints ?? 0, change.lastLevel ?? null, player);
     },
 
-    addPerson(player: string, person: Pick<Person, "name" | "role" | "traits" | "facts">, day: number): Person {
+    addPerson(player: string, person: Pick<Person, "name" | "role" | "traits" | "facts"> & { pronoun?: Pronoun | null }, day: number): Person {
+      const pronoun = person.pronoun ?? null;
       const result = db
-        .prepare("INSERT INTO people (player, name, role, traits, facts, first_day, last_day) VALUES (?, ?, ?, ?, ?, ?, ?)")
-        .run(player, person.name, person.role, JSON.stringify(person.traits), JSON.stringify(person.facts), day, day);
-      return { ...person, id: Number(result.lastInsertRowid), fondness: 0, status: "active", firstDay: day, lastDay: day, flag: null, flagDay: null };
+        .prepare("INSERT INTO people (player, name, pronoun, role, traits, facts, first_day, last_day) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
+        .run(player, person.name, pronoun, person.role, JSON.stringify(person.traits), JSON.stringify(person.facts), day, day);
+      return { ...person, pronoun, id: Number(result.lastInsertRowid), fondness: 0, status: "active", firstDay: day, lastDay: day, flag: null, flagDay: null };
     },
 
     listPeople(player: string): Person[] {
@@ -411,6 +421,7 @@ export function openStore(path: string) {
         .map((row) => ({
           id: row.id as number,
           name: row.name as string,
+          pronoun: (row.pronoun as Pronoun | null) ?? null,
           role: row.role as string,
           traits: JSON.parse(row.traits as string) as string[],
           facts: JSON.parse(row.facts as string) as string[],
@@ -441,14 +452,23 @@ export function openStore(path: string) {
       db.prepare("DELETE FROM people WHERE id = ?").run(id);
     },
 
-    addEvent(player: string, event: Omit<StoredEvent, "id" | "state" | "chosen" | "effects" | "outcomeSummary">): number {
+    addEvent(
+      player: string,
+      event: Omit<StoredEvent, "id" | "state" | "chosen" | "effects" | "outcomeSummary">,
+      state: "writing" | "pending" = "pending",
+    ): number {
       const result = db
         .prepare(
-          `INSERT INTO events (player, day, seed_id, kind, mood, person_id, stakes, payload, scene_summary)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          `INSERT INTO events (player, day, seed_id, kind, mood, person_id, stakes, payload, scene_summary, state)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         )
-        .run(player, event.day, event.seedId, event.kind, JSON.stringify(event.mood), event.personId, event.stakes, JSON.stringify(event.payload), event.sceneSummary);
+        .run(player, event.day, event.seedId, event.kind, JSON.stringify(event.mood), event.personId, event.stakes, JSON.stringify(event.payload), event.sceneSummary, state);
       return Number(result.lastInsertRowid);
+    },
+
+    // Puts an event that has been written out of sight in front of the player.
+    showEvent(id: number): void {
+      db.prepare("UPDATE events SET state = 'pending' WHERE id = ? AND state = 'writing'").run(id);
     },
 
     // Every event for a player, oldest first.

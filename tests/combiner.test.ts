@@ -113,6 +113,56 @@ describe("generated combos", () => {
     expect(second.entry).toEqual(first.entry);
   });
 
+  describe("a second look at a repeat", () => {
+    const cinder: ComboDraft = { name: "Cinder", description: "A small, sulking coal.", tags: ["mineral"], missingTag: null };
+    // Gives Ash, and whatever `again` says when it is asked to look a second time.
+    function generatorRepeating(again: () => ComboDraft) {
+      const generate: ComboGenerator = async (_a, _b, _reject, alreadyMade) => (alreadyMade ? again() : ash);
+      return vi.fn(generate);
+    }
+
+    it("is not taken for a result nobody has made before", async () => {
+      const generate = generatorRepeating(() => cinder);
+      const { entry } = await createCombiner({ data, store, generate }).combine("ann", "fire", "fire");
+      expect(entry.id).toBe("ash");
+      expect(generate).toHaveBeenCalledTimes(1);
+      expect(generate.mock.calls[0]![3]).toBeUndefined();
+    });
+
+    it("asks once more when a new pair lands on something already made, and uses a different answer", async () => {
+      const generate = generatorRepeating(() => cinder);
+      const combiner = createCombiner({ data, store, generate });
+      await combiner.combine("ann", "fire", "fire");
+      const { entry, origin } = await combiner.combine("ann", "water", "water");
+      expect(entry.id).toBe("cinder");
+      expect(origin).toBe("generated");
+      expect(generate).toHaveBeenCalledTimes(3);
+      // The model is told what the pair first gave.
+      expect(generate.mock.calls[2]![3]).toBe("Ash");
+      expect((await combiner.combine("ann", "water", "water")).entry.id).toBe("cinder");
+    });
+
+    it("keeps the same answer if the model gives it again, however many ways that makes it", async () => {
+      const generate = generatorRepeating(() => ash);
+      const combiner = createCombiner({ data, store, generate });
+      const first = await combiner.combine("ann", "fire", "fire");
+      const second = await combiner.combine("ann", "water", "water");
+      expect(second.entry).toEqual(first.entry);
+      // Asked exactly once more, not until it changes its mind.
+      expect(generate).toHaveBeenCalledTimes(3);
+      expect(store.getCombo("water+water")).toBe("ash");
+    });
+
+    it("keeps the first answer if the second look fails", async () => {
+      const generate = generatorRepeating(() => {
+        throw new Error("the model gave up");
+      });
+      const combiner = createCombiner({ data, store, generate });
+      await combiner.combine("ann", "fire", "fire");
+      expect((await combiner.combine("ann", "water", "water")).entry.id).toBe("ash");
+    });
+  });
+
   it("keeps the model's missing-tag hint for review without making it a tag", async () => {
     const mist: ComboDraft = { name: "Mist", description: "A thing.", tags: [], missingTag: "vapor" };
     const combiner = createCombiner({ data, store, generate: generatorOffering(mist) });

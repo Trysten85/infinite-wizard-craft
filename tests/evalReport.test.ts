@@ -64,7 +64,12 @@ describe("the request sent to Ollama", () => {
   const request = { system: "s", prompt: "p", jsonSchema: { type: "object" }, temperature: 0.5 };
 
   it("carries a thinking level only for a reasoning model", () => {
-    expect(chatBody("gpt-oss:20b", request, "low")).toMatchObject({ model: "gpt-oss:20b", think: "low", format: { type: "object" } });
+    expect(chatBody("gpt-oss:20b", request, { think: "low" })).toMatchObject({ model: "gpt-oss:20b", think: "low", format: { type: "object" } });
     expect(chatBody("gemma3:12b", request)).not.toHaveProperty("think");
+  });
+
+  it("says how long to keep the model loaded, when told", () => {
+    expect(chatBody("gpt-oss:20b", request, { keepAlive: "30m" })).toMatchObject({ keep_alive: "30m" });
+    expect(chatBody("gpt-oss:20b", request)).not.toHaveProperty("keep_alive");
   });
 });

@@ -44,6 +44,8 @@ export function createApp(combiner: Combiner, services?: { progress: ProgressSer
     if (!request) return c.json({ error: "Invalid player name." }, 400);
     // Progress is read first: it pays out anything owed, which can itself be a discovery reward.
     const progress = services?.progress.getProgress(request.player);
+    // Loading the page also picks up an event that was left half-written.
+    services?.events?.prepare(request.player);
     return c.json({ entries: combiner.listDiscovered(request.player), ...(progress && { progress }) });
   });
 
@@ -67,8 +69,8 @@ export function createApp(combiner: Combiner, services?: { progress: ProgressSer
     const { progress, shop, events } = services;
 
     if (events) {
-      // Returns the event waiting on the player. If one is due, it is written first, which can
-      // take a few seconds.
+      // Returns the event waiting on the player, or null. It answers at once: an event that is due
+      // is written out of sight, and `progress.eventReady` turns true once it is waiting.
       app.get("/api/players/:player/event", async (c) => {
         const request = await read(c);
         if (!request) return invalid(c);
@@ -96,6 +98,8 @@ export function createApp(combiner: Combiner, services?: { progress: ProgressSer
         if (!request) return invalid(c);
         try {
           const result = await events.respond(request.player, request.body.type, request.body.beat);
+          // What an event pays out can be enough to earn the next one.
+          events.prepare(request.player);
           return c.json({ ...result, progress: progress.getProgress(request.player) });
         } catch (err) {
           return refuse(c, err);
@@ -125,6 +129,7 @@ export function createApp(combiner: Combiner, services?: { progress: ProgressSer
       if (!request) return invalid(c);
       try {
         const { entry, rewards } = shop.buy(request.player, request.body.slot);
+        events?.prepare(request.player);
         return c.json({ entry, rewards, progress: progress.getProgress(request.player), shop: shop.view(request.player) });
       } catch (err) {
         return refuse(c, err);

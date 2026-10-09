@@ -22,7 +22,7 @@ An event is a short conversation, not a single choice. It has two beats.
 
 The code never reads the AI's story to decide effects. It only reads which response type the player chose.
 
-**Timing:** each beat is written separately, so beat 2 can answer what the player did in beat 1. The server writes beat 2 for both ways of carrying on while the player is still reading beat 1.
+**Timing:** each beat is written separately, so beat 2 can answer what the player did in beat 1. The whole event (beat 1, and beat 2 for both ways of carrying on) is written out of sight before the player hears of it, so an event simply turns up a minute or two after it is earned and plays without waiting. Writing gives way to combinations, which the player is waiting on.
 
 ## Response types (code-owned)
 Every response the AI writes must map to one of these. Each type has a fixed effect profile, scaled by stakes size.
