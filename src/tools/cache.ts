@@ -3,13 +3,14 @@
 //   npm run cache -- delete fire+mud
 //   npm run cache -- calls
 //   npm run cache -- revoice     rewrite every cached description in the current voice guide
+//   npm run cache -- revoice --long   rewrite only the descriptions that run over the length limit
 //   npm run cache -- review      have the model grade every cached combo and list the doubtful ones
 import { copyFileSync, existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { z } from "zod";
 import { loadBlocklist } from "../server/blocklist";
 import { goesWith } from "../server/cacheReview";
-import { createMadeFrom, thingLine } from "../server/comboContext";
+import { createMadeFrom, thingName } from "../server/comboContext";
 import { createComboGrader } from "../server/comboGrader";
 import { loadGameData } from "../server/gameData";
 import { generateValidated, GenerationError } from "../server/llm/generate";
@@ -17,7 +18,7 @@ import { createModelClient, readModelConfig } from "../server/llm/config";
 import { createOllamaClient } from "../server/llm/ollama";
 import { openStore } from "../server/store";
 import { slugify } from "../shared/schema";
-import { createVoiceCheck, endsCleanly } from "../server/voice";
+import { createVoiceCheck, endsCleanly, tooLong } from "../server/voice";
 
 const dbPath = join(process.cwd(), "var/game.db");
 if (!existsSync(dbPath)) {
@@ -70,7 +71,7 @@ if (command === "list") {
   for (const combo of combos) {
     const [a, b, result] = [find(combo.a), find(combo.b), store.getEntry(combo.resultId)];
     if (!a || !b || !result) continue;
-    const graded = await grade({ a: thingLine(a, madeFrom(a.id)), b: thingLine(b, madeFrom(b.id)), result: result.name, description: result.description }).catch(() => null);
+    const graded = await grade({ a: thingName(a, madeFrom(a.id)), b: thingName(b, madeFrom(b.id)), result: result.name, description: result.description }).catch(() => null);
     if (!graded) continue;
     const realName = graded.realName || storybook.has(result.id);
     process.stdout.write(graded.makesSense && realName ? "." : "?");
@@ -106,7 +107,11 @@ if (command === "list") {
   const client = createModelClient(readModelConfig(root), "combos");
   const nameOf = (id: string) => data.entries.get(id)?.name ?? store.getEntry(id)?.name ?? id;
   const madeFrom = new Map(store.listCombos().map((combo) => [combo.resultId, `${nameOf(combo.a)} + ${nameOf(combo.b)}`]));
-  for (const entry of store.listEntries()) {
+  const limit = data.balance.generation;
+  // With --long, only the descriptions that run over the limit are touched.
+  const entries = store.listEntries().filter((entry) => key !== "--long" || tooLong(entry.description, limit) !== null);
+  if (key === "--long") console.log(`${entries.length} of ${store.listEntries().length} cached descriptions run over ${limit.maxSentences} sentences or ${limit.maxWords} words.\n`);
+  for (const entry of entries) {
     try {
       const { description } = await generateValidated(client, store.logModelCall, {
         purpose: "revoice",
@@ -114,7 +119,7 @@ if (command === "list") {
           voice.trim(),
           "",
           "Rewrite the description of one thing from a crafting game in the voice above.",
-          "One or two short, plain sentences, with a small dry joke in the last few words if one fits.",
+          `One or two short, plain sentences, with a small dry joke in the last few words if one fits. Never more than ${limit.maxSentences} sentences.`,
           "Keep what the thing is. Do not list its ingredients, do not start with its name, and do not use digits.",
           "The sample lines in the guide show tone only. Never reuse their wording.",
         ].join("\n"),
@@ -123,6 +128,8 @@ if (command === "list") {
         reject: (value) =>
           !endsCleanly(value.description)
             ? "The description stops in the middle of a sentence. Write one or two short, complete sentences."
+            : tooLong(value.description, limit) !== null
+            ? tooLong(value.description, limit)
             : /[0-9!]/.test(value.description)
             ? "The description must not contain digits or exclamation marks."
             : blocklist.find(value.description).length > 0

@@ -73,11 +73,15 @@
   "generation": {
     "maxAttempts": 3,
     "temperature": 0.8,
+    "naming": "questions",
     "ideasTemperature": 0.3,
     "pick": false,
     "examples": 6,
     "storybookOffered": 8,
     "maxTags": 3,
+    "maxSentences": 3,
+    "maxWords": 50,
+    "twistShare": 0.25,
     "wonderInputs": ["life", "death", "light", "shadow", "mind"],
     "charmedCarriesMagic": false
   }

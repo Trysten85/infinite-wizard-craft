@@ -9,7 +9,9 @@ describe("the model settings", () => {
   it("name one model, thinking less for combinations than for events", () => {
     const config = readModelConfig(root, {});
     expect(config.model).toBe("gpt-oss:20b");
-    expect(config.effort).toEqual({ combos: "low", events: "medium" });
+    expect(config.effort).toMatchObject({ combos: "low", events: "medium" });
+    // The call that decides what a thing is has a level of its own.
+    expect(config.effort.naming).toBeTruthy();
     expect(config.keepAlive).toBeTruthy();
     // The model is only ever reached on the host-only network.
     expect(config.url).toMatch(/^http:\/\/192\.168\.56\./);
@@ -17,7 +19,7 @@ describe("the model settings", () => {
 
   it("can be overridden for one run, and send no effort level to a different model", () => {
     const config = readModelConfig(root, { OLLAMA_MODEL: "gemma3:12b", OLLAMA_URL: "http://192.168.56.1:9999" });
-    expect(config).toMatchObject({ model: "gemma3:12b", url: "http://192.168.56.1:9999", effort: { combos: null, events: null } });
+    expect(config).toMatchObject({ model: "gemma3:12b", url: "http://192.168.56.1:9999", effort: { combos: null, naming: null, events: null } });
     expect(readModelConfig(root, { OLLAMA_MODEL: "gpt-oss:20b" }).effort.events).toBe("medium");
   });
 });

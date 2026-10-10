@@ -18,19 +18,24 @@ export function createMadeFrom(data: GameData, store: Pick<Store, "getMakers" | 
   };
 }
 
-// One ingredient as the model reads it. Only a model-made thing says what it was made from: a
-// hand-written one is described well enough already, and "a person, made from Life and Mud" sends
-// a small model off after mud.
-export function thingLine(entry: GameEntry, madeFrom: string | null): string {
-  const tags = entry.tags.length > 0 ? `; tags: ${entry.tags.join(", ")}` : "";
-  const origin = madeFrom && entry.source === "generated" ? `, made from ${madeFrom}` : "";
-  return `${entry.name} (${entry.kind}${tags})${origin}: ${entry.description}`;
+// One ingredient as the model reads it: the name, and for a model-made thing what it came from.
+// The description is left out on purpose. The hand-written ones are jokes ("Person: mud that
+// stood up and asked what was for breakfast"), and a small model takes them at their word: it
+// starts making things out of mud, and writes a pickle up as a slice of bread.
+export function thingName(entry: GameEntry, madeFrom: string | null): string {
+  return madeFrom && entry.source === "generated" ? `${entry.name} (made from ${madeFrom})` : entry.name;
 }
 
 function hash(text: string): number {
   let value = 0;
   for (const char of text) value = (value * 31 + char.charCodeAt(0)) >>> 0;
   return value;
+}
+
+// A number from 0 up to 1 that belongs to this pair: the same every time, whichever way round
+// the two are given. It lets code set a dial ("one pair in four") without anything being random.
+export function pairShare(a: GameEntry, b: GameEntry): number {
+  return (hash(`twist:${[a.id, b.id].sort().join("+")}`) % 1000) / 1000;
 }
 
 // What a storybook item's `from` words are matched against: a thing's id and the single words of

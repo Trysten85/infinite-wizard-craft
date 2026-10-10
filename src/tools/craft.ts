@@ -168,7 +168,7 @@ async function draftMaterials(): Promise<void> {
       ? await draftMaterialRecipe(
           { client, log, voice, tags: [...data.tags.values()] },
           { name: row.name, usedFor: spells.map((spell) => spell.name) },
-          { ingredients, usedPairs, depthBand, blocklist },
+          { ingredients, usedPairs, depthBand, blocklist, length: data.balance.generation },
         )
       : null;
     if (draft) {

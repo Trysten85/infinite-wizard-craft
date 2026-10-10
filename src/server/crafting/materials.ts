@@ -4,7 +4,7 @@ import type { Blocklist } from "../blocklist";
 import { generateValidated, GenerationError } from "../llm/generate";
 import type { LlmClient } from "../llm/types";
 import type { ModelCall } from "../store";
-import { endsCleanly } from "../voice";
+import { endsCleanly, tooLong, type LengthLimit } from "../voice";
 
 export type MaterialDraft = { inputs: [string, string]; logic: string; description: string; tags: string[] };
 
@@ -16,6 +16,8 @@ export type DraftRules = {
   // [shallowest, deepest] depth the new material may land at.
   depthBand: [number, number];
   blocklist?: Blocklist;
+  // How long the description may run.
+  length?: LengthLimit;
 };
 
 type ModelDeps = { client: LlmClient; log: (call: ModelCall) => void };
@@ -36,7 +38,7 @@ export function checkMaterialDraft(draft: MaterialDraft, rules: DraftRules): str
   }
   if (/[0-9!]/.test(draft.description)) return "The description must not contain digits or exclamation marks.";
   if (!endsCleanly(draft.description)) return "The description stops in the middle of a sentence. Write one or two short, complete sentences.";
-  return null;
+  return rules.length ? tooLong(draft.description, rules.length) : null;
 }
 
 // The ingredients that can still be paired with `first` inside the rules: the pair is unused and

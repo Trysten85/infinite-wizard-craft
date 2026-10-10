@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { comboDraftSchema, slugify, type Balance, type ComboDraft, type ComboExample, type GameEntry, type StorybookItem, type Tag } from "../shared/schema";
-import { exampleLine, pickExamples, storybookFor, thingLine, type MadeFrom } from "./comboContext";
+import { exampleLine, pairShare, pickExamples, storybookFor, thingName, type MadeFrom } from "./comboContext";
 import { generateValidated } from "./llm/generate";
 import type { LlmClient } from "./llm/types";
 import type { ModelCall } from "./store";
@@ -34,6 +34,8 @@ type Idea = { why: string; name: string };
 // Code does the rest: what each ingredient was made from, and which examples resemble the pair.
 export function createComboGenerator(deps: {
   client: LlmClient;
+  // The client for the one call that decides what the thing is. It may think harder than the rest.
+  namingClient?: LlmClient;
   log: (call: ModelCall) => void;
   voice: string;
   tags: Iterable<Tag>;
@@ -51,13 +53,13 @@ export function createComboGenerator(deps: {
 }): ComboGenerator {
   const rules = deps.balance.generation;
   const tags = [...deps.tags];
-  const schema = comboDraftSchema(tags, rules.maxTags);
   const voiceCheck = createVoiceCheck(deps.voice);
   const madeFrom = deps.madeFrom ?? (() => null);
   const exists = deps.exists ?? (() => false);
   const menu = (deps.storybook ?? []).filter((item) => !deps.reservedIds?.has(slugify(item.name)));
   const onMenu = new Set(menu.map((item) => slugify(item.name)));
   const NONE = "none";
+  const namer = deps.namingClient ?? deps.client;
 
   const storybookSystem = [
     "In a fairy-tale world, two things are combined and something new appears.",
@@ -91,6 +93,15 @@ export function createComboGenerator(deps: {
     "Each answer is one thing, named with a noun. It is never a spell, never one of the two ingredients, and never an ingredient's name with a new ending.",
   ].join("\n");
 
+  // The thin way: no questions, no reasons, only the word. One worked example, and it is a
+  // hand-written recipe, so it can never be handed back as the answer to something else.
+  const wordSystem = [
+    "In a cozy crafting game, two things are combined and one new thing appears.",
+    "Answer with the one thing a ten-year-old would say the two make. For example, Fire + Water = Steam.",
+    "Give only its name: a plain, real, well-known noun. One word if you can, two only when the two together are a well-known thing.",
+    "Never one of the two ingredients, never a made-up word, never a spell.",
+  ].join("\n");
+
   const pickSystem = [
     "In a crafting game, two things are combined and one new thing appears. You are shown some suggested answers.",
     "Pick the answer most ten-year-olds would give if asked what the two make. The everyday, obvious thing wins.",
@@ -99,21 +110,20 @@ export function createComboGenerator(deps: {
     `Only if every one of them would make a child frown, answer "${NONE}".`,
   ].join("\n");
 
-  const tagList = tags
-    .filter((tag) => tag.assignedBy === "model")
-    .map((tag) => `- ${tag.id}: ${tag.meaning}`)
-    .join("\n");
   const describeSystem = [
     deps.voice.trim(),
     "You describe the single thing made when two things are combined. Its name has already been chosen.",
-    "Description: one or two short sentences. The humor belongs here, never in the name.",
+    `Description: one or two short sentences. Never more than ${rules.maxSentences}. The humor belongs here, never in the name.`,
     `Tags: say what the result is made of or plainly does. Most results need one or two, and ${rules.maxTags} is the most. Choosing none is fine.`,
-    "Do not add a tag because it might loosely apply. A tag must match its meaning below.",
+    "Do not add a tag because it might loosely apply. A tag must match its meaning.",
     "missingTag: if the most obvious word for the result is not in the list, give that one plain word. Otherwise null.",
-    "",
-    "Tags and their meanings:",
-    tagList,
   ].join("\n");
+
+  // The tags on offer for one pair. What a thing is made of is handed down by code: a material
+  // tag (metal, plant, liquid and so on) is only on offer if one of the ingredients carries it.
+  // That is what stops a tree-man being tagged as a mineral and a liquid.
+  const tagsFor = (a: GameEntry, b: GameEntry) =>
+    tags.filter((tag) => tag.assignedBy === "model" && (tag.group !== "material" || a.tags.includes(tag.id) || b.tags.includes(tag.id)));
 
   // Has the model choose from the storybook things code put on offer, or decline them. Choosing
   // from a closed list is the thing a small model does well.
@@ -149,7 +159,7 @@ export function createComboGenerator(deps: {
       });
       return { ideas, refused: given.filter((idea) => !ideas.includes(idea)).map((idea) => `${idea.name} (${usable(idea) ?? "said twice"})`) };
     };
-    const answer = await generateValidated(deps.client, deps.log, {
+    const answer = await generateValidated(namer, deps.log, {
       purpose: "combo-ideas",
       system: ideasSystem,
       prompt: [pair, guidance, ...(turnedDown.length > 0 ? [`Not these, which were turned down: ${turnedDown.join(", ")}.`] : [])].join("\n\n"),
@@ -161,6 +171,21 @@ export function createComboGenerator(deps: {
     const { ideas, refused } = read(answer);
     if (refused.length > 0) deps.trace?.({ ideas: [], picked: null, refused });
     return ideas;
+  }
+
+  // Asks for the one word. A name the rules refuse is sent back with the reason.
+  async function nameOnly(pair: string, lane: string, usable: (idea: Idea) => string | null): Promise<Idea> {
+    const { name } = await generateValidated(namer, deps.log, {
+      purpose: "combo-name",
+      system: wordSystem,
+      prompt: [pair, lane].join("\n\n"),
+      schema: z.strictObject({ name: z.string().min(1).max(40) }),
+      reject: (value) => usable({ name: value.name, why: "" }),
+      maxAttempts: rules.maxAttempts,
+      temperature: 0,
+    });
+    deps.trace?.({ ideas: [name], picked: name });
+    return { name, why: "" };
   }
 
   // Settles on one of the ideas. Normally that is the first one, unless another pair already
@@ -197,7 +222,8 @@ export function createComboGenerator(deps: {
 
   return async (a, b, reject) => {
     const magical = isWonderPair(a, b, deps.balance);
-    const pair = `Combine these two:\n1. ${thingLine(a, madeFrom(a.id))}\n2. ${thingLine(b, madeFrom(b.id))}`;
+    // Every step goes by the ingredients' names, never their descriptions.
+    const pair = `Combine these two:\n1. ${thingName(a, madeFrom(a.id))}\n2. ${thingName(b, madeFrom(b.id))}`;
 
     // Only the name is at stake here. The description is written, and checked, afterwards.
     const allowed = (name: string) => reject({ name, description: "A thing.", tags: [], missingTag: null });
@@ -209,17 +235,22 @@ export function createComboGenerator(deps: {
       return allowed(idea.name);
     };
 
+    const lane = [
+      magical
+        ? "Magic is in play, but the result is still an everyday, real-world thing: the kind a touch of magic could have made. Each needs a plain, real name.\nNo fairy-tale creatures."
+        : "The result is an ordinary, real-world thing: a material, a place, a kind of weather, a food, a tool, a plant, or an animal.\nNo fairy-tale creatures and no enchanted objects.",
+      ...(a.id === b.id ? [`Both ingredients are the same. The answer is what a great deal of ${a.name} makes, or the bigger thing it grows into.`] : []),
+    ].join("\n\n");
+
     let chosen: Idea | null = null;
     const fairy = offered.length > 0 ? await pickStorybook(pair, offered) : null;
     if (fairy) chosen = { name: fairy, why: "the fairy-tale thing these two make" };
+    else if (rules.naming === "word") chosen = await nameOnly(pair, lane, usable);
     else {
       const examples = pickExamples(deps.examples ?? [], a, b, magical, rules.examples);
       const guidance = [
         ...(examples.length > 0 ? [["Good answers to other pairs, to show the kind of thing wanted:", ...examples.map((example) => `- ${exampleLine(example)}`)].join("\n")] : []),
-        magical
-          ? "Magic is in play, but the result is still an everyday, real-world thing: the kind a touch of magic could have made. Each needs a plain, real name.\nNo fairy-tale creatures."
-          : "The result is an ordinary, real-world thing: a material, a place, a kind of weather, a food, a tool, a plant, or an animal.\nNo fairy-tale creatures and no enchanted objects.",
-        ...(a.id === b.id ? [`Both ingredients are the same. The answer is what a great deal of ${a.name} makes, or the bigger thing it grows into.`] : []),
+        lane,
       ].join("\n\n");
       const first = await suggest(pair, guidance, usable, []);
       chosen = await choose(pair, first);
@@ -232,16 +263,27 @@ export function createComboGenerator(deps: {
 
     const storybook = fairy !== null;
     const charmed = magical && !storybook;
+    // The whimsy dial. Code marks a share of the ordinary pairs for one playful twist, in the
+    // words only: the name, the tags, and what the thing is stay literal.
+    const twist = !magical && pairShare(a, b) < rules.twistShare;
     const note = storybook
       ? `The result is a ${chosen.name}, the kind from fairy tales. Use exactly that name, and describe this one.`
       : charmed
         ? `The result is: ${chosen.name}. Use exactly that name. It is the everyday thing it sounds like, but magic had a hand in making it, so give it one small touch of enchantment in the description: something it quietly does that it should not be able to.`
-        : `The result is: ${chosen.name}. Use exactly that name. It is an ordinary, real-world thing, with nothing magical about it.`;
+        : twist
+          ? `The result is: ${chosen.name}. Use exactly that name. It is an ordinary, real-world thing. Say plainly what it is, then give it one playful twist: a small, fond flight of fancy about it. Nothing magical has happened to it.`
+          : `The result is: ${chosen.name}. Use exactly that name. It is an ordinary, real-world thing, with nothing magical about it. Describe it plainly.`;
+    const offeredTags = tagsFor(a, b);
     const draft = await generateValidated(deps.client, deps.log, {
       purpose: "combo",
       system: describeSystem,
-      prompt: [pair, `How the two make it: ${chosen.why}`, note].join("\n\n"),
-      schema: schema.extend({ name: z.literal(chosen.name) }),
+      prompt: [
+        pair,
+        ...(chosen.why ? [`How the two make it: ${chosen.why}`] : []),
+        note,
+        ["Tags you may use, and their meanings:", ...offeredTags.map((tag) => `- ${tag.id}: ${tag.meaning}`)].join("\n"),
+      ].join("\n\n"),
+      schema: comboDraftSchema(offeredTags, rules.maxTags).extend({ name: z.literal(chosen.name) }),
       reject: (value) => reject(value) ?? voiceCheck(value.description, value.name),
       maxAttempts: rules.maxAttempts,
       temperature: rules.temperature,

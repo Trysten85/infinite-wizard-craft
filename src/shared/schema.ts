@@ -451,8 +451,11 @@ export const balanceSchema = z.strictObject({
     maxAttempts: z.number().int().min(1),
     // How freely the description is written.
     temperature: z.number().min(0).max(2),
-    // A new combination is named in steps: the model suggests a few ideas, each with a reason,
-    // and then picks the one that makes most sense. How freely the ideas are thought up.
+    // How a thing that is not from the storybook gets its name. "questions": the model answers
+    // three plain questions about the pair, each with a reason, and the first usable answer is
+    // taken. "word": the model is asked for the one word and nothing else.
+    naming: z.enum(["questions", "word"]),
+    // How freely the answers to the three questions are thought up.
     ideasTemperature: z.number().min(0).max(2),
     // Whether the model is always asked, in a separate call, to judge between the ideas. A small
     // model judges poorly at low effort, so this is off: the first usable idea is taken, and the
@@ -464,6 +467,12 @@ export const balanceSchema = z.strictObject({
     storybookOffered: z.number().int().min(0),
     // The most tags a model-made thing may carry.
     maxTags: z.number().int().min(0).max(MAX_TAGS),
+    // How long a description may run. A longer one is sent back to be rewritten.
+    maxSentences: z.number().int().min(1),
+    maxWords: z.number().int().min(1),
+    // The share of ordinary pairs whose description gets one playful twist. Code picks which,
+    // and a pair always gets the same treatment. The name and what the thing is stay literal.
+    twistShare: z.number().min(0).max(1),
     // Combining with one of these may make a storybook thing (a golem, a ghost). Anything else
     // makes an ordinary real-world thing.
     wonderInputs: z.array(idSchema),

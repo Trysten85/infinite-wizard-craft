@@ -22,7 +22,7 @@ npm run typecheck
 |---|---|
 | `url` | Where Ollama answers. The host PC's address on the VirtualBox host-only network |
 | `model` | The model, which must already be pulled in Ollama |
-| `effort` | How hard a reasoning model thinks: `combos` for combinations, which the player waits on, and `events`, which are written out of sight. `low`, `medium`, `high`, or `null` for a model that does not reason |
+| `effort` | How hard a reasoning model thinks: `combos` for combinations, which the player waits on, `naming` for the one call in a combination that decides what the thing is, and `events`, which are written out of sight. `low`, `medium`, `high`, or `null` for a model that does not reason |
 | `keepAlive` | How long Ollama keeps the model loaded after a call |
 | `timeoutSeconds` | How long one call may take before it is given up and tried again |
 | `background` | How event writing gives way to combinations (below) |
@@ -301,11 +301,22 @@ list, and best when code has already cut the list down. So a new combination is 
    reason before its name: what the two make, where they are found together, and a thing with
    both in it. The first answer the game's rules allow is taken. If another pair already makes
    that thing and one of the other answers is new, the new one is taken instead.
-   - The model is shown what each model-made ingredient was made from, and a few examples from
-     `data/combo-examples.json` and the hand-written recipes, chosen to resemble the pair.
+   - The model is given the ingredients' **names only**, plus what a model-made ingredient was
+     made from. Never their descriptions: those are jokes ("Person: mud that stood up"), and a
+     small model takes them at their word.
+   - It is also shown a few examples from `data/combo-examples.json` and the hand-written
+     recipes, chosen to resemble the pair.
    - A magical pair that makes nothing from the storybook makes an **everyday thing touched by
      magic**: a plain name, with one small enchantment in its description.
 4. **Describe.** The description and tags are written for the chosen name.
+   - **Short.** `generation.maxSentences` and `maxWords` are enforced by code: a longer
+     description is sent back and rewritten. The same limit holds in the revoice and craft tools.
+   - **Material tags are handed down.** A tag in the "material" group of `data/tags.json` (metal,
+     plant, liquid...) is only on offer if one of the ingredients carries it. What a thing does
+     is still the model's to say. Three tags at most.
+   - **The whimsy dial.** Code marks `generation.twistShare` of ordinary pairs (one in four) for
+     one playful twist in the description. A pair always gets the same treatment. The name, the
+     tags, and what the thing is stay literal.
 
 | To change | Edit |
 |---|---|
@@ -313,6 +324,20 @@ list, and best when code has already cut the list down. So a new combination is 
 | The examples shown to the model | `data/combo-examples.json` |
 | How many examples, storybook things offered, and tags; the temperatures | `generation` in `config/balance.json` |
 
+- `generation.naming` is how step 3 asks: `questions` (the three questions) or `word` (only the
+  one word, nothing else). Compare them with `npm run bench -- --naming word`, and try a harder-
+  thinking naming call with `--effort medium`. As measured on 2026-10-09 with `gpt-oss:20b`:
+
+  | Naming | Right answers, of 54 | Bad or failed | Seconds |
+  |---|---|---|---|
+  | The generator before all this | 20 | 1 | 5.2 |
+  | `questions`, low effort (two runs) | 29, 34 | 1, 1 | 6.5, 5.8 |
+  | `word`, low effort | 29 | 5 | 10.2 |
+  | `word`, medium effort | stopped after six pairs | one timed out | 91 |
+
+  The one word is slower because it is so often a name the rules refuse, and then it must be
+  asked again. Two runs of the same setting differ by about three answers, so smaller gaps than
+  that mean nothing.
 - `generation.pick` adds a step where the model judges between the three ideas. It is off: at
   low effort the model judges poorly and it doubles the wait. Try it with `npm run bench -- --pick`.
 - `generation.charmedCarriesMagic` decides whether an everyday thing touched by magic counts as
@@ -379,5 +404,6 @@ npm run cache -- list            # every cached combo and what it made
 npm run cache -- delete fire+mud # delete one; also removes anything built from it
 npm run cache -- calls           # recent model calls with tokens and latency
 npm run cache -- revoice         # rewrite cached descriptions in the current voice (names stay; a backup is kept)
+npm run cache -- revoice --long  # rewrite only the ones over the length limit
 npm run cache -- review          # have the model grade every cached combo and list the doubtful ones
 ```

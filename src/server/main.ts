@@ -34,6 +34,7 @@ const voice = readFileSync(join(root, "prompts/voice.md"), "utf8");
 const turns = createModelTurns(model.background);
 const generate = createComboGenerator({
   client: turns.forPlayer(createModelClient(model, "combos")),
+  namingClient: turns.forPlayer(createModelClient(model, "naming")),
   log: store.logModelCall,
   voice,
   tags: data.tags.values(),

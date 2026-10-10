@@ -8,6 +8,22 @@ export function endsCleanly(text: string): boolean {
   return /[.?…"'’”)]$/.test(text.trim());
 }
 
+// How long a description may run. Every description of a thing in the game stays short.
+export type LengthLimit = { maxSentences: number; maxWords: number };
+
+export function countSentences(text: string): number {
+  return text.trim().split(/(?<=[.?!…])["'’”)]*\s+/).filter((part) => part.trim() !== "").length;
+}
+
+// The reason a description runs too long, or null if it does not.
+export function tooLong(text: string, limit: LengthLimit): string | null {
+  const count = text.trim().split(/\s+/).length;
+  if (countSentences(text) > limit.maxSentences || count > limit.maxWords) {
+    return `The description is too long. Write one or two short sentences: ${limit.maxSentences} at the very most, and under ${limit.maxWords} words in all.`;
+  }
+  return null;
+}
+
 function words(text: string): string[] {
   return text.toLowerCase().match(/[a-z']+/g) ?? [];
 }

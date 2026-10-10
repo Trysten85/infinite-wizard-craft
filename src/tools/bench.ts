@@ -2,13 +2,15 @@
 //   npm run bench                  every pair in data/combo-bench.json, graded
 //   npm run bench -- sand spirit   only pairs that use one of these things
 //   npm run bench -- --pick        with the separate judging step switched on, to see what it is worth
+//   npm run bench -- --naming word --effort medium
+//                                  try another way of naming, or another effort level for the naming call
 // The report goes to var/bench/<date>/report.md, beside the last run's results if there is one.
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { benchSchema, fromGrade, renderBenchReport, settle, type BenchOutcome } from "../server/bench";
 import { loadBlocklist } from "../server/blocklist";
 import { createCombiner } from "../server/combiner";
-import { createMadeFrom, thingLine } from "../server/comboContext";
+import { createMadeFrom, thingName } from "../server/comboContext";
 import { createComboGenerator, isWonderPair } from "../server/comboGenerator";
 import { createComboGrader } from "../server/comboGrader";
 import { loadGameData, tierForDepth, xpForTier } from "../server/gameData";
@@ -22,8 +24,14 @@ const PLAYER = "bench";
 const settings = readModelConfig(root);
 const data = loadGameData(root);
 const bench = benchSchema.parse(JSON.parse(readFileSync(join(root, "data/combo-bench.json"), "utf8")));
-const flags = process.argv.slice(2).filter((arg) => arg.startsWith("--"));
-const only = process.argv.slice(2).filter((arg) => !arg.startsWith("--"));
+const args = process.argv.slice(2);
+// A flag that takes a value, such as "--naming word".
+const valueOf = (flag: string) => (args.includes(flag) ? args[args.indexOf(flag) + 1] : undefined);
+const valued = ["--naming", "--effort"];
+const flags = args.filter((arg) => arg.startsWith("--"));
+const only = args.filter((arg, index) => !arg.startsWith("--") && !valued.includes(args[index - 1] ?? ""));
+const naming = (valueOf("--naming") ?? data.balance.generation.naming) as "questions" | "word";
+const namingEffort = (valueOf("--effort") ?? settings.effort.naming ?? undefined) as "low" | "medium" | "high" | undefined;
 const pick = flags.includes("--pick") || data.balance.generation.pick;
 // What was suggested for the pair in hand, round by round.
 let ideas: string[] = [];
@@ -37,7 +45,8 @@ const generate = createComboGenerator({
   log: store.logModelCall,
   voice,
   tags: data.tags.values(),
-  balance: { ...data.balance, generation: { ...data.balance.generation, pick } },
+  namingClient: createModelClient({ ...settings, effort: { ...settings.effort, naming: namingEffort ?? null } }, "naming"),
+  balance: { ...data.balance, generation: { ...data.balance.generation, pick, naming } },
   storybook: data.storybook,
   reservedIds: new Set(data.entries.keys()),
   examples: data.comboExamples,
@@ -94,7 +103,7 @@ for (const pair of pairs) {
     const { verdict, why } =
       settle(answer, pair, magical) ??
       fromGrade(
-        await grade({ a: thingLine(a, madeFrom(a.id)), b: thingLine(b, madeFrom(b.id)), result: entry.name, description: entry.description })
+        await grade({ a: thingName(a, madeFrom(a.id)), b: thingName(b, madeFrom(b.id)), result: entry.name, description: entry.description })
           // A fairy-tale name from the storybook list is a real name, whatever the grader makes of it.
           .then((graded) => ({ ...graded, realName: graded.realName || answer.storybook }))
           .catch(() => null),
@@ -115,7 +124,7 @@ const last = earlier.at(-1);
 const before = last && only.length === 0 ? { when: last, outcomes: JSON.parse(readFileSync(join(benchDir, last, "results.json"), "utf8")) as BenchOutcome[] } : undefined;
 const dir = join(benchDir, when.replace(/[: ]/g, "-"));
 mkdirSync(dir, { recursive: true });
-const label = `Model: ${settings.model}, ${settings.effort.combos ?? "no"} effort${pick ? ", with the judging step on" : ""}. Graded by the same model at medium effort.`;
+const label = `Model: ${settings.model}. Naming by "${naming}" at ${namingEffort ?? "no"} effort${pick ? ", with the judging step on" : ""}. Graded by the same model at medium effort.`;
 writeFileSync(join(dir, "report.md"), renderBenchReport(outcomes, when, label, before));
 // A run of only some pairs is not kept as something to compare against.
 if (only.length === 0) writeFileSync(join(dir, "results.json"), JSON.stringify(outcomes, null, 2));

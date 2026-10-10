@@ -3,7 +3,7 @@ import type { Blocklist } from "./blocklist";
 import type { ComboGenerator } from "./comboGenerator";
 import { tierForDepth, xpForTier, type GameData } from "./gameData";
 import type { Store } from "./store";
-import { endsCleanly } from "./voice";
+import { endsCleanly, tooLong } from "./voice";
 
 export type RuleCode = "rule" | "no-focus" | "missing-needs" | "no-result" | "not-enough-gold" | "sold-out" | "level-too-low" | "no-job" | "shift-not-ready";
 
@@ -97,6 +97,8 @@ export function createCombiner(deps: {
         return "The description uses a proper name. Rewrite it without naming any person, place, or group.";
       }
       if (!endsCleanly(draft.description)) return "The description stops in the middle of a sentence. Write one or two short, complete sentences.";
+      const long = tooLong(draft.description, data.balance.generation);
+      if (long) return long;
       // From the voice guide's "never appears" list.
       if (/[0-9!]/.test(draft.description)) return "The description must not contain digits or exclamation marks.";
       return null;

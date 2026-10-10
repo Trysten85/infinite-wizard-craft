@@ -6,7 +6,9 @@ import type { LlmClient } from "./types";
 
 // The two kinds of writing the game asks of the model. A combination is waited on by the player,
 // so it gets less thinking. An event is written out of sight, so it can take longer.
-export type ModelJob = "combos" | "events";
+// "naming" is the one call in a combination that decides what the thing is. It has its own effort
+// level because that is where thinking harder pays, and the rest of a combination is quick work.
+export type ModelJob = "combos" | "naming" | "events";
 
 const effortSchema = z.enum(["low", "medium", "high"]);
 const modelConfigSchema = z.strictObject({
@@ -14,7 +16,7 @@ const modelConfigSchema = z.strictObject({
   url: z.url(),
   model: z.string().min(1),
   // How hard a reasoning model thinks for each job. Null for a model that does not reason.
-  effort: z.strictObject({ combos: effortSchema.nullable(), events: effortSchema.nullable() }),
+  effort: z.strictObject({ combos: effortSchema.nullable(), naming: effortSchema.nullable(), events: effortSchema.nullable() }),
   // How long Ollama keeps the model loaded after a call, so the next one does not wait for it.
   keepAlive: z.string().min(1),
   timeoutSeconds: z.strictObject({ combos: z.number().positive(), events: z.number().positive() }),
@@ -32,7 +34,7 @@ export function readModelConfig(root: string, env: Record<string, string | undef
     ...file,
     url: env.OLLAMA_URL || file.url,
     model,
-    effort: model === file.model ? file.effort : { combos: null, events: null },
+    effort: model === file.model ? file.effort : { combos: null, naming: null, events: null },
   };
 }
 
@@ -42,6 +44,6 @@ export function createModelClient(config: ModelConfig, job: ModelJob): LlmClient
     model: config.model,
     think: config.effort[job] ?? undefined,
     keepAlive: config.keepAlive,
-    timeoutMs: config.timeoutSeconds[job] * 1000,
+    timeoutMs: config.timeoutSeconds[job === "events" ? "events" : "combos"] * 1000,
   });
 }

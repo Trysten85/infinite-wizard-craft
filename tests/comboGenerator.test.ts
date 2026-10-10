@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createCombiner, isInflection, isWeld } from "../src/server/combiner";
+import { pairShare } from "../src/server/comboContext";
 import { createComboGenerator, isWonderPair } from "../src/server/comboGenerator";
 import { createFakeClient } from "../src/server/llm/fake";
 import { GenerationError } from "../src/server/llm/generate";
@@ -36,7 +37,8 @@ function generatorWith(responses: string[], options: { exists?: (name: string) =
     log: () => {},
     voice: "v",
     tags: data.tags.values(),
-    balance: { ...data.balance, generation: { ...data.balance.generation, pick: false, ...options.generation } },
+    // The whimsy dial is off unless a test turns it on, so the same pair always reads the same here.
+    balance: { ...data.balance, generation: { ...data.balance.generation, pick: false, naming: "questions", twistShare: 0, ...options.generation } },
     storybook: STORYBOOK,
     reservedIds: new Set(data.entries.keys()),
     examples: EXAMPLES,
@@ -80,9 +82,13 @@ describe("naming an ordinary combination", () => {
   it("tells the model what a model-made thing is made from, and shows examples that resemble the pair", async () => {
     const { client, generate } = generatorWith([ideas("Brick", "Kiln", "Pot"), draft("Brick")]);
     await generate(clay, entry("tree"), () => null);
-    expect(client.requests[0]!.prompt).toContain("Clay (material; tags: mineral), made from Mud and Fire: Soft earth.");
-    // A hand-written thing is described well enough without its recipe.
-    expect(client.requests[0]!.prompt).not.toContain("Tree (material; tags: plant), made from");
+    // The naming step goes by names alone, with what a model-made thing came from. The joke
+    // descriptions of the hand-written things would only send it astray.
+    expect(client.requests[0]!.prompt).toContain("1. Clay (made from Mud and Fire)\n2. Tree\n");
+    expect(client.requests[0]!.prompt).not.toContain(entry("tree").description);
+    // The step that writes the description goes by names too, so it writes about the new thing.
+    expect(client.requests[1]!.prompt).toContain("1. Clay (made from Mud and Fire)\n2. Tree\n");
+    expect(client.requests[1]!.prompt).not.toContain(entry("tree").description);
     expect(client.requests[0]!.prompt).toContain("- Tree + Tree = Forest (a great many trees together)");
     // Nothing magical went in, so no magical example is shown.
     expect(client.requests[0]!.prompt).not.toContain("Moss");
@@ -127,6 +133,139 @@ describe("naming an ordinary combination", () => {
   it("never accepts a fairy-tale thing, whatever the model suggests", async () => {
     const { generate } = generatorWith([ideas("Golem", "Kiln", "Pot"), draft("Kiln")]);
     expect((await generate(clay, entry("fire"), () => null)).name).toBe("Kiln");
+  });
+});
+
+describe("naming by the one word alone", () => {
+  const thin = { generation: { naming: "word" as const } };
+  const word = (name: string) => JSON.stringify({ name });
+
+  it("asks for the name and nothing else, then describes it", async () => {
+    const { client, generate } = generatorWith([word("Beach"), draft("Beach")], thin);
+    expect((await generate(entry("sand"), entry("water"), () => null)).name).toBe("Beach");
+    expect(client.requests).toHaveLength(2);
+    const [asked, describing] = client.requests;
+    expect(Object.keys((asked!.jsonSchema as { properties: object }).properties)).toEqual(["name"]);
+    expect(asked!.temperature).toBe(0);
+    // One worked example, and no list of others.
+    expect(asked!.system).toContain("Fire + Water = Steam");
+    expect(asked!.prompt).not.toContain("Good answers to other pairs");
+    expect(asked!.prompt).toContain("No fairy-tale creatures and no enchanted objects.");
+    expect(describing!.prompt).not.toContain("How the two make it");
+  });
+
+  it("sends a refused name back with the reason", async () => {
+    const { client, generate } = generatorWith([word("Mud"), word("Beach"), draft("Beach")], thin);
+    const result = await generate(entry("sand"), entry("water"), (value) => (value.name === "Mud" ? "Mud already exists." : null));
+    expect(result.name).toBe("Beach");
+    expect(client.requests[1]!.prompt).toContain("Your previous answer was rejected: Mud already exists.");
+  });
+
+  it("leaves the storybook step as it is", async () => {
+    const { client, generate } = generatorWith([pick("Treant"), draft("Treant")], thin);
+    expect(await generate(entry("tree"), entry("life"), () => null)).toMatchObject({ name: "Treant", storybook: true });
+    expect(client.requests).toHaveLength(2);
+    const declined = generatorWith([pick("none"), word("Sapling"), draft("Sapling")], thin);
+    expect((await declined.generate(entry("tree"), entry("life"), () => null)).name).toBe("Sapling");
+    expect(declined.client.requests[1]!.prompt).toContain("Magic is in play");
+  });
+});
+
+describe("the call that decides what a thing is", () => {
+  it("can be given a model that thinks harder than the rest", async () => {
+    const naming = createFakeClient([JSON.stringify({ name: "Beach" })]);
+    const rest = createFakeClient([draft("Beach")]);
+    const generate = createComboGenerator({
+      client: rest,
+      namingClient: naming,
+      log: () => {},
+      voice: "v",
+      tags: data.tags.values(),
+      balance: { ...data.balance, generation: { ...data.balance.generation, naming: "word" } },
+    });
+    await generate(entry("sand"), entry("water"), () => null);
+    expect(naming.requests).toHaveLength(1);
+    expect(rest.requests).toHaveLength(1);
+  });
+});
+
+describe("tags handed down by code", () => {
+  const tagsOffered = (request: { jsonSchema: unknown }) =>
+    (request.jsonSchema as { properties: { tags: { items: { enum: string[] } } } }).properties.tags.items.enum;
+
+  it("offers a material tag only if one of the ingredients carries it", async () => {
+    const { client, generate } = generatorWith([ideas("Beach", "Coast", "Shore"), draft("Beach")]);
+    await generate(entry("sand"), entry("water"), () => null);
+    const offered = tagsOffered(client.requests[1]!);
+    // Sand is a mineral and a reagent, and water is a liquid. Nothing here is metal, plant, or animal.
+    for (const tag of ["mineral", "reagent", "liquid"]) expect(offered).toContain(tag);
+    for (const tag of ["metal", "plant", "animal", "toxic"]) expect(offered).not.toContain(tag);
+    // What a thing does is still the model's to say.
+    for (const tag of ["utility", "area", "forging"]) expect(offered).toContain(tag);
+    // Author-only tags are never on offer.
+    expect(offered).not.toContain("rare");
+    expect(client.requests[1]!.prompt).toContain("- liquid: ");
+    expect(client.requests[1]!.prompt).not.toContain("- metal: ");
+  });
+
+  it("refuses an answer that uses one anyway", async () => {
+    const { generate } = generatorWith([ideas("Beach", "Coast", "Shore"), draft("Beach", ["metal"]), draft("Beach", ["mineral"])]);
+    expect((await generate(entry("sand"), entry("water"), () => null)).tags).toEqual(["mineral"]);
+  });
+});
+
+describe("the whimsy dial", () => {
+  const things = [...data.entries.values()].filter((item) => item.kind === "material" || item.kind === "element");
+
+  it("gives a pair the same number every time, whichever way round", () => {
+    expect(pairShare(entry("sand"), entry("water"))).toBe(pairShare(entry("water"), entry("sand")));
+    expect(pairShare(entry("sand"), entry("water"))).toBeGreaterThanOrEqual(0);
+    expect(pairShare(entry("sand"), entry("water"))).toBeLessThan(1);
+  });
+
+  it("marks about a quarter of pairs at the setting the game ships with", () => {
+    const share = data.balance.generation.twistShare;
+    expect(share).toBe(0.25);
+    let marked = 0;
+    let total = 0;
+    for (const a of things) for (const b of things) if (a.id <= b.id) (total++, pairShare(a, b) < share && marked++);
+    expect(marked / total).toBeGreaterThan(0.18);
+    expect(marked / total).toBeLessThan(0.32);
+  });
+
+  it("asks for one playful twist in the words, and changes nothing else", async () => {
+    const plain = generatorWith([ideas("Beach", "Coast", "Shore"), draft("Beach")], { generation: { twistShare: 0 } });
+    const marked = generatorWith([ideas("Beach", "Coast", "Shore"), draft("Beach")], { generation: { twistShare: 1 } });
+    const [a, b] = [await plain.generate(entry("sand"), entry("water"), () => null), await marked.generate(entry("sand"), entry("water"), () => null)];
+    expect(plain.client.requests[1]!.prompt).toContain("Describe it plainly.");
+    expect(marked.client.requests[1]!.prompt).toContain("one playful twist");
+    expect(marked.client.requests[1]!.prompt).toContain("Nothing magical has happened to it.");
+    // Same name, same tags on offer, and it is not counted as magical.
+    expect(b.name).toBe(a.name);
+    expect(marked.client.requests[1]!.jsonSchema).toEqual(plain.client.requests[1]!.jsonSchema);
+    expect(b.storybook).toBeUndefined();
+    // The naming step is not told about it at all.
+    expect(marked.client.requests[0]!.prompt).toBe(plain.client.requests[0]!.prompt);
+  });
+
+  it("leaves magical pairs to their own rules", async () => {
+    const { client, generate } = generatorWith([ideas("Lantern", "Lighthouse", "Lamp"), draft("Lantern")], { generation: { twistShare: 1 } });
+    await generate(entry("iron"), entry("light"), () => null);
+    expect(client.requests[1]!.prompt).toContain("one small touch of enchantment");
+    expect(client.requests[1]!.prompt).not.toContain("one playful twist");
+  });
+});
+
+describe("a description that runs on", () => {
+  it("is sent back by the game's rules until it is short", async () => {
+    const long = JSON.stringify({ name: "Beach", description: "Sand by the sea. It is warm. It is wide. It is full of shells.", tags: [], missingTag: null });
+    const { client, generate } = generatorWith([ideas("Beach", "Coast", "Shore"), long, draft("Beach")]);
+    const store = openStore(":memory:");
+    store.addDiscovery("ann", "sand");
+    const { entry: beach } = await createCombiner({ data, store, generate }).combine("ann", "sand", "water");
+    expect(beach.description).toBe("A hunched figure of packed clay.");
+    expect(client.requests[2]!.prompt).toContain("The description is too long.");
+    expect(client.requests[1]!.system).toContain("Never more than 3.");
   });
 });
 

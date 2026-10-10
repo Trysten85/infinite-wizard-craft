@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { benchSchema } from "../src/server/bench";
-import { createMadeFrom, exampleLine, pickExamples, storybookFor, thingLine } from "../src/server/comboContext";
+import { createMadeFrom, exampleLine, pickExamples, storybookFor, thingName } from "../src/server/comboContext";
 import { openStore } from "../src/server/store";
 import { slugify, type GameEntry } from "../src/shared/schema";
 import { data } from "./helpers";
@@ -24,9 +24,10 @@ describe("what a thing is made from", () => {
   });
 
   it("is told to the model only for things the model made", () => {
-    expect(thingLine(made("clay", ["mineral"]), "Mud and Fire")).toBe("Clay (material; tags: mineral), made from Mud and Fire: A thing.");
-    expect(thingLine(entry("person"), "Life and Mud")).not.toContain("made from");
-    expect(thingLine(entry("air"), null)).toMatch(/^Air \(element\): /);
+    // The model sees names only: never the joke descriptions, and never a hand-written thing's recipe.
+    expect(thingName(entry("person"), "Life and Mud")).toBe("Person");
+    expect(thingName(made("clay", ["mineral"]), "Mud and Fire")).toBe("Clay (made from Mud and Fire)");
+    expect(thingName(made("clay", ["mineral"]), null)).toBe("Clay");
   });
 });
 
