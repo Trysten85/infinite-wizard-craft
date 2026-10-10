@@ -5,5 +5,5 @@
   "keepAlive": "30m",
   "timeoutSeconds": { "combos": 60, "events": 120 },
   "background": { "quietSeconds": 3, "giveWayTimes": 4 },
-  "bake": { "share": 0.5, "workMinutes": 5, "unloadWhileResting": true, "quietMinutes": 3, "rankEffort": "medium", "rankTimeoutSeconds": 180 }
+  "bake": { "share": 1, "workMinutes": 5, "unloadWhileResting": true, "quietMinutes": 3, "rankEffort": "medium", "rankTimeoutSeconds": 180 }
 }
