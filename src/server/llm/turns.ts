@@ -9,6 +9,9 @@ export function createModelTurns(options: {
   // How many times one background call gives way. After that it runs to the end, so that a busy
   // player cannot put an event off forever.
   giveWayTimes: number;
+  // Told whenever a player's call starts or ends, so that work in other programs (the overnight
+  // bake) can stand aside too.
+  onPlayerCall?: () => void;
 }) {
   const quietMs = options.quietSeconds * 1000;
   let playersWaiting = 0;
@@ -29,12 +32,14 @@ export function createModelTurns(options: {
         model: client.model,
         async complete(request) {
           playersWaiting++;
+          options.onPlayerCall?.();
           for (const controller of cutShort) controller.abort();
           try {
             return await client.complete(request);
           } finally {
             playersWaiting--;
             lastPlayerCall = performance.now();
+            options.onPlayerCall?.();
           }
         },
       };

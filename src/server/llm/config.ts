@@ -22,6 +22,20 @@ const modelConfigSchema = z.strictObject({
   timeoutSeconds: z.strictObject({ combos: z.number().positive(), events: z.number().positive() }),
   // How writing done out of sight gives way to a call a player is waiting on. See turns.ts.
   background: z.strictObject({ quietSeconds: z.number().min(0), giveWayTimes: z.number().int().min(0) }),
+  // How the overnight bake (npm run bake) shares the PC. See src/server/bakePace.ts.
+  bake: z.strictObject({
+    // The share of the time it works. The rest of the time it rests: 0.5 is half and half.
+    share: z.number().gt(0).max(1),
+    // How long it works at a stretch before resting.
+    workMinutes: z.number().positive(),
+    // Whether it tells Ollama to let go of the model while it rests, freeing the video memory.
+    unloadWhileResting: z.boolean(),
+    // How long the game must have left the model alone before the bake carries on.
+    quietMinutes: z.number().min(0),
+    // How hard the model thinks when it ranks its own candidates, and how long that may take.
+    rankEffort: effortSchema.nullable(),
+    rankTimeoutSeconds: z.number().positive(),
+  }),
 });
 export type ModelConfig = z.infer<typeof modelConfigSchema>;
 

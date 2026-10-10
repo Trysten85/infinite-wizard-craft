@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { comboDraftSchema, slugify, type Balance, type ComboDraft, type ComboExample, type GameEntry, type StorybookItem, type Tag } from "../shared/schema";
 import { exampleLine, pairShare, pickExamples, storybookFor, thingName, type MadeFrom } from "./comboContext";
-import { generateValidated } from "./llm/generate";
+import { generateValidated, StopRequested } from "./llm/generate";
 import type { LlmClient } from "./llm/types";
 import type { ModelCall } from "./store";
 import { createVoiceCheck } from "./voice";
@@ -21,7 +21,9 @@ export function isWonderPair(a: GameEntry, b: GameEntry, balance: Balance): bool
   return wakes(a) || wakes(b);
 }
 
-type Idea = { why: string; name: string };
+export type Idea = { why: string; name: string };
+// The reason recorded for a storybook choice, which the model gives no reason of its own for.
+export const FAIRY_WHY = "the fairy-tale thing these two make";
 
 // A small model is poor at inventing the right answer in one go, better at choosing from a short
 // list, and best when code has already cut the list down. So a new combination is named in steps:
@@ -32,7 +34,7 @@ type Idea = { why: string; name: string };
 //      name. The first answer the game can use is taken.
 //   3. describe: the words for the name that was chosen.
 // Code does the rest: what each ingredient was made from, and which examples resemble the pair.
-export function createComboGenerator(deps: {
+export type ComboDeps = {
   client: LlmClient;
   // The client for the one call that decides what the thing is. It may think harder than the rest.
   namingClient?: LlmClient;
@@ -50,7 +52,11 @@ export function createComboGenerator(deps: {
   exists?: (name: string) => boolean;
   // Hears what was suggested and what was chosen, for the bench. The game does not use it.
   trace?: (step: { ideas: string[]; picked: string | null; refused?: string[] }) => void;
-}): ComboGenerator {
+};
+
+// The steps one at a time, for the overnight bake, which runs them in its own order and puts a
+// harder-thinking judge between them. `generate` is the same steps as the game runs them.
+export function createComboSteps(deps: ComboDeps) {
   const rules = deps.balance.generation;
   const tags = [...deps.tags];
   const voiceCheck = createVoiceCheck(deps.voice);
@@ -139,7 +145,8 @@ export function createComboGenerator(deps: {
       });
       deps.trace?.({ ideas: offered, picked: choice === NONE ? null : choice });
       return choice === NONE ? null : choice;
-    } catch {
+    } catch (err) {
+      if (err instanceof StopRequested) throw err;
       // No pick is never a failure: the pair simply makes an everyday thing.
       return null;
     }
@@ -214,13 +221,15 @@ export function createComboGenerator(deps: {
       const picked = ideas.find((idea) => idea.name === choice) ?? null;
       deps.trace?.({ ideas: ideas.map((idea) => idea.name), picked: picked?.name ?? null });
       return picked;
-    } catch {
+    } catch (err) {
+      if (err instanceof StopRequested) throw err;
       // A judge that cannot answer never stops a combination.
       return fresh;
     }
   }
 
-  return async (a, b, reject) => {
+  // What code works out about a pair before the model is asked anything.
+  function scene(a: GameEntry, b: GameEntry, reject: (draft: ComboDraft) => string | null) {
     const magical = isWonderPair(a, b, deps.balance);
     // Every step goes by the ingredients' names, never their descriptions.
     const pair = `Combine these two:\n1. ${thingName(a, madeFrom(a.id))}\n2. ${thingName(b, madeFrom(b.id))}`;
@@ -241,27 +250,18 @@ export function createComboGenerator(deps: {
         : "The result is an ordinary, real-world thing: a material, a place, a kind of weather, a food, a tool, a plant, or an animal.\nNo fairy-tale creatures and no enchanted objects.",
       ...(a.id === b.id ? [`Both ingredients are the same. The answer is what a great deal of ${a.name} makes, or the bigger thing it grows into.`] : []),
     ].join("\n\n");
+    const examples = pickExamples(deps.examples ?? [], a, b, magical, rules.examples);
+    // What the three questions are asked with: the examples, then the kind of thing wanted.
+    const guidance = [
+      ...(examples.length > 0 ? [["Good answers to other pairs, to show the kind of thing wanted:", ...examples.map((example) => `- ${exampleLine(example)}`)].join("\n")] : []),
+      lane,
+    ].join("\n\n");
+    return { magical, pair, offered, usable, lane, guidance };
+  }
 
-    let chosen: Idea | null = null;
-    const fairy = offered.length > 0 ? await pickStorybook(pair, offered) : null;
-    if (fairy) chosen = { name: fairy, why: "the fairy-tale thing these two make" };
-    else if (rules.naming === "word") chosen = await nameOnly(pair, lane, usable);
-    else {
-      const examples = pickExamples(deps.examples ?? [], a, b, magical, rules.examples);
-      const guidance = [
-        ...(examples.length > 0 ? [["Good answers to other pairs, to show the kind of thing wanted:", ...examples.map((example) => `- ${exampleLine(example)}`)].join("\n")] : []),
-        lane,
-      ].join("\n\n");
-      const first = await suggest(pair, guidance, usable, []);
-      chosen = await choose(pair, first);
-      if (!chosen) {
-        // The judge found none of them made sense. One more round, then the best of what there is.
-        const second = await suggest(pair, guidance, usable, first.map((idea) => idea.name)).catch(() => []);
-        chosen = (second.length > 0 ? await choose(pair, second) : null) ?? second[0] ?? first[0]!;
-      }
-    }
-
-    const storybook = fairy !== null;
+  // Writes the description and tags for a name that has been settled on.
+  async function describe(a: GameEntry, b: GameEntry, chosen: Idea, storybook: boolean, reject: (draft: ComboDraft) => string | null): Promise<ComboDraft> {
+    const { magical, pair } = scene(a, b, reject);
     const charmed = magical && !storybook;
     // The whimsy dial. Code marks a share of the ordinary pairs for one playful twist, in the
     // words only: the name, the tags, and what the thing is stay literal.
@@ -289,5 +289,34 @@ export function createComboGenerator(deps: {
       temperature: rules.temperature,
     });
     return storybook || (charmed && rules.charmedCarriesMagic) ? { ...draft, storybook: true } : draft;
+  }
+
+  // The whole of it, as the game uses it while a player waits.
+  const generate: ComboGenerator = async (a, b, reject) => {
+    const { pair, offered, usable, lane, guidance } = scene(a, b, reject);
+    let chosen: Idea | null = null;
+    const fairy = offered.length > 0 ? await pickStorybook(pair, offered) : null;
+    if (fairy) chosen = { name: fairy, why: FAIRY_WHY };
+    else if (rules.naming === "word") chosen = await nameOnly(pair, lane, usable);
+    else {
+      const first = await suggest(pair, guidance, usable, []);
+      chosen = await choose(pair, first);
+      if (!chosen) {
+        // The judge found none of them made sense. One more round, then the best of what there is.
+        const second = await suggest(pair, guidance, usable, first.map((idea) => idea.name)).catch((err) => {
+          if (err instanceof StopRequested) throw err;
+          return [];
+        });
+        chosen = (second.length > 0 ? await choose(pair, second) : null) ?? second[0] ?? first[0]!;
+      }
+    }
+    return describe(a, b, chosen, fairy !== null, reject);
   };
+
+  return { scene, pickStorybook, suggest, describe, generate };
+}
+
+// Writes the words for a new combination, start to finish.
+export function createComboGenerator(deps: ComboDeps): ComboGenerator {
+  return createComboSteps(deps).generate;
 }

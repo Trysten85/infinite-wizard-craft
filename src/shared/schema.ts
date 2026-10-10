@@ -544,6 +544,24 @@ export const comboExampleSchema = z.strictObject({
 });
 export type ComboExample = z.infer<typeof comboExampleSchema> & { authored?: boolean };
 
+// One pair the overnight bake has settled: what the two make, in the model's words, with the
+// score it gave its own answer and why. A draft is not in the game. Set `status` to "ok" (or use
+// `npm run bake -- approve`) and it becomes a fixed recipe at the next server start.
+export const bakedComboSchema = z.strictObject({
+  inputs: z.tuple([idSchema, idSchema]),
+  name: z.string().min(1),
+  description: z.string().min(1),
+  tags: z.array(z.string()).max(MAX_TAGS),
+  // A storybook thing, so that what is made from it may be magical too.
+  wonder: z.boolean(),
+  // How much sense the model thought its answer made, from 1 to 5, and its reason. Null if it
+  // could not be ranked.
+  sense: z.number().int().min(1).max(5).nullable(),
+  reason: z.string(),
+  status: z.enum(["draft", "ok", "rejected"]),
+});
+export type BakedCombo = z.infer<typeof bakedComboSchema>;
+
 // What the model is allowed to write for a new combo. Everything else is filled in by code.
 export function comboDraftSchema(tags: Iterable<Tag>, maxTags = MAX_TAGS) {
   const allowed = [...tags].filter((tag) => tag.assignedBy === "model").map((tag) => tag.id);

@@ -4,6 +4,11 @@ import type { LlmClient } from "./types";
 
 export class GenerationError extends Error {}
 
+// Thrown by a model client that has been told to stop mid-call (the overnight bake, when it is
+// paused or a player needs the model). It is not a bad answer, so it is never retried or
+// swallowed: it goes straight up to whoever asked for the stop.
+export class StopRequested extends Error {}
+
 export type GenerateOptions<T> = {
   purpose: string;
   system: string;
@@ -52,6 +57,7 @@ export async function generateValidated<T>(
         value = parsed.data;
       }
     } catch (err) {
+      if (err instanceof StopRequested) throw err;
       failure = err instanceof Error ? err.message : String(err);
     }
 

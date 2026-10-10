@@ -33,17 +33,35 @@ export function createOllamaClient(options: { baseUrl: string; model: string; ti
       if (!response.ok) {
         throw new Error(`Ollama returned ${response.status}: ${await response.text()}`);
       }
-      // A reasoning model also returns its thinking, separately. Only the answer is used.
+      // A reasoning model also returns its thinking, separately. Only the answer is used by the
+      // game. The thinking is passed along for anyone who wants to keep it.
       const body = (await response.json()) as {
-        message: { content: string };
+        message: { content: string; thinking?: string };
         prompt_eval_count?: number;
         eval_count?: number;
       };
       return {
         text: body.message.content,
+        ...(body.message.thinking ? { thinking: body.message.thinking } : {}),
         promptTokens: body.prompt_eval_count ?? 0,
         completionTokens: body.eval_count ?? 0,
       };
     },
   };
+}
+
+// Tells Ollama to let go of a model now, freeing the video memory it holds. The next call loads
+// it again, which takes a little while. Failing to reach Ollama is not an error worth stopping for.
+export async function unloadModel(baseUrl: string, model: string): Promise<boolean> {
+  try {
+    const response = await fetch(`${baseUrl}/api/generate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      signal: AbortSignal.timeout(15_000),
+      body: JSON.stringify({ model, keep_alive: 0 }),
+    });
+    return response.ok;
+  } catch {
+    return false;
+  }
 }

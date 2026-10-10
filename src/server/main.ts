@@ -1,9 +1,10 @@
 import { serve } from "@hono/node-server";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { createApp } from "./app";
 import { loadBlocklist } from "./blocklist";
 import { slugify } from "../shared/schema";
+import { PLAYER_MARKER } from "./bakePace";
 import { createCombiner } from "./combiner";
 import { createMadeFrom } from "./comboContext";
 import { createComboGenerator } from "./comboGenerator";
@@ -32,7 +33,10 @@ const store = openStore(join(root, "var/game.db"));
 const voice = readFileSync(join(root, "prompts/voice.md"), "utf8");
 // One model, asked to think less for a combination the player is waiting on than for an event,
 // which is written out of sight and gives way whenever a combination needs the model.
-const turns = createModelTurns(model.background);
+// A marker the overnight bake watches: while the game is using the model, the bake stands aside.
+const playerMarker = join(root, PLAYER_MARKER);
+mkdirSync(dirname(playerMarker), { recursive: true });
+const turns = createModelTurns({ ...model.background, onPlayerCall: () => writeFileSync(playerMarker, new Date().toISOString()) });
 const generate = createComboGenerator({
   client: turns.forPlayer(createModelClient(model, "combos")),
   namingClient: turns.forPlayer(createModelClient(model, "naming")),

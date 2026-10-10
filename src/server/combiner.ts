@@ -50,6 +50,35 @@ function isAuthoredOnly(entry: GameEntry): boolean {
   return entry.kind === "school" || entry.kind === "spell" || entry.kind === "job";
 }
 
+// Everything a model-made name and description must satisfy for one pair. Returns the reason an
+// answer is refused, or null. The game and the overnight bake both go by this.
+export function comboRules(deps: { data: GameData; blocklist?: Blocklist }) {
+  const { data, blocklist } = deps;
+  return (a: GameEntry, b: GameEntry) =>
+    (draft: ComboDraft): string | null => {
+      if (!NAME_PATTERN.test(draft.name)) return "The name must use only letters, spaces, hyphens and apostrophes.";
+      // Plain things have short names. Long ones are where the invented fantasy compounds creep in.
+      if (draft.name.trim().split(/\s+/).length > 2) return "Use a plainer name: one everyday word, two at most.";
+      const id = slugify(draft.name);
+      if (id === a.id || id === b.id) return `The result cannot be one of the inputs ("${draft.name}").`;
+      if (isWeld(draft.name, a.name, b.name)) return `"${draft.name}" is only the two names stuck together. Name a real thing.`;
+      if (isInflection(draft.name, a.name, b.name)) return `"${draft.name}" is only an ingredient's name with a new ending. Name the new thing the two make.`;
+      // Hand-written entries are progression. The model may not hand them out through other combos.
+      if (data.entries.has(id)) return `"${draft.name}" already exists and is made another way.`;
+      // The reason never names the blocked term, so the list itself is never shown to the model.
+      if (blocklist && blocklist.find(draft.name).length > 0) return "That name is not available. Choose a different one.";
+      if (blocklist && blocklist.find(draft.description).length > 0) {
+        return "The description uses a proper name. Rewrite it without naming any person, place, or group.";
+      }
+      if (!endsCleanly(draft.description)) return "The description stops in the middle of a sentence. Write one or two short, complete sentences.";
+      const long = tooLong(draft.description, data.balance.generation);
+      if (long) return long;
+      // From the voice guide's "never appears" list.
+      if (/[0-9!]/.test(draft.description)) return "The description must not contain digits or exclamation marks.";
+      return null;
+    };
+}
+
 export function createCombiner(deps: {
   data: GameData;
   store: Store;
@@ -57,6 +86,7 @@ export function createCombiner(deps: {
   blocklist?: Blocklist;
 }) {
   const { data, store, generate, blocklist } = deps;
+  const rules = comboRules({ data, blocklist });
   // Two players making the same new combo at once share one model call and one result.
   const inFlight = new Map<string, Promise<GameEntry>>();
 
@@ -81,28 +111,7 @@ export function createCombiner(deps: {
   }
 
   async function generateEntry(key: string, a: GameEntry, b: GameEntry): Promise<GameEntry> {
-    const reject = (draft: ComboDraft): string | null => {
-      if (!NAME_PATTERN.test(draft.name)) return "The name must use only letters, spaces, hyphens and apostrophes.";
-      // Plain things have short names. Long ones are where the invented fantasy compounds creep in.
-      if (draft.name.trim().split(/\s+/).length > 2) return "Use a plainer name: one everyday word, two at most.";
-      const id = slugify(draft.name);
-      if (id === a.id || id === b.id) return `The result cannot be one of the inputs ("${draft.name}").`;
-      if (isWeld(draft.name, a.name, b.name)) return `"${draft.name}" is only the two names stuck together. Name a real thing.`;
-      if (isInflection(draft.name, a.name, b.name)) return `"${draft.name}" is only an ingredient's name with a new ending. Name the new thing the two make.`;
-      // Hand-written entries are progression. The model may not hand them out through other combos.
-      if (data.entries.has(id)) return `"${draft.name}" already exists and is made another way.`;
-      // The reason never names the blocked term, so the list itself is never shown to the model.
-      if (blocklist && blocklist.find(draft.name).length > 0) return "That name is not available. Choose a different one.";
-      if (blocklist && blocklist.find(draft.description).length > 0) {
-        return "The description uses a proper name. Rewrite it without naming any person, place, or group.";
-      }
-      if (!endsCleanly(draft.description)) return "The description stops in the middle of a sentence. Write one or two short, complete sentences.";
-      const long = tooLong(draft.description, data.balance.generation);
-      if (long) return long;
-      // From the voice guide's "never appears" list.
-      if (/[0-9!]/.test(draft.description)) return "The description must not contain digits or exclamation marks.";
-      return null;
-    };
+    const reject = rules(a, b);
     const draft = await generate(a, b, reject);
     const name = draft.name[0]!.toUpperCase() + draft.name.slice(1);
     const id = slugify(name);

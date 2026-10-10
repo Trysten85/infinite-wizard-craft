@@ -11,6 +11,9 @@ export type LlmRequest = {
 
 export type LlmCompletion = {
   text: string;
+  // What a reasoning model thought before it answered, when it says. The game never reads it.
+  // The overnight bake keeps it.
+  thinking?: string;
   promptTokens: number;
   completionTokens: number;
 };
