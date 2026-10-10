@@ -1,5 +1,7 @@
 import type { Balance, GameEntry, PlayerProgress, Quest, QuestProgress, RequestView, Rewards } from "../shared/schema";
+import { shiftIn } from "../shared/shifts";
 import { RuleError } from "./combiner";
+import { craftedCount } from "./crafted";
 import { learnCostForTier, levelForSpellTier, type GameData } from "./gameData";
 import type { Store } from "./store";
 
@@ -60,7 +62,7 @@ export function createProgress(deps: {
     const stats = store.getStats(player);
     const paid = new Set(store.getLedgerRefs(player, "quest"));
     const fromQuests = data.quests.reduce((total, quest) => total + (paid.has(quest.id) ? quest.xp : 0), 0);
-    const earned = found.reduce((total, entry) => total + entry.xp, 0) + fromQuests + stats.bonusXp;
+    const earned = found.reduce((total, entry) => total + entry.xp, 0) + fromQuests + store.getShiftXp(player) + stats.bonusXp;
     // What the player is short of the level they had already reached, if anything.
     const short = Math.max(0, xpToReach(stats.lastLevel, data.balance) - earned);
     const xp = earned + short;
@@ -243,8 +245,13 @@ export function createProgress(deps: {
     const stats = store.getStats(player);
     const waiting = store.listEvents(player).some((event) => event.state === "pending");
     const eventIn = waiting ? 0 : Math.max(0, eventThreshold(stats.rep, data.balance) - stats.eventPoints);
+    const job = jobOf(player, stats.job);
+    // A shift opens every so many things made by combining, and only once a job is taken up.
+    const untilShift = shiftIn(craftedCount(store, player), stats.shiftAt, data.balance.shifts);
     return {
-      job: jobOf(player, stats.job),
+      job,
+      shiftReady: job !== null && untilShift === 0,
+      shiftIn: untilShift,
       rep: stats.rep,
       repBand: repBandFor(stats.rep, data.balance).name,
       requests: listRequestViews(player),

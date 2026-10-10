@@ -13,12 +13,28 @@ export type ModelCall = {
   error?: string;
 };
 
-export type LedgerReason = "quest" | "discovery" | "learn" | "shop" | "event" | "request" | "gift";
+export type LedgerReason = "quest" | "discovery" | "learn" | "shop" | "event" | "request" | "gift" | "shift";
 
 // `bonusXp` makes up the difference when a change to the game's numbers would otherwise have
 // taken away a level the player had already reached.
 // `job` is the job the player has taken up, or null if they have not chosen one.
-export type PlayerStats = { rep: number; eventPoints: number; lastLevel: number; bonusXp: number; job: string | null };
+export type PlayerStats = { rep: number; eventPoints: number; lastLevel: number; bonusXp: number; job: string | null; shiftAt: number | null };
+
+// An order on a player's board, for one job. It stays until it is filled.
+export type StoredShiftOrder = { id: number; job: string; tags: string[]; tier: number; text: string; state: "open" | "done" };
+// One shift worked, for the log.
+export type StoredShift = {
+  id: number;
+  job: string;
+  orderTags: string[];
+  // The ids chosen for the base, the method, and the touch if there was one.
+  inputs: string[];
+  quality: string;
+  line: string;
+  gold: number;
+  xp: number;
+  rep: number;
+};
 
 export type Pronoun = "she" | "he" | "they";
 
@@ -180,6 +196,28 @@ export function openStore(path: string) {
       at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       PRIMARY KEY (player, entry_id)
     );
+    CREATE TABLE IF NOT EXISTS shift_orders (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      player TEXT NOT NULL,
+      job TEXT NOT NULL,
+      tags TEXT NOT NULL,
+      tier INTEGER NOT NULL,
+      text TEXT NOT NULL,
+      state TEXT NOT NULL DEFAULT 'open'
+    );
+    CREATE TABLE IF NOT EXISTS shifts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      player TEXT NOT NULL,
+      job TEXT NOT NULL,
+      order_tags TEXT NOT NULL,
+      inputs TEXT NOT NULL,
+      quality TEXT NOT NULL,
+      line TEXT NOT NULL,
+      gold INTEGER NOT NULL,
+      xp INTEGER NOT NULL,
+      rep INTEGER NOT NULL,
+      at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
     CREATE TABLE IF NOT EXISTS model_calls (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -199,6 +237,7 @@ export function openStore(path: string) {
   const statColumns = db.prepare("PRAGMA table_info(player_stats)").all().map((row) => row.name as string);
   if (!statColumns.includes("bonus_xp")) db.exec("ALTER TABLE player_stats ADD COLUMN bonus_xp INTEGER NOT NULL DEFAULT 0");
   if (!statColumns.includes("job")) db.exec("ALTER TABLE player_stats ADD COLUMN job TEXT");
+  if (!statColumns.includes("shift_at")) db.exec("ALTER TABLE player_stats ADD COLUMN shift_at INTEGER");
 
   function transaction<T>(fn: () => T): T {
     db.exec("BEGIN");
@@ -404,10 +443,10 @@ export function openStore(path: string) {
     },
 
     getStats(player: string): PlayerStats {
-      const row = db.prepare("SELECT rep, event_points, last_level, bonus_xp, job FROM player_stats WHERE player = ?").get(player);
+      const row = db.prepare("SELECT rep, event_points, last_level, bonus_xp, job, shift_at FROM player_stats WHERE player = ?").get(player);
       return row
-        ? { rep: row.rep as number, eventPoints: row.event_points as number, lastLevel: row.last_level as number, bonusXp: row.bonus_xp as number, job: (row.job as string | null) ?? null }
-        : { rep: 0, eventPoints: 0, lastLevel: 1, bonusXp: 0, job: null };
+        ? { rep: row.rep as number, eventPoints: row.event_points as number, lastLevel: row.last_level as number, bonusXp: row.bonus_xp as number, job: (row.job as string | null) ?? null, shiftAt: (row.shift_at as number | null) ?? null }
+        : { rep: 0, eventPoints: 0, lastLevel: 1, bonusXp: 0, job: null, shiftAt: null };
     },
 
     // Adds to a player's running totals. `lastLevel` is set outright when given.
@@ -422,6 +461,75 @@ export function openStore(path: string) {
       db.prepare(
         "UPDATE player_stats SET rep = rep + ?, event_points = event_points + ?, bonus_xp = bonus_xp + ?, last_level = COALESCE(?, last_level) WHERE player = ?",
       ).run(change.rep ?? 0, change.eventPoints ?? 0, change.bonusXp ?? 0, change.lastLevel ?? null, player);
+    },
+
+    // Notes how many things the player had made by combining when they last worked a shift.
+    setShiftAt(player: string, crafted: number): void {
+      db.prepare("INSERT OR IGNORE INTO player_stats (player) VALUES (?)").run(player);
+      db.prepare("UPDATE player_stats SET shift_at = ? WHERE player = ?").run(crafted, player);
+    },
+
+    addShiftOrder(player: string, order: Pick<StoredShiftOrder, "job" | "tags" | "tier" | "text">): number {
+      const result = db
+        .prepare("INSERT INTO shift_orders (player, job, tags, tier, text) VALUES (?, ?, ?, ?, ?)")
+        .run(player, order.job, JSON.stringify(order.tags), order.tier, order.text);
+      return Number(result.lastInsertRowid);
+    },
+
+    // A player's orders for one job that are still waiting to be filled, oldest first.
+    listOpenShiftOrders(player: string, job: string): StoredShiftOrder[] {
+      return db
+        .prepare("SELECT * FROM shift_orders WHERE player = ? AND job = ? AND state = 'open' ORDER BY id")
+        .all(player, job)
+        .map((row) => ({
+          id: row.id as number,
+          job: row.job as string,
+          tags: JSON.parse(row.tags as string) as string[],
+          tier: row.tier as number,
+          text: row.text as string,
+          state: "open" as const,
+        }));
+    },
+
+    finishShiftOrder(id: number): void {
+      db.prepare("UPDATE shift_orders SET state = 'done' WHERE id = ?").run(id);
+    },
+
+    addShift(player: string, shift: Omit<StoredShift, "id">): number {
+      const result = db
+        .prepare("INSERT INTO shifts (player, job, order_tags, inputs, quality, line, gold, xp, rep) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
+        .run(player, shift.job, JSON.stringify(shift.orderTags), JSON.stringify(shift.inputs), shift.quality, shift.line, shift.gold, shift.xp, shift.rep);
+      return Number(result.lastInsertRowid);
+    },
+
+    // Every shift a player has worked, oldest first.
+    listShifts(player: string): StoredShift[] {
+      return db
+        .prepare("SELECT * FROM shifts WHERE player = ? ORDER BY id")
+        .all(player)
+        .map((row) => ({
+          id: row.id as number,
+          job: row.job as string,
+          orderTags: JSON.parse(row.order_tags as string) as string[],
+          inputs: JSON.parse(row.inputs as string) as string[],
+          quality: row.quality as string,
+          line: row.line as string,
+          gold: row.gold as number,
+          xp: row.xp as number,
+          rep: row.rep as number,
+        }));
+    },
+
+    // How many shifts a player has worked in one job. Rank comes from this.
+    countShifts(player: string, job: string): number {
+      const row = db.prepare("SELECT COUNT(*) AS n FROM shifts WHERE player = ? AND job = ?").get(player, job);
+      return row!.n as number;
+    },
+
+    // All the XP a player's shifts have paid.
+    getShiftXp(player: string): number {
+      const row = db.prepare("SELECT COALESCE(SUM(xp), 0) AS xp FROM shifts WHERE player = ?").get(player);
+      return row!.xp as number;
     },
 
     addPerson(player: string, person: Pick<Person, "name" | "role" | "traits" | "facts"> & { pronoun?: Pronoun | null }, day: number): Person {

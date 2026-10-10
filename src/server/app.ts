@@ -5,6 +5,7 @@ import { RuleError, type Combiner } from "./combiner";
 import type { EventService } from "./events/service";
 import { GenerationError } from "./llm/generate";
 import type { ProgressService } from "./progress";
+import type { ShiftService } from "./shifts/service";
 import type { ShopService } from "./shop";
 
 const playerSchema = z.string().regex(/^[A-Za-z0-9_-]{1,24}$/);
@@ -12,6 +13,9 @@ const combineBodySchema = z.object({ a: idSchema, b: idSchema });
 const learnBodySchema = z.object({ spell: idSchema });
 const buyBodySchema = z.object({ slot: z.number().int().min(0) });
 const jobBodySchema = z.object({ job: idSchema });
+// A staple's id has a colon in it ("staple:scrap"), so these are plain strings, checked against what is on offer.
+const optionIdSchema = z.string().min(1).max(80);
+const shiftBodySchema = z.object({ order: z.number().int().min(1), base: optionIdSchema, method: optionIdSchema, touch: optionIdSchema.nullable().optional() });
 const respondBodySchema = z.object({ type: responseTypeSchema, beat: z.number().int().min(1).optional() });
 const testEventBodySchema = z.object({ seed: z.string().optional() });
 
@@ -27,7 +31,7 @@ function refuse(c: Context, err: unknown) {
   throw err;
 }
 
-export function createApp(combiner: Combiner, services?: { progress: ProgressService; shop: ShopService; events?: EventService }) {
+export function createApp(combiner: Combiner, services?: { progress: ProgressService; shop: ShopService; events?: EventService; shifts?: ShiftService }) {
   const app = new Hono();
 
   // Reads the player name and, when a schema is given, the JSON body. Returns null if either is bad.
@@ -67,7 +71,28 @@ export function createApp(combiner: Combiner, services?: { progress: ProgressSer
   });
 
   if (services) {
-    const { progress, shop, events } = services;
+    const { progress, shop, events, shifts } = services;
+
+    if (shifts) {
+      // The order board for the job the player has taken up, and what they may fill an order with.
+      app.get("/api/players/:player/shift", async (c) => {
+        const request = await read(c);
+        return request ? c.json(shifts.board(request.player)) : invalid(c);
+      });
+
+      // Works one order from the board with the things chosen.
+      app.post("/api/players/:player/shift", async (c) => {
+        const request = await read(c, shiftBodySchema);
+        if (!request) return invalid(c);
+        try {
+          const { result, rewards } = shifts.work(request.player, request.body);
+          events?.prepare(request.player);
+          return c.json({ result, rewards, progress: progress.getProgress(request.player), shift: shifts.board(request.player) });
+        } catch (err) {
+          return refuse(c, err);
+        }
+      });
+    }
 
     if (events) {
       // Returns the event waiting on the player, or null. It answers at once: an event that is due

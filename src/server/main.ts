@@ -14,6 +14,7 @@ import { createModelClient, readModelConfig } from "./llm/config";
 import { createModelTurns } from "./llm/turns";
 import { createProgress } from "./progress";
 import { RECIPE_KEY_FILE, renderRecipeKey } from "./recipeKey";
+import { createShifts } from "./shifts/service";
 import { createShop } from "./shop";
 import { openStore } from "./store";
 
@@ -53,7 +54,8 @@ const progress = createProgress({ data, store, listDiscovered: combiner.listDisc
 const shop = createShop({ data, store, progress, listDiscovered: combiner.listDiscovered });
 const writer = createModelEventWriter({ client: turns.inBackground(createModelClient(model, "events")), log: store.logModelCall, voice, blocklist });
 const events = createEvents({ data, store, progress, listDiscovered: combiner.listDiscovered, writer, writeAhead: true });
-const app = createApp(combiner, { progress, shop, events });
+const shifts = createShifts({ data, store, progress, listDiscovered: combiner.listDiscovered });
+const app = createApp(combiner, { progress, shop, events, shifts });
 
 serve({ fetch: app.fetch, port }, () => {
   const effort = model.effort.combos ? `, ${model.effort.combos} effort for combinations and ${model.effort.events} for events` : "";

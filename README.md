@@ -235,8 +235,8 @@ npm run path -- jobs          # every job with the length of its chain
 ### Work shifts (rules and data)
 
 A job's shift is one order from its board, filled by picking a **Base**, a **Method**, and an
-optional **Touch**. The design is in `Jobs Guide.txt`. This part is the rules and the content;
-saving shifts and serving them to the page is the shift service's job.
+optional **Touch**. The design is in `Jobs Guide.txt`. This part is the rules and the content.
+Saving shifts and serving them to the page is the shift service's job, described after it.
 
 - **Skins** are in `data/job-skins.json`, one per job. A skin names the three slots, lists the
   job's own *staples* for each (always on offer, so nobody has an empty slot), and says which
@@ -260,6 +260,34 @@ saving shifts and serving them to the page is the shift service's job.
   counts toward a restock. The first is open as soon as a job is taken up (`shiftIn`).
 - Order and result text is plain for now, from `data/shift-text.json`. Every number is under
   `shifts` in `config/balance.json`.
+
+### Work shifts (routes)
+
+The shift service (`src/server/shifts/service.ts`) keeps each player's board, pays out, and
+writes the log.
+
+| Route | Returns |
+|---|---|
+| `GET /api/players/:player/shift` | A `ShiftBoard`: `{ job, rank, ready, shiftIn, slots, orders, options, rules }` |
+| `POST /api/players/:player/shift` with `{ order, base, method, touch? }` | `{ result, rewards, progress, shift }` |
+
+- The board is for the job the player has taken up. With no job, `job` is null and the rest is
+  empty. It always holds `shifts.board` open orders: filling one brings a new one, and an open
+  order is never dropped. Each job keeps its own orders and its own rank.
+- `order` is the id of an order on the board. `base`, `method`, and `touch` are option ids from
+  `options` (a staple's id starts with `staple:`). `touch` may be left out.
+- `result` is a `ShiftResult`: `{ order, quality: { id, name }, line, gold, xp, rep, rankUp }`.
+  `rankUp` is the new rank when this shift earned one, otherwise null. `rules` on the board lets
+  the page preview a result with `previewRange` from `src/shared/shifts.ts`.
+- `rewards` is whatever else the shift set off (a quest finished by its XP), as elsewhere.
+  `shift` is the board afterwards.
+- `progress` carries `shiftReady` and `shiftIn`: a shift is ready when a job is taken up and
+  `shiftIn` is 0. After a shift, `shiftIn` counts down from `shifts.every` with each thing made
+  by combining. Things bought or given do not count.
+- Refusals are 400 with a `code`: `no-job`, `shift-not-ready`, or `rule` for an order that is
+  not on the board or a choice that is not on offer.
+- Gold is paid through the ledger (reason `shift`), XP counts toward level like any other, and
+  standing moves for Great and Perfect. Every shift is logged in the `shifts` table.
 
 ## Drafting spell recipes
 

@@ -1,5 +1,6 @@
 import type { GameEntry, Rewards, ShopSlot, ShopView } from "../shared/schema";
 import { RuleError } from "./combiner";
+import { craftedCount } from "./crafted";
 import { levelForSpellTier, type GameData } from "./gameData";
 import { buildPath } from "./paths";
 import { repBandFor, type ProgressService } from "./progress";
@@ -23,11 +24,6 @@ export function createShop(deps: {
   const neverSells = new Set(rules.neverSells);
 
   const pickRandom = <T>(items: T[]): T | undefined => items[Math.floor(random() * items.length)];
-
-  // Discoveries made by combining. Purchases are left out, so buying never triggers a restock.
-  function craftedCount(player: string): number {
-    return store.getDiscoveries(player).length - store.getLedgerRefs(player, "shop").length - store.getLedgerRefs(player, "gift").length;
-  }
 
   // The shop sells materials and spells the player does not have. Elements, schools, jobs, and
   // the focus are progression and are never for sale.
@@ -151,11 +147,11 @@ export function createShop(deps: {
       const entry = pick?.entry ?? pickRandom(available);
       if (entry) add(entry, pick ? "tailored" : "random", pick?.reason ?? "");
     }
-    store.setShop(player, craftedCount(player), slots);
+    store.setShop(player, craftedCount(store, player), slots);
   }
 
   function view(player: string): ShopView {
-    const crafted = craftedCount(player);
+    const crafted = craftedCount(store, player);
     let stock = store.getShop(player);
     if (!stock || crafted - stock.stockedAt >= rules.restockEvery) {
       restock(player);

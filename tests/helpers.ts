@@ -3,6 +3,7 @@ import { createEvents } from "../src/server/events/service";
 import { createCannedEventWriter, type EventWriter } from "../src/server/events/writer";
 import { loadGameData } from "../src/server/gameData";
 import { createProgress } from "../src/server/progress";
+import { createShifts } from "../src/server/shifts/service";
 import { createShop } from "../src/server/shop";
 import { openStore, type Store } from "../src/server/store";
 
@@ -29,11 +30,12 @@ export function newGame(seed = 1, writer: EventWriter = createCannedEventWriter(
   const progress = createProgress({ data, store, listDiscovered: combiner.listDiscovered, eventsWrittenAhead: writeAhead });
   const shop = createShop({ data, store, progress, listDiscovered: combiner.listDiscovered, random: seeded(seed) });
   const events = createEvents({ data, store, progress, listDiscovered: combiner.listDiscovered, writer, random: seeded(seed + 100), writeAhead });
+  const shifts = createShifts({ data, store, progress, listDiscovered: combiner.listDiscovered, random: seeded(seed + 200) });
   // Plays the given combos in order for one player.
   async function play(player: string, steps: [string, string][]) {
     for (const [a, b] of steps) await combiner.combine(player, a, b);
   }
-  return { store, combiner, progress, shop, events, play };
+  return { store, combiner, progress, shop, events, shifts, play };
 }
 
 export const TO_FIRE_BOLT: [string, string][] = [
