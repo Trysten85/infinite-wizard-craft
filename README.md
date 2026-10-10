@@ -386,6 +386,47 @@ comes out as plausible or doubtful. That grade is rough: read the report, and mo
 the lists to settle them. The report also shows what the model suggested for each pair and how
 long each step took. Run it before and after changing a prompt, the storybook, or a setting.
 
+## The overnight bake
+
+`npm run bake` has the model work through every pair of basic things that has no recipe yet
+(about 730), thinking harder than it can while a player waits. Nothing it makes is in the game
+until it is approved.
+
+For each pair it gathers candidates (the storybook choice if there is one, then two rounds of
+the three questions), has the model **mark each one out of five with a reason** and say which it
+would keep, and writes up the winner with the game's own describing step.
+
+```
+npm run bake                 # work through the pairs, carrying on from where it stopped
+npm run bake -- --limit 10   # only that many pairs, for a trial
+npm run bake -- pause        # stop within a second and let go of the model
+npm run bake -- resume       # carry on
+npm run bake -- status       # how far it has got and how long is left
+npm run bake -- review       # write a reading list to var/bake/review.md, lowest marks first
+npm run bake -- approve 4    # approve every draft marked 4 or better
+npm run bake -- approve sand+water     # approve single pairs
+npm run bake -- reject sand+water      # turn single pairs down
+```
+
+- **Sharing the PC** is set under `bake` in `config/model.json`. It works for `workMinutes`, then
+  rests so that it is busy only `share` of the time (0.5 is half and half), and with
+  `unloadWhileResting` it tells Ollama to let go of the model while it rests, which frees the
+  video memory. While someone is playing the game it stands aside, and carries on once the game
+  has left the model alone for `quietMinutes`. Stopped, crashed, or slept through, the next start
+  skips what is already done.
+- **Results** go to `data/baked-combos.json` as drafts, each with the model's mark and reason.
+  A row with `status: "ok"` is a fixed recipe from the next server start. A baked thing can
+  still be reached from other pairs while playing; a hand-written thing cannot.
+- **Everything is kept** in `var/bake/`, which is not in git:
+  - `pairs.jsonl`: one line per pair. What code decided, every candidate with its reason and
+    its mark, what the rules refused and why, the pick and the runner-up, the words, and the
+    seconds each step took.
+  - `calls.jsonl`: every model call whole. The prompt, the answer, the model's own thinking,
+    the effort, the tokens, the seconds, and whether the answer passed.
+  - `prompts.json`: each system prompt once, under the id the calls refer to.
+- The ranking runs at `bake.rankEffort`. If that fails or times out it is redone at ordinary
+  effort, and the record says which.
+
 ## Blocklist
 
 `Blocklist.md` lists proper nouns the model must never produce. It is not in git because it holds

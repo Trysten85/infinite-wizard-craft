@@ -5,6 +5,7 @@ import {
   QUALITIES,
   RANKS,
   SHIFT_SLOTS,
+  bakedComboSchema,
   balanceSchema,
   comboExampleSchema,
   comboKey,
@@ -17,12 +18,14 @@ import {
   questSchema,
   schoolSchema,
   shiftTextSchema,
+  slugify,
   spellEntryId,
   spellMaterialSchema,
   spellRecipeSchema,
   spellSchema,
   storybookItemSchema,
   tagSchema,
+  type BakedCombo,
   type Balance,
   type Combo,
   type ComboExample,
@@ -59,6 +62,9 @@ export type GameData = {
   storybook: StorybookItem[];
   // Good combinations to show the model: the hand-picked ones, then the hand-written recipes.
   comboExamples: ComboExample[];
+  // The things that came out of the overnight bake and were approved. They are fixed recipes
+  // like the hand-written ones, but the model may still arrive at them from other pairs.
+  bakedIds: Set<string>;
   // comboKey -> what the pair makes, and anything else the player must have discovered first
   combos: Map<string, Recipe>;
 };
@@ -73,6 +79,7 @@ function readJson<T>(path: string, schema: z.ZodType<T>): T {
 
 export const SPELL_RECIPES_FILE = "data/spell-recipes.json";
 export const SPELL_MATERIALS_FILE = "data/spell-materials.json";
+export const BAKED_FILE = "data/baked-combos.json";
 
 export function readOptional<T>(path: string, schema: z.ZodType<T[]>): T[] {
   return existsSync(path) ? readJson(path, schema) : [];
@@ -159,6 +166,7 @@ export function buildGameData(raw: {
   eventSeeds?: EventSeed[];
   storybook?: StorybookItem[];
   comboExamples?: ComboExample[];
+  baked?: BakedCombo[];
 }): GameData {
   const { balance, tags, schools, combos, spells = [], ladders = [], spellRecipes = [], spellMaterials = [], jobs = [], quests = [] } = raw;
   const eventSeeds = raw.eventSeeds ?? [];
@@ -194,7 +202,28 @@ export function buildGameData(raw: {
     tier: 0,
     source: "authored",
   }));
-  const derivedTier = new Set([...materialEntries, ...jobEntries].map((entry) => entry.id));
+  // Approved pairs from the overnight bake. The first pair to make a thing gives it its words.
+  // Two pairs may make the same thing.
+  const liveBaked = (raw.baked ?? []).filter((row) => row.status === "ok");
+  const bakedEntries: Entry[] = [];
+  const bakedWonders = new Set<string>();
+  for (const row of liveBaked) {
+    const id = slugify(row.name);
+    if (row.wonder) bakedWonders.add(id);
+    if (bakedEntries.some((entry) => entry.id === id)) continue;
+    const parents = row.inputs.map((input) => raw.entries.find((entry) => entry.id === input));
+    bakedEntries.push({
+      id,
+      name: row.name,
+      kind: "material",
+      description: row.description,
+      tags: row.tags,
+      affinity: [...new Set(parents.flatMap((parent) => parent?.affinity ?? []))],
+      tier: 0,
+      source: "authored",
+    });
+  }
+  const derivedTier = new Set([...materialEntries, ...jobEntries, ...bakedEntries].map((entry) => entry.id));
   const keyIds = new Set([...raw.entries, ...materialEntries].map((entry) => entry.id));
   const draftIds = new Set(spellMaterials.map((row) => row.id));
   const liveRecipes = spellRecipes.filter((row) => {
@@ -245,7 +274,7 @@ export function buildGameData(raw: {
       source: spell.source,
     });
   }
-  const entries = [...raw.entries, ...materialEntries, ...schoolEntries, ...spellEntries, ...jobEntries];
+  const entries = [...raw.entries, ...materialEntries, ...schoolEntries, ...spellEntries, ...jobEntries, ...bakedEntries];
   const tagMap = new Map(tags.map((tag) => [tag.id, tag]));
   if (tagMap.size !== tags.length) problems.push("the tag vocabulary lists a tag twice");
   const entryIds = new Set<string>();
@@ -320,6 +349,7 @@ export function buildGameData(raw: {
   for (const row of liveMaterials) {
     if (row.inputs) recipes.push({ inputs: row.inputs, result: row.id, needs: [] });
   }
+  for (const row of liveBaked) recipes.push({ inputs: row.inputs, result: slugify(row.name), needs: [] });
   for (const job of jobs) {
     recipes.push({ inputs: job.inputs, result: job.id, needs: [] });
     if (job.orAnySpellTagged) {
@@ -431,7 +461,8 @@ export function buildGameData(raw: {
     const depth = depths.get(entry.id)!;
     const tier = derivedTier.has(entry.id) ? tierForDepth(depth, balance) : entry.tier;
     const learning = entry.kind === "spell" ? { learnCost: learnCostForTier(tier, balance), learnLevel: levelForSpellTier(tier, balance) } : {};
-    entryMap.set(entry.id, { ...entry, tier, depth, xp: xpForTier(tier, balance), ...learning });
+    const wonder = bakedWonders.has(entry.id) ? { wonder: true } : {};
+    entryMap.set(entry.id, { ...entry, tier, depth, xp: xpForTier(tier, balance), ...learning, ...wonder });
   }
 
   // A quest must not ask for more than the game holds. Materials are left out: the model makes
@@ -472,6 +503,7 @@ export function buildGameData(raw: {
     eventSeeds,
     storybook: raw.storybook ?? [],
     comboExamples: [...(raw.comboExamples ?? []), ...recipesAsExamples(combos, entryMap)],
+    bakedIds: new Set(bakedEntries.map((entry) => entry.id)),
     combos: comboMap,
   };
 }
@@ -488,6 +520,7 @@ export function readGameFiles(rootDir: string) {
     ladders: readJson(join(rootDir, "data/ladders.json"), z.array(ladderSchema)),
     spellRecipes: readOptional(join(rootDir, SPELL_RECIPES_FILE), z.array(spellRecipeSchema)),
     spellMaterials: readOptional(join(rootDir, SPELL_MATERIALS_FILE), z.array(spellMaterialSchema)),
+    baked: readOptional(join(rootDir, BAKED_FILE), z.array(bakedComboSchema)),
     jobs: readJson(join(rootDir, "data/jobs.json"), z.array(jobSchema)),
     jobSkins: readJson(join(rootDir, "data/job-skins.json"), z.array(jobSkinSchema)),
     shiftText: readJson(join(rootDir, "data/shift-text.json"), shiftTextSchema),
@@ -498,6 +531,9 @@ export function readGameFiles(rootDir: string) {
   };
 }
 
-export function loadGameData(rootDir: string): GameData {
-  return buildGameData(readGameFiles(rootDir));
+// `baked: false` leaves the approved bakes out: the game as it stood before them. The bake and
+// the bench both want that, since they are about pairs the model has yet to be asked.
+export function loadGameData(rootDir: string, options: { baked?: boolean } = {}): GameData {
+  const files = readGameFiles(rootDir);
+  return buildGameData(options.baked === false ? { ...files, baked: [] } : files);
 }

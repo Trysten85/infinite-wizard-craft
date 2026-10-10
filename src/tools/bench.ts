@@ -22,7 +22,8 @@ import { comboKey, slugify, type GameEntry } from "../shared/schema";
 const root = process.cwd();
 const PLAYER = "bench";
 const settings = readModelConfig(root);
-const data = loadGameData(root);
+// The bench is about what the model makes of a pair, so approved bakes are left out.
+const data = loadGameData(root, { baked: false });
 const bench = benchSchema.parse(JSON.parse(readFileSync(join(root, "data/combo-bench.json"), "utf8")));
 const args = process.argv.slice(2);
 // A flag that takes a value, such as "--naming word".

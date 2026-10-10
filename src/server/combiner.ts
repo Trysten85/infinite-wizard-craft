@@ -64,7 +64,8 @@ export function comboRules(deps: { data: GameData; blocklist?: Blocklist }) {
       if (isWeld(draft.name, a.name, b.name)) return `"${draft.name}" is only the two names stuck together. Name a real thing.`;
       if (isInflection(draft.name, a.name, b.name)) return `"${draft.name}" is only an ingredient's name with a new ending. Name the new thing the two make.`;
       // Hand-written entries are progression. The model may not hand them out through other combos.
-      if (data.entries.has(id)) return `"${draft.name}" already exists and is made another way.`;
+      // A thing from the overnight bake is different: other pairs may make it too.
+      if (data.entries.has(id) && !data.bakedIds.has(id)) return `"${draft.name}" already exists and is made another way.`;
       // The reason never names the blocked term, so the list itself is never shown to the model.
       if (blocklist && blocklist.find(draft.name).length > 0) return "That name is not available. Choose a different one.";
       if (blocklist && blocklist.find(draft.description).length > 0) {
@@ -117,7 +118,8 @@ export function createCombiner(deps: {
     const id = slugify(name);
 
     // If an earlier combo already produced this thing, reuse it exactly as it was first written.
-    let entry = store.getEntry(id);
+    // The same goes for a thing from the overnight bake.
+    let entry = data.bakedIds.has(id) ? data.entries.get(id) : store.getEntry(id);
     if (!entry) {
       const depth = Math.max(a.depth, b.depth) + 1;
       const tier = tierForDepth(depth, data.balance);
