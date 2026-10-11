@@ -263,7 +263,7 @@ function triage(): void {
         flags: flags.join("; "),
         secondChoice: record?.runnerUp ? `${record.runnerUp.name} (${record.runnerUp.mark ?? "?"})` : "",
         modelReason: row.reason,
-        comparison: record?.comparison ?? "",
+        weighing: record?.weighing ?? "",
         suggested: suggestion.verdict,
         suggestedResult: suggestion.result ?? "",
         failure: kept?.failure || suggestion.failure || "",
@@ -316,8 +316,8 @@ function why(): void {
   console.log("\nCandidates:");
   for (const candidate of record.candidates) console.log(`  ${candidate.mark ?? "?"}  ${candidate.name}  [${candidate.source}]\n       why suggested: ${candidate.why}\n       why that mark: ${candidate.reason}`);
   if (record.refused.length > 0) console.log(`\nRefused by the rules: ${record.refused.join("; ")}`);
+  if (record.weighing) console.log(`\nWeighing them up, before marking any: ${record.weighing}`);
   console.log(`\nRanked at ${record.rankEffort} effort. It said it would keep: ${record.keep ?? "nothing"}. Picked: ${record.pick?.name ?? "nothing"}.`);
-  if (record.comparison) console.log(`Its comparison: ${record.comparison}`);
   if (!existsSync(callsFile)) return;
   const calls = readFileSync(callsFile, "utf8")
     .split("\n")

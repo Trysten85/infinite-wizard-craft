@@ -18,7 +18,7 @@ export type TriageRow = {
   flags: string;
   secondChoice: string;
   modelReason: string;
-  comparison: string;
+  weighing: string;
   suggested: string;
   suggestedResult: string;
   failure: string;
@@ -36,7 +36,7 @@ const COLUMNS: [keyof TriageRow, string][] = [
   ["flags", "flags"],
   ["secondChoice", "model_second_choice"],
   ["modelReason", "model_reason"],
-  ["comparison", "model_comparison"],
+  ["weighing", "model_weighing"],
   ["suggested", "SUGGESTED (keep/fix/reject/nothing)"],
   ["suggestedResult", "SUGGESTED_RESULT"],
   ["failure", "FAILURE"],

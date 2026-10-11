@@ -30,8 +30,8 @@ export type BakeRecord = {
   // Suggestions the game's rules turned down, each with the rule that did it.
   refused: string[];
   rankEffort: string;
-  // The model's own account of why its pick beats the next best. Missing from the first bake.
-  comparison?: string;
+  // The model thinking the candidates over before it marked or chose any. Missing from the first bake.
+  weighing?: string;
   // Names passed over because enough pairs make them already.
   capped?: string[];
   keep: string | null;
@@ -142,7 +142,7 @@ export function createBaker(deps: {
     // The model marks its own suggestions and says which it would keep.
     const ranking = await rankCandidates({ thinker: deps.thinker, thinkerEffort: deps.thinkerEffort, fallback: deps.client, log }, pair, magical, record.candidates);
     record.rankEffort = ranking.effort;
-    record.comparison = ranking.comparison;
+    record.weighing = ranking.weighing;
     record.keep = ranking.keep;
     record.candidates = record.candidates.map((candidate) => ({ ...candidate, mark: ranking.marks.get(candidate.name)?.mark ?? null, reason: ranking.marks.get(candidate.name)?.reason ?? "" }));
     const { pick, runnerUp } = settle(record.candidates, ranking);

@@ -2,6 +2,7 @@ import { z } from "zod";
 import { generateValidated, GenerationError } from "./llm/generate";
 import type { LlmClient } from "./llm/types";
 import type { ModelCall } from "./store";
+import { countSentences } from "./voice";
 
 // The step the overnight bake adds to naming a combination: the model looks over the candidates
 // for a pair, gives each a mark out of five with its reason, and says which one it would keep.
@@ -10,8 +11,9 @@ import type { ModelCall } from "./store";
 export type Mark = { mark: number; reason: string };
 export type Ranking = {
   marks: Map<string, Mark>;
-  // Why the one it keeps beats the next best, in the model's words. Its own account, not proof.
-  comparison: string;
+  // The model thinking the candidates over, written before it has marked or chosen anything.
+  // Its own account, not proof, but an account of weighing them up and not of defending a pick.
+  weighing: string;
   // The candidate the model said it would keep. Not always the one it marked highest.
   keep: string | null;
   // How hard it was thinking: the level asked for, "low" if that failed, "none" if both did.
@@ -21,7 +23,11 @@ export type Ranking = {
 const INSTRUCTIONS = [
   "This is a cozy crafting game. A player puts two things together and one new thing comes out.",
   "Below are the two things, and a list of suggested results with the thinking behind each.",
-  "Mark each suggestion out of five for how much sense it makes:",
+  "First, weigh them up in two or three sentences, before you mark or choose anything.",
+  "Say what each of the two things really is, which suggestions owe something to both of them and which only to one, and what is making this pair easy or hard.",
+  "You have not chosen yet. Do not argue for a winner: think it through.",
+  "Keep the weighing to those two or three plain sentences. No list, and no marks in it: the marks come next.",
+  "Then mark each suggestion out of five for how much sense it makes:",
   "- five: nearly any child would give this answer straight away",
   "- four: a clear, natural result of both things",
   "- three: reasonable, though it takes a moment to see",
@@ -30,7 +36,6 @@ const INSTRUCTIONS = [
   "A good result owes something to both things. Mark down a name that only plays on the two names, or one nobody would really say.",
   "If the pair has magic in it, a well-known storybook thing that comes of both is a good result.",
   "For each suggestion give your reason in one sentence first, and then the mark.",
-  "Then write a comparison: two or three sentences on why the best suggestion beats the next best one. Name both.",
   "Last, say which single suggestion you would keep.",
 ].join("\n");
 
@@ -42,9 +47,10 @@ export async function rankCandidates(
 ): Promise<Ranking> {
   const names = candidates.map((candidate) => candidate.name) as [string, ...string[]];
   const schema = z.strictObject({
+    // First of all, before any mark or choice: this is the model working it out, so that what it
+    // writes is its reasoning and not a defense of something it has already decided.
+    weighing: z.string().min(1).max(700),
     marks: z.array(z.strictObject({ name: z.enum(names), reason: z.string().min(1).max(400), mark: z.number().int().min(1).max(5) })).length(names.length),
-    // Written before the pick, so that it shapes the choice and does not only excuse it.
-    comparison: z.string().min(1).max(700),
     keep: z.enum(names),
   });
   const prompt = [
@@ -61,17 +67,22 @@ export async function rankCandidates(
         system: INSTRUCTIONS,
         prompt,
         schema,
-        reject: (value) => (new Set(value.marks.map((item) => item.name)).size === names.length ? null : "Mark every suggestion once, and only once."),
+        reject: (value) => {
+          if (new Set(value.marks.map((item) => item.name)).size !== names.length) return "Mark every suggestion once, and only once.";
+          // The weighing is thinking, not the verdicts written out early.
+          if (countSentences(value.weighing) > 4 || /[\n*]/.test(value.weighing)) return "Keep the weighing to two or three plain sentences, with no list and no marks in it.";
+          return null;
+        },
         maxAttempts: 2,
         temperature: 0,
       });
-      return { marks: new Map(answer.marks.map((item) => [item.name, { mark: item.mark, reason: item.reason }])), comparison: answer.comparison, keep: answer.keep, effort };
+      return { marks: new Map(answer.marks.map((item) => [item.name, { mark: item.mark, reason: item.reason }])), weighing: answer.weighing, keep: answer.keep, effort };
     } catch (err) {
       // Anything but a run of bad answers (a stop, for one) is not this step's to deal with.
       if (!(err instanceof GenerationError)) throw err;
     }
   }
-  return { marks: new Map(), comparison: "", keep: null, effort: "none" };
+  return { marks: new Map(), weighing: "", keep: null, effort: "none" };
 }
 
 // Settles on one candidate from a ranking: the highest mark, and among equals the one the model

@@ -17,7 +17,7 @@ const entry = (id: string) => data.entries.get(id)!;
 const ideas = (made: string, place: string, thing: string) =>
   JSON.stringify({ made: { why: `how the two make ${made}`, name: made }, place: { why: `where ${place} is`, name: place }, thing: { why: `what ${thing} is`, name: thing } });
 const marks = (given: Record<string, number>, keep: string) =>
-  JSON.stringify({ marks: Object.entries(given).map(([name, mark]) => ({ name, reason: `${name} because`, mark })), comparison: `${keep} beats the rest.`, keep });
+  JSON.stringify({ marks: Object.entries(given).map(([name, mark]) => ({ name, reason: `${name} because`, mark })), weighing: "Both are sand and water. Some of these only use one.", keep });
 // Sand is a mineral, so a result of sand may be tagged as one. A tree and Life offer no such tag.
 const words = (name: string, tags: string[] = name === "Treant" || name === "Sapling" ? [] : ["mineral"]) => JSON.stringify({ name, description: "Sand at the edge of the water.", tags, missingTag: null });
 const baker = (answers: (string | Error)[], thinking: (string | Error)[] | null = null) => {
@@ -62,7 +62,7 @@ describe("baking one pair", () => {
     expect(record.refused.join(" ")).toContain("Mud");
     expect(record.pick).toMatchObject({ name: "Beach", mark: 5, reason: "Beach because", why: "where Beach is" });
     expect(record.runnerUp!.name).toBe("Sandcastle");
-    expect(record).toMatchObject({ rankEffort: "medium", keep: "Beach", comparison: "Beach beats the rest.", description: "Sand at the edge of the water.", tags: ["mineral"], wonder: false });
+    expect(record).toMatchObject({ rankEffort: "medium", keep: "Beach", weighing: "Both are sand and water. Some of these only use one.", description: "Sand at the edge of the water.", tags: ["mineral"], wonder: false });
     expect(record.steps.map((step) => step.purpose)).toEqual(["combo-ideas", "combo-ideas", "bake-rank", "combo"]);
     expect(record.seconds).toBeGreaterThanOrEqual(0);
     // The ranking went to the harder-thinking model, and the second round was told what the first said.
@@ -150,18 +150,28 @@ describe("ranking", () => {
     expect(client.requests[1]!.prompt).toContain("Mark every suggestion once");
     const schema = JSON.stringify(client.requests[0]!.jsonSchema);
     expect(schema.indexOf('"reason"')).toBeLessThan(schema.indexOf('"mark"'));
-    // The comparison is written before the pick is named, so it shapes the choice.
-    expect(schema.indexOf('"comparison"')).toBeGreaterThan(schema.indexOf('"marks"'));
-    expect(schema.indexOf('"comparison"')).toBeLessThan(schema.indexOf('"keep"'));
-    expect(ranking.comparison).toBe("Beach beats the rest.");
-    expect(client.requests[0]!.system).toContain("why the best suggestion beats the next best");
+    // The weighing-up comes first of all, before any mark or pick, so it is the model working
+    // the pair out and not defending a choice it has already made.
+    expect(schema.indexOf('"weighing"')).toBeLessThan(schema.indexOf('"marks"'));
+    expect(schema.indexOf('"marks"')).toBeLessThan(schema.indexOf('"keep"'));
+    expect(ranking.weighing).toBe("Both are sand and water. Some of these only use one.");
+    expect(client.requests[0]!.system).toContain("before you mark or choose anything");
+    expect(client.requests[0]!.system).toContain("Do not argue for a winner");
     expect(client.requests[0]!.prompt).toContain("This pair has no magic in it.");
     expect(client.requests[0]!.temperature).toBe(0);
   });
 
+  it("sends back a weighing that has turned into the verdicts written out early", async () => {
+    const rambling = JSON.stringify({ marks: [{ name: "Beach", reason: "r", mark: 5 }, { name: "Shore", reason: "r", mark: 3 }], weighing: "Sand and water.\n**Evaluations**\n- Beach: 5\n- Shore: 3", keep: "Beach" });
+    const client = createFakeClient([rambling, marks({ Beach: 5, Shore: 3 }, "Beach")]);
+    const ranking = await rankCandidates({ thinker: null, thinkerEffort: "medium", fallback: client, log: () => {} }, "Combine these two:\n1. Sand\n2. Water", false, candidates);
+    expect(ranking.weighing).toBe("Both are sand and water. Some of these only use one.");
+    expect(client.requests[1]!.prompt).toContain("two or three plain sentences");
+  });
+
   it("settles on the highest mark, then the one the model would keep, then the earliest", () => {
     const three = [{ name: "A" }, { name: "B" }, { name: "C" }];
-    const ranked = (given: Record<string, number>, keep: string | null) => ({ marks: new Map(Object.entries(given).map(([name, mark]) => [name, { mark, reason: "" }])), comparison: "", keep, effort: "medium" });
+    const ranked = (given: Record<string, number>, keep: string | null) => ({ marks: new Map(Object.entries(given).map(([name, mark]) => [name, { mark, reason: "" }])), weighing: "", keep, effort: "medium" });
     expect(settle(three, ranked({ A: 2, B: 5, C: 4 }, "A"))).toEqual({ pick: { name: "B" }, runnerUp: { name: "C" } });
     expect(settle(three, ranked({ A: 4, B: 4, C: 4 }, "C")).pick.name).toBe("C");
     expect(settle(three, ranked({ A: 4, B: 4, C: 1 }, "C")).pick.name).toBe("A");

@@ -22,7 +22,7 @@ const line = (key: string, more: Partial<TriageRow> = {}): TriageRow => ({
   flags: "",
   secondChoice: "",
   modelReason: "",
-  comparison: "",
+  weighing: "",
   suggested: "keep",
   suggestedResult: "",
   failure: "",

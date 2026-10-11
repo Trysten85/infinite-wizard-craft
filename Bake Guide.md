@@ -48,7 +48,7 @@ tail -f var/bake/bake.log    # watch it (Ctrl+C stops watching, not the bake)
 | `npm run bake -- triage` | Writes `data/combo-triage.csv`: every draft, flagged by code, with a suggested verdict and empty columns for yours. Safe to run again: verdicts you have filled in are carried over. Also prints the acceptance checks. |
 | `npm run bake -- import data/combo-triage.csv` | Reads your verdicts back into the drafts. A row you left blank is untouched. |
 | `npm run bake -- import data/combo-triage.csv --accept-suggestions` | The same, taking the suggestion wherever you left a row blank. |
-| `npm run bake -- why bat+tea` | One pair's whole trail: every candidate, its mark and reason, what the rules refused, the model's comparison, and its own thinking call by call. |
+| `npm run bake -- why bat+tea` | One pair's whole trail: every candidate, its mark and reason, what the rules refused, the model's weighing-up, and its own thinking call by call. |
 
 To stop it for good, not just pause: `kill -INT $(cat var/bake/pid)`. It stops cleanly, and
 `npm run bake` carries on later.
@@ -92,8 +92,10 @@ Things worth knowing:
    questions (what the two make, where they are found, a thing with both in it). The second
    round is told what the first said. Usually four to seven candidates, each with a reason.
    The game's rules throw out hand-written names, welded names, and the like.
-3. **Ranking, at `rankEffort`.** The model gives every candidate a reason and a mark, and says
-   which one it would keep. The pick is the highest mark; among equals, the one it would keep.
+3. **Ranking, at `rankEffort`.** The model first weighs the candidates up in two or three
+   sentences, before it has marked or chosen anything: what the two things are, which
+   suggestions owe something to both, what makes the pair easy or hard. Then it gives every
+   candidate a reason and a mark, and says which one it would keep. The pick is the highest mark; among equals, the one it would keep.
 4. **The words.** Description and tags for the pick, by the same step the game uses: three
    sentences at most, material tags handed down from the ingredients, one pair in four given a
    playful twist.
