@@ -30,6 +30,10 @@ export type BakeRecord = {
   // Suggestions the game's rules turned down, each with the rule that did it.
   refused: string[];
   rankEffort: string;
+  // The model's own account of why its pick beats the next best. Missing from the first bake.
+  comparison?: string;
+  // Names passed over because enough pairs make them already.
+  capped?: string[];
   keep: string | null;
   pick: Candidate | null;
   runnerUp: Candidate | null;
@@ -52,6 +56,9 @@ export function createBaker(deps: {
   thinker: LlmClient | null;
   thinkerEffort: string;
   log?: (call: ModelCall) => void;
+  // How many pairs already make a thing of this name. Past the cap it is passed over, so that
+  // one ingredient's favorite answer cannot win every time.
+  usesOf?: (name: string) => number;
 }) {
   const { data } = deps;
   const rulesFor = comboRules({ data, blocklist: deps.blocklist });
@@ -124,10 +131,18 @@ export function createBaker(deps: {
       ...second.map((idea) => ({ ...idea, source: "second round" as const, ...blank })),
     ];
     if (record.candidates.length === 0) return finish("The model suggested nothing the game's rules allow.");
+    // A name enough pairs make already is passed over, unless there is nothing else.
+    const cap = data.balance.generation.bakeNameCap;
+    const fresh = record.candidates.filter((candidate) => (deps.usesOf?.(candidate.name) ?? 0) < cap);
+    if (fresh.length > 0 && fresh.length < record.candidates.length) {
+      record.capped = record.candidates.filter((candidate) => !fresh.includes(candidate)).map((candidate) => candidate.name);
+      record.candidates = fresh;
+    }
 
     // The model marks its own suggestions and says which it would keep.
     const ranking = await rankCandidates({ thinker: deps.thinker, thinkerEffort: deps.thinkerEffort, fallback: deps.client, log }, pair, magical, record.candidates);
     record.rankEffort = ranking.effort;
+    record.comparison = ranking.comparison;
     record.keep = ranking.keep;
     record.candidates = record.candidates.map((candidate) => ({ ...candidate, mark: ranking.marks.get(candidate.name)?.mark ?? null, reason: ranking.marks.get(candidate.name)?.reason ?? "" }));
     const { pick, runnerUp } = settle(record.candidates, ranking);

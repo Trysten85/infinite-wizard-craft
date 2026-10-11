@@ -10,6 +10,8 @@ import type { ModelCall } from "./store";
 export type Mark = { mark: number; reason: string };
 export type Ranking = {
   marks: Map<string, Mark>;
+  // Why the one it keeps beats the next best, in the model's words. Its own account, not proof.
+  comparison: string;
   // The candidate the model said it would keep. Not always the one it marked highest.
   keep: string | null;
   // How hard it was thinking: the level asked for, "low" if that failed, "none" if both did.
@@ -28,6 +30,7 @@ const INSTRUCTIONS = [
   "A good result owes something to both things. Mark down a name that only plays on the two names, or one nobody would really say.",
   "If the pair has magic in it, a well-known storybook thing that comes of both is a good result.",
   "For each suggestion give your reason in one sentence first, and then the mark.",
+  "Then write a comparison: two or three sentences on why the best suggestion beats the next best one. Name both.",
   "Last, say which single suggestion you would keep.",
 ].join("\n");
 
@@ -40,6 +43,8 @@ export async function rankCandidates(
   const names = candidates.map((candidate) => candidate.name) as [string, ...string[]];
   const schema = z.strictObject({
     marks: z.array(z.strictObject({ name: z.enum(names), reason: z.string().min(1).max(400), mark: z.number().int().min(1).max(5) })).length(names.length),
+    // Written before the pick, so that it shapes the choice and does not only excuse it.
+    comparison: z.string().min(1).max(700),
     keep: z.enum(names),
   });
   const prompt = [
@@ -60,13 +65,13 @@ export async function rankCandidates(
         maxAttempts: 2,
         temperature: 0,
       });
-      return { marks: new Map(answer.marks.map((item) => [item.name, { mark: item.mark, reason: item.reason }])), keep: answer.keep, effort };
+      return { marks: new Map(answer.marks.map((item) => [item.name, { mark: item.mark, reason: item.reason }])), comparison: answer.comparison, keep: answer.keep, effort };
     } catch (err) {
       // Anything but a run of bad answers (a stop, for one) is not this step's to deal with.
       if (!(err instanceof GenerationError)) throw err;
     }
   }
-  return { marks: new Map(), keep: null, effort: "none" };
+  return { marks: new Map(), comparison: "", keep: null, effort: "none" };
 }
 
 // Settles on one candidate from a ranking: the highest mark, and among equals the one the model

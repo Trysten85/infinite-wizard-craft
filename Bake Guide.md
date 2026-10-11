@@ -45,6 +45,10 @@ tail -f var/bake/bake.log    # watch it (Ctrl+C stops watching, not the bake)
 | `npm run bake -- approve 4` | Approves every draft marked 4 or better. Any mark from 1 to 5 works. |
 | `npm run bake -- approve sand+water air+air` | Approves single pairs by their key. The key is in the review list. |
 | `npm run bake -- reject sand+water` | Turns single pairs down. A rejected pair stays rejected if the bake is run again. |
+| `npm run bake -- triage` | Writes `data/combo-triage.csv`: every draft, flagged by code, with a suggested verdict and empty columns for yours. Safe to run again: verdicts you have filled in are carried over. Also prints the acceptance checks. |
+| `npm run bake -- import data/combo-triage.csv` | Reads your verdicts back into the drafts. A row you left blank is untouched. |
+| `npm run bake -- import data/combo-triage.csv --accept-suggestions` | The same, taking the suggestion wherever you left a row blank. |
+| `npm run bake -- why bat+tea` | One pair's whole trail: every candidate, its mark and reason, what the rules refused, the model's comparison, and its own thinking call by call. |
 
 To stop it for good, not just pause: `kill -INT $(cat var/bake/pid)`. It stops cleanly, and
 `npm run bake` carries on later.
@@ -142,6 +146,46 @@ What approval does:
   Hand-written things stay reserved, as before.
 - A saved combination for the same pair is simply overridden. The old result stays in any
   player's discoveries.
+
+## Reviewing with the triage file
+
+The first bake showed the model's marks cannot approve anything, so review goes through
+`data/combo-triage.csv` instead of `approve 4`. Open it in a spreadsheet.
+
+| Column | What |
+|---|---|
+| `flags` | What code can see: a name used more than 3 times, a thing from after the age of steam, not a real word, a name that only says what went in, a low mark, worn-out words, too long. |
+| `SUGGESTED`, `SUGGESTED_RESULT`, `FAILURE` | A suggested verdict. For the first bake these are in `data/combo-suggestions.json`. Otherwise they come from the flags. |
+| `YOUR_VERDICT` | `keep`, `fix`, `reject`, or `nothing`. **This is the column that counts.** |
+| `YOUR_RESULT_IF_FIX` | The right result, for a `fix`. Left blank, the suggested result is used. |
+| `NOTES` | Anything worth keeping. A funny answer for later goes here. |
+
+What each verdict does on import:
+
+- `keep`: approved. In the game at the next server start.
+- `fix`: the row is marked with the right result. Its description still has to be rewritten for
+  the new name before it goes live.
+- `reject`: wrong, with a better answer likely. It is baked again in the next round.
+- `nothing`: the pair makes nothing. In the game it answers with a gentle line from
+  `data/no-result-lines.json`, always the same one for that pair, and the model is never asked.
+
+Failure types, kept on every row that was not simply kept: attractor, one-sided, bad logic,
+modern, not a word, name pun, misread ingredient, too abstract, metaphorical, wrong category.
+
+## Rules enforced by code
+
+These hold for the live game and the bake alike (`comboRules` in `src/server/combiner.ts`).
+
+| Rule | Where to change it |
+|---|---|
+| A name must be made of real words | `data/words.txt` (from SCOWL, license beside it) and `data/extra-words.json` for real words it lacks |
+| A name of two words or more may not be only the ingredients' own names | code (`src/server/names.ts`) |
+| Nothing from after the age of steam | `data/banned-results.json` |
+| A description may not lean on worn-out words | `data/overused-words.json` |
+| A description is 2 sentences at most | `generation.maxSentences` in `config/balance.json` |
+| One spelling per name | `data/name-aliases.json` |
+| In the bake, a name already made by 3 pairs is passed over | `generation.bakeNameCap` |
+| The model is told what an ambiguous thing is | `gloss` on each entry in `data/entries.json` |
 
 ## Read before trusting the marks
 

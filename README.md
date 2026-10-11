@@ -370,7 +370,14 @@ list, and best when code has already cut the list down. So a new combination is 
   low effort the model judges poorly and it doubles the wait. Try it with `npm run bench -- --pick`.
 - `generation.charmedCarriesMagic` decides whether an everyday thing touched by magic counts as
   magical itself. Off, the magic fades unless a magical ingredient is added again.
-- A name that is only the two ingredients run together (Bloodfire from Blood and Fire) is refused.
+- A result's name must be made of real words (`data/words.txt`), may not be only the
+  ingredients' own names again, and may not be on `data/banned-results.json` (nothing from after
+  the age of steam). `data/name-aliases.json` gives the one spelling of a name.
+- Each basic thing has a `gloss` in `data/entries.json`, a few plain words shown to the model
+  beside its name, so that Spirits is read as a drink and a Bat as an animal.
+- A description may not use the words in `data/overused-words.json`.
+- A pair can make nothing: a row with status `nothing` in `data/baked-combos.json` answers
+  `no-result` (422) with a line from `data/no-result-lines.json`. `Bake Guide.md` has the rest.
 
 ### Measuring it
 
