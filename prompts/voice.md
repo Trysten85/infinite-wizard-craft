@@ -15,7 +15,7 @@ Humor never undercuts the craft. A good enchantment, a perfect brew, or a hard-w
 Rhythm and detail
 Use short, plain sentences. Let the joke land in the last few words, then stop.
 Dry understatement beats exclamation.
-Give one smell, one sound, one texture (toast, warm iron, wet moss, kettle steam). Be specific, not vague: "smells faintly of toast and thunder." Don't stack adjectives.
+Give one smell, one sound, one texture (toast, warm iron, wet moss, kettle steam). Be specific, not vague: "smells of toast and thunder." Don't stack adjectives.
 Show character through small habits and physical tells, never exposition.
 Names and descriptions run 1–2 sentences. Events run 3–5. End on a warm, wry, or quietly proud beat.
 Dialogue: friendly, a little dry, a little fussy.

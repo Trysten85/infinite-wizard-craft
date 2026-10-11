@@ -17,6 +17,9 @@ export type Tag = z.infer<typeof tagSchema>;
 export const entrySchema = z.strictObject({
   id: idSchema,
   name: z.string().min(1),
+  // A few plain words saying what the thing is, shown to the model beside the name. Without it
+  // the model reads Spirits as ghosts and a Bat as something you swing.
+  gloss: z.string().min(1).optional(),
   kind: z.enum(["element", "material", "focus", "school", "spell", "job"]),
   description: z.string().min(1),
   // An entry with no tags is allowed. It shows up in `npm run tags` for review.
@@ -470,6 +473,8 @@ export const balanceSchema = z.strictObject({
     // How long a description may run. A longer one is sent back to be rewritten.
     maxSentences: z.number().int().min(1),
     maxWords: z.number().int().min(1),
+    // In the bake, how many pairs may make the same thing before that thing is passed over.
+    bakeNameCap: z.number().int().min(1),
     // The share of ordinary pairs whose description gets one playful twist. Code picks which,
     // and a pair always gets the same treatment. The name and what the thing is stay literal.
     twistShare: z.number().min(0).max(1),
@@ -544,6 +549,10 @@ export const comboExampleSchema = z.strictObject({
 });
 export type ComboExample = z.infer<typeof comboExampleSchema> & { authored?: boolean };
 
+// The ways a baked result can be wrong, as a reviewer records them.
+export const BAKE_FAILURES = ["attractor", "one-sided", "bad logic", "modern", "not a word", "name pun", "misread ingredient", "too abstract", "metaphorical", "wrong category"] as const;
+export type BakeFailure = (typeof BAKE_FAILURES)[number];
+
 // One pair the overnight bake has settled: what the two make, in the model's words, with the
 // score it gave its own answer and why. A draft is not in the game. Set `status` to "ok" (or use
 // `npm run bake -- approve`) and it becomes a fixed recipe at the next server start.
@@ -558,7 +567,15 @@ export const bakedComboSchema = z.strictObject({
   // could not be ranked.
   sense: z.number().int().min(1).max(5).nullable(),
   reason: z.string(),
-  status: z.enum(["draft", "ok", "rejected"]),
+  // draft: waiting for review. ok: in the game. rejected: wrong, to be baked again.
+  // fix: the reviewer has given the right result, and its description is still to be written.
+  // nothing: this pair makes nothing, and the game says so gently.
+  status: z.enum(["draft", "ok", "rejected", "fix", "nothing"]),
+  // What a reviewer said about a row that was not simply kept. Every rejection is a labelled
+  // example for later, so the reason and the right answer are kept with it.
+  failure: z.enum(BAKE_FAILURES).optional(),
+  correction: z.string().min(1).optional(),
+  notes: z.string().optional(),
 });
 export type BakedCombo = z.infer<typeof bakedComboSchema>;
 

@@ -22,8 +22,11 @@ export function createMadeFrom(data: GameData, store: Pick<Store, "getMakers" | 
 // The description is left out on purpose. The hand-written ones are jokes ("Person: mud that
 // stood up and asked what was for breakfast"), and a small model takes them at their word: it
 // starts making things out of mud, and writes a pickle up as a slice of bread.
+// A hand-written thing may carry a gloss, a few plain words saying what it is, so that Spirits is
+// read as a drink and a Bat as an animal.
 export function thingName(entry: GameEntry, madeFrom: string | null): string {
-  return madeFrom && entry.source === "generated" ? `${entry.name} (made from ${madeFrom})` : entry.name;
+  if (madeFrom && entry.source === "generated") return `${entry.name} (made from ${madeFrom})`;
+  return entry.gloss ? `${entry.name} (${entry.gloss})` : entry.name;
 }
 
 function hash(text: string): number {

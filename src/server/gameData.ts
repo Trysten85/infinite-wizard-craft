@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { z } from "zod";
+import type { Banned } from "./names";
 import {
   QUALITIES,
   RANKS,
@@ -62,6 +63,16 @@ export type GameData = {
   storybook: StorybookItem[];
   // Good combinations to show the model: the hand-picked ones, then the hand-written recipes.
   comboExamples: ComboExample[];
+  // Real words, for telling a real name from a made-up one. Empty means no such check is made.
+  words: Set<string>;
+  // Names and words that do not belong in this world, and words descriptions lean on too much.
+  banned: Banned;
+  overused: string[];
+  // The one spelling the game uses for a name that could be written several ways.
+  aliases: Map<string, string>;
+  // Pairs a reviewer has said make nothing, and the gentle lines the game says so with.
+  noResults: Set<string>;
+  noResultLines: string[];
   // The things that came out of the overnight bake and were approved. They are fixed recipes
   // like the hand-written ones, but the model may still arrive at them from other pairs.
   bakedIds: Set<string>;
@@ -167,6 +178,11 @@ export function buildGameData(raw: {
   storybook?: StorybookItem[];
   comboExamples?: ComboExample[];
   baked?: BakedCombo[];
+  words?: string[];
+  banned?: Banned;
+  overused?: string[];
+  aliases?: Record<string, string>;
+  noResultLines?: string[];
 }): GameData {
   const { balance, tags, schools, combos, spells = [], ladders = [], spellRecipes = [], spellMaterials = [], jobs = [], quests = [] } = raw;
   const eventSeeds = raw.eventSeeds ?? [];
@@ -504,6 +520,12 @@ export function buildGameData(raw: {
     storybook: raw.storybook ?? [],
     comboExamples: [...(raw.comboExamples ?? []), ...recipesAsExamples(combos, entryMap)],
     bakedIds: new Set(bakedEntries.map((entry) => entry.id)),
+    words: new Set(raw.words ?? []),
+    banned: raw.banned ?? { names: [], words: [] },
+    overused: raw.overused ?? [],
+    aliases: new Map(Object.entries(raw.aliases ?? {})),
+    noResults: new Set((raw.baked ?? []).filter((row) => row.status === "nothing").map((row) => comboKey(...row.inputs))),
+    noResultLines: raw.noResultLines ?? ["Nothing happens."],
     combos: comboMap,
   };
 }
@@ -521,6 +543,15 @@ export function readGameFiles(rootDir: string) {
     spellRecipes: readOptional(join(rootDir, SPELL_RECIPES_FILE), z.array(spellRecipeSchema)),
     spellMaterials: readOptional(join(rootDir, SPELL_MATERIALS_FILE), z.array(spellMaterialSchema)),
     baked: readOptional(join(rootDir, BAKED_FILE), z.array(bakedComboSchema)),
+    // One word to a line, with a few of our own added: real words the dictionary happens to lack.
+    words: [
+      ...readFileSync(join(rootDir, "data/words.txt"), "utf8").split("\n").filter((word) => word !== ""),
+      ...readJson(join(rootDir, "data/extra-words.json"), z.array(z.string().regex(/^[a-z]+$/))),
+    ],
+    banned: readJson(join(rootDir, "data/banned-results.json"), z.strictObject({ names: z.array(z.string()), words: z.array(z.string()) })),
+    overused: readJson(join(rootDir, "data/overused-words.json"), z.array(z.string().min(1))),
+    aliases: readJson(join(rootDir, "data/name-aliases.json"), z.record(z.string(), z.string().min(1))),
+    noResultLines: readJson(join(rootDir, "data/no-result-lines.json"), z.array(z.string().min(1)).min(1)),
     jobs: readJson(join(rootDir, "data/jobs.json"), z.array(jobSchema)),
     jobSkins: readJson(join(rootDir, "data/job-skins.json"), z.array(jobSkinSchema)),
     shiftText: readJson(join(rootDir, "data/shift-text.json"), shiftTextSchema),

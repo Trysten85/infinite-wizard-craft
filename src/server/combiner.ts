@@ -1,8 +1,10 @@
 import { comboKey, slugify, type CombineResult, type ComboDraft, type GameEntry } from "../shared/schema";
 import type { Blocklist } from "./blocklist";
+import { pairShare } from "./comboContext";
 import type { ComboGenerator } from "./comboGenerator";
 import { tierForDepth, xpForTier, type GameData } from "./gameData";
 import type { Store } from "./store";
+import { canonicalName, isBanned, isOnlyIngredients, isRealName, overusedIn } from "./names";
 import { endsCleanly, tooLong } from "./voice";
 
 export type RuleCode = "rule" | "no-focus" | "missing-needs" | "no-result" | "not-enough-gold" | "sold-out" | "level-too-low" | "no-job" | "shift-not-ready";
@@ -18,21 +20,6 @@ export class RuleError extends Error {
 }
 
 const NAME_PATTERN = /^[A-Za-z][A-Za-z '’-]*$/;
-
-// A made-up word that is only the two ingredients' names run together: Bloodfire from Blood and
-// Fire, Mindbook from Mind and Spellbook. Real compounds are left alone: a Sandcastle from Sand
-// and Water has a castle in it that neither ingredient supplied.
-export function isWeld(name: string, a: string, b: string): boolean {
-  const letters = (text: string) => text.toLowerCase().replace(/[^a-z]/g, "");
-  const word = letters(name);
-  if (name.trim().includes(" ")) return false;
-  const madeOf = (first: string, second: string) =>
-    letters(first).length >= 3 &&
-    [word.startsWith(letters(first)) ? word.slice(letters(first).length) : null, word.endsWith(letters(first)) ? word.slice(0, -letters(first).length) : null].some(
-      (rest) => rest !== null && rest.length >= 3 && letters(second).includes(rest),
-    );
-  return madeOf(a, b) || madeOf(b, a);
-}
 
 // An ingredient's own name with a new ending: Salted or Salty from Salt, Sands from Sand. That
 // describes the ingredient. It is not a new thing.
@@ -54,6 +41,7 @@ function isAuthoredOnly(entry: GameEntry): boolean {
 // answer is refused, or null. The game and the overnight bake both go by this.
 export function comboRules(deps: { data: GameData; blocklist?: Blocklist }) {
   const { data, blocklist } = deps;
+  const storybook = new Set(data.storybook.map((item) => slugify(item.name)));
   return (a: GameEntry, b: GameEntry) =>
     (draft: ComboDraft): string | null => {
       if (!NAME_PATTERN.test(draft.name)) return "The name must use only letters, spaces, hyphens and apostrophes.";
@@ -61,13 +49,18 @@ export function comboRules(deps: { data: GameData; blocklist?: Blocklist }) {
       if (draft.name.trim().split(/\s+/).length > 2) return "Use a plainer name: one everyday word, two at most.";
       const id = slugify(draft.name);
       if (id === a.id || id === b.id) return `The result cannot be one of the inputs ("${draft.name}").`;
-      if (isWeld(draft.name, a.name, b.name)) return `"${draft.name}" is only the two names stuck together. Name a real thing.`;
+      // The reason never names the blocked term, so the list itself is never shown to the model.
+      // The name is checked as the game will show it, with its capital.
+      if (blocklist && blocklist.find(draft.name[0]!.toUpperCase() + draft.name.slice(1)).length > 0) return "That name is not available. Choose a different one.";
       if (isInflection(draft.name, a.name, b.name)) return `"${draft.name}" is only an ingredient's name with a new ending. Name the new thing the two make.`;
+      if (isOnlyIngredients(draft.name, a.name, b.name)) return `"${draft.name}" only says what went in. Name the new thing the two make.`;
+      // A real word, or a name the game already vouches for. This is what tells Saltwater from Bloodfire.
+      const vouched = (name: string) => data.entries.has(slugify(name)) || storybook.has(slugify(name));
+      if (data.words.size > 0 && !isRealName(draft.name, data.words, vouched)) return `"${draft.name}" is not a real, well-known word. Name a real thing.`;
+      if (isBanned(draft.name, data.banned)) return `"${draft.name}" does not belong in this world: nothing from after the age of steam. Name something older.`;
       // Hand-written entries are progression. The model may not hand them out through other combos.
       // A thing from the overnight bake is different: other pairs may make it too.
       if (data.entries.has(id) && !data.bakedIds.has(id)) return `"${draft.name}" already exists and is made another way.`;
-      // The reason never names the blocked term, so the list itself is never shown to the model.
-      if (blocklist && blocklist.find(draft.name).length > 0) return "That name is not available. Choose a different one.";
       if (blocklist && blocklist.find(draft.description).length > 0) {
         return "The description uses a proper name. Rewrite it without naming any person, place, or group.";
       }
@@ -76,6 +69,8 @@ export function comboRules(deps: { data: GameData; blocklist?: Blocklist }) {
       if (long) return long;
       // From the voice guide's "never appears" list.
       if (/[0-9!]/.test(draft.description)) return "The description must not contain digits or exclamation marks.";
+      const worn = overusedIn(draft.description, data.overused);
+      if (worn) return `The description leans on "${worn}", which has been used too often. Say it another way.`;
       return null;
     };
 }
@@ -114,7 +109,7 @@ export function createCombiner(deps: {
   async function generateEntry(key: string, a: GameEntry, b: GameEntry): Promise<GameEntry> {
     const reject = rules(a, b);
     const draft = await generate(a, b, reject);
-    const name = draft.name[0]!.toUpperCase() + draft.name.slice(1);
+    const name = canonicalName(draft.name, data.aliases);
     const id = slugify(name);
 
     // If an earlier combo already produced this thing, reuse it exactly as it was first written.
@@ -152,6 +147,11 @@ export function createCombiner(deps: {
     let entry: GameEntry;
     let origin: CombineResult["origin"];
 
+    // A pair a reviewer has said makes nothing. The line is always the same one for that pair.
+    if (data.noResults.has(key)) {
+      const lines = data.noResultLines;
+      throw new RuleError(lines[Math.floor(pairShare(a, b) * lines.length)]!, "no-result");
+    }
     const recipe = data.combos.get(key);
     const cachedId = recipe ? undefined : store.getCombo(key);
     if (recipe) {

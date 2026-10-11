@@ -79,8 +79,9 @@
     "examples": 6,
     "storybookOffered": 8,
     "maxTags": 3,
-    "maxSentences": 3,
+    "maxSentences": 2,
     "maxWords": 50,
+    "bakeNameCap": 3,
     "twistShare": 0.25,
     "wonderInputs": ["life", "death", "light", "shadow", "mind"],
     "charmedCarriesMagic": false

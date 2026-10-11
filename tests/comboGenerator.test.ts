@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createCombiner, isInflection, isWeld } from "../src/server/combiner";
+import { createCombiner, isInflection } from "../src/server/combiner";
 import { pairShare } from "../src/server/comboContext";
 import { createComboGenerator, isWonderPair } from "../src/server/comboGenerator";
 import { createFakeClient } from "../src/server/llm/fake";
@@ -84,10 +84,10 @@ describe("naming an ordinary combination", () => {
     await generate(clay, entry("tree"), () => null);
     // The naming step goes by names alone, with what a model-made thing came from. The joke
     // descriptions of the hand-written things would only send it astray.
-    expect(client.requests[0]!.prompt).toContain("1. Clay (made from Mud and Fire)\n2. Tree\n");
+    expect(client.requests[0]!.prompt).toContain("1. Clay (made from Mud and Fire)\n2. Tree (a growing tree, and its wood)\n");
     expect(client.requests[0]!.prompt).not.toContain(entry("tree").description);
     // The step that writes the description goes by names too, so it writes about the new thing.
-    expect(client.requests[1]!.prompt).toContain("1. Clay (made from Mud and Fire)\n2. Tree\n");
+    expect(client.requests[1]!.prompt).toContain("1. Clay (made from Mud and Fire)\n2. Tree (a growing tree, and its wood)\n");
     expect(client.requests[1]!.prompt).not.toContain(entry("tree").description);
     expect(client.requests[0]!.prompt).toContain("- Tree + Tree = Forest (a great many trees together)");
     // Nothing magical went in, so no magical example is shown.
@@ -258,14 +258,15 @@ describe("the whimsy dial", () => {
 
 describe("a description that runs on", () => {
   it("is sent back by the game's rules until it is short", async () => {
-    const long = JSON.stringify({ name: "Beach", description: "Sand by the sea. It is warm. It is wide. It is full of shells.", tags: [], missingTag: null });
+    const long = JSON.stringify({ name: "Beach", description: "Sand by the sea. It is warm. It is wide.", tags: [], missingTag: null });
     const { client, generate } = generatorWith([ideas("Beach", "Coast", "Shore"), long, draft("Beach")]);
     const store = openStore(":memory:");
     store.addDiscovery("ann", "sand");
     const { entry: beach } = await createCombiner({ data, store, generate }).combine("ann", "sand", "water");
     expect(beach.description).toBe("A hunched figure of packed clay.");
     expect(client.requests[2]!.prompt).toContain("The description is too long.");
-    expect(client.requests[1]!.system).toContain("Never more than 3.");
+    expect(data.balance.generation.maxSentences).toBe(2);
+    expect(client.requests[1]!.system).toContain("Never more than 2.");
   });
 });
 
@@ -371,19 +372,8 @@ describe("with the separate judging step switched on", () => {
   });
 });
 
-describe("a name that is only the two ingredients stuck together", () => {
-  it("is told apart from a real compound", () => {
-    expect(isWeld("Bloodfire", "Blood", "Fire")).toBe(true);
-    expect(isWeld("Mindbook", "Mind", "Spellbook")).toBe(true);
-    expect(isWeld("Firewater", "Water", "Fire")).toBe(true);
-    // A sandcastle has a castle in it that neither ingredient supplied.
-    expect(isWeld("Sandcastle", "Sand", "Water")).toBe(false);
-    expect(isWeld("Beach", "Sand", "Water")).toBe(false);
-    expect(isWeld("Tea Party", "Tea", "Person")).toBe(false);
-    expect(isWeld("Catfish", "Animal", "Water")).toBe(false);
-  });
-
-  it("is told apart from an ingredient's name with a new ending, which is refused too", () => {
+describe("a name that only says what went in", () => {
+  it("is refused when it is an ingredient's name with a new ending", () => {
     for (const name of ["Salted", "Salty", "Sands", "Muddy"]) expect(isInflection(name, name.startsWith("M") ? "Mud" : name.startsWith("Sand") ? "Sand" : "Salt", "Water"), name).toBe(true);
     for (const name of ["Sandcastle", "Saltcellar", "Beach", "Salt Flat", "Airship"]) expect(isInflection(name, "Sand", "Salt"), name).toBe(false);
     // Air is too short a word to judge by: plenty of real things start with it.

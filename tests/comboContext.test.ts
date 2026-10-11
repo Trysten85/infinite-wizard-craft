@@ -25,7 +25,10 @@ describe("what a thing is made from", () => {
 
   it("is told to the model only for things the model made", () => {
     // The model sees names only: never the joke descriptions, and never a hand-written thing's recipe.
-    expect(thingName(entry("person"), "Life and Mud")).toBe("Person");
+    expect(thingName(entry("person"), "Life and Mud")).toBe("Person (a human being)");
+    // The gloss is what stops Spirits being read as ghosts and a Bat as something you swing.
+    expect(thingName(entry("spirits"), null)).toBe("Spirits (strong drink, such as brandy)");
+    expect(thingName(entry("bat"), null)).toBe("Bat (the small flying animal)");
     expect(thingName(made("clay", ["mineral"]), "Mud and Fire")).toBe("Clay (made from Mud and Fire)");
     expect(thingName(made("clay", ["mineral"]), null)).toBe("Clay");
   });
