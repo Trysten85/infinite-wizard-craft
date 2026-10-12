@@ -108,13 +108,16 @@ Night falls on the first of these:
 1. The last candle is spent.
 2. The player goes to bed. This is offered from dusk.
 3. **The midnight oil:** the player makes `nightAfter` discoveries in a row after dusk without
-   spending a candle between them. Spending a candle starts the count again. Unspent candles are
-   gone. The page shows the count running down, so this is never a surprise.
+   spending a candle between them. Spending a candle starts the count again. The discovery that
+   brings dusk on does not count; the count starts with the next one. Unspent candles are gone.
+   The page shows the count running down, so this is never a surprise.
 
 A player who only wants to craft can do so all night. They miss the evening, and nothing else.
 
-**Turning in early:** from noon the player may call it a day. The evening then has
-`earlyCandles` candles. This is the way out for a player who is stuck for new discoveries.
+**Turning in early:** from noon the player may call it a day. This does not bring night: it
+moves the sun straight to dusk, and the evening then has `earlyCandles` candles. Night falls
+after that in one of the three ways above. This is the way out for a player who is stuck for new
+discoveries.
 
 ### The night ledger
 
