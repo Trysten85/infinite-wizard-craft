@@ -237,7 +237,7 @@ The first six:
 |---|---|---|---|---|---|
 | Farm | Farmer | 30 | Mud, Animal | plant, animal, liquid | healing, enhance |
 | Market Stall | Merchant | 50 | Tree, Glass | reagent, enchanting, industrial, knowledge | knowledge, utility |
-| Tavern | Innkeeper (new job) | 80 | Spirits, Food, Tree | brewing, liquid, plant, animal | utility, healing |
+| Tavern | Innkeeper (new job: Person + Spirits) | 80 | Spirits, Food, Tree | brewing, liquid, plant, animal | utility, healing |
 | Smithy | Blacksmith | 70 | Forge, Iron | forging, metal, mineral, industrial | energy, protection |
 | Herb Garden | Herbalist | 50 | Herb, Mud | plant, healing, reagent, liquid | healing, transform |
 | Wizard's Tower | Wizard | 100 | Spellbook, Crystal | knowledge, enchanting, mind, energy | knowledge, protection |
@@ -508,8 +508,8 @@ reload is readable from a GET.
 
 ## Open questions (for Trysten)
 
-1. **The Innkeeper's recipe.** Draft: Person + Spirits. The bake drafted "Bartender" for that
-   pair; a hand-written job would take its place.
+1. **The Innkeeper's recipe.** Settled 2026-10-11 by Trysten: Person + Spirits. The bake's
+   draft for that pair ("Bartender") is overwritten by the hand-written job.
 2. **The meal's XP lift.** Settled 2026-10-11, as relayed by the Rules session: keep the 20%
    lift to gold and XP, and leave `levels.xpStep` alone.
 3. **`utility`.** The model puts it on a great many things, so it is left out of every building's

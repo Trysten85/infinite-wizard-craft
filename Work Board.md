@@ -53,7 +53,7 @@ Standing rules are in `CLAUDE.md`.
 Goal: one visible clock. A player crafts through the morning, works a shift after noon, has an
 evening, and sees a ledger at night. Nothing about the town yet.
 
-### D1 · Rules · open
+### D1 · Rules · done
 - **What:** the day's rules as pure functions, and its numbers.
 - **Depends on:** nothing.
 - **Guide:** "The day", "Draft numbers".
@@ -65,7 +65,23 @@ evening, and sees a ledger at night. Nothing about the town yet.
   shift is open, how many candles are left, and whether night has fallen and why. Every boundary
   in the guide's "Tests to write: the day" has a test. `shifts.every`, `shop.restockEvery`,
   `events.every`, and `events.points` are left in place until D2 stops reading them.
-- **Notes:**
+- **Notes:** done by infinite-spell-craft-23, not committed. `npm test` (579) and typecheck pass.
+  - **For D2:** a day in progress is a `DayState` in `src/shared/day.ts`: `number`, `sun`,
+    `shiftDone`, `early`, `spent` (candles spent; candles left is worked out), `oil` (the
+    midnight-oil count). Save those and the last `Ledger`. `firstDay()` is where every saved
+    player starts. Call `afterAction(state, action, rules)` for anything the player does,
+    `refuseCandles` then `spendCandles` for an evening action, `turnIn`, `shiftOpen`,
+    `nightFalls` (answers `last-candle`, `midnight-oil`, or null; `bed` is your route's own
+    reason), `nextDay`, and `dayView` for `progress.day`.
+  - **For D4:** `progress.day` is a `DayView` and the ledger a `Ledger`, both in
+    `src/shared/schema.ts`. `Ledger` has `fell` (why night fell), and `cheer` is null until
+    there is a town. `Standing.day` is optional until D2 serves it.
+  - **Also landed:** plain lines for dusk, each way night falls, and the morning, in
+    `data/day-text.json` (`data.dayText`), since the ledger's `lines` need words. `RuleCode` is
+    in `src/shared/schema.ts`; two lines changed in `combiner.ts` (the import and a re-export).
+  - **Left for later:** the `tonightChance` column on `events.repBands` (no draft numbers yet;
+    `tonightComes` takes the band's shift as an argument, so E1 can add the column), and the
+    old counters, which stay until D2 says nothing reads them.
 
 ### D2 · Backend · claimed by infinite-spell-craft-7e
 - **What:** save the day, run it, and move the three old counters onto it.
@@ -97,7 +113,7 @@ evening, and sees a ledger at night. Nothing about the town yet.
   players have taken.
 - **Notes:**
 
-### D4 · Page · open
+### D4 · Page · claimed by infinite-spell-craft-e6
 - **What:** show the day.
 - **Depends on:** D1 for the types. D2 to see it live.
 - **Guide:** "The day", "The night ledger", "Shapes for the page".
@@ -110,7 +126,11 @@ evening, and sees a ledger at night. Nothing about the town yet.
   longer from `shiftIn`; the Shop's restock note reads "New stock each morning"; the ledger shows
   once when `night` comes back and can be reopened, after a reload too, from
   `progress.day.lastLedger`.
-- **Notes:**
+- **Notes:** started 2026-10-11 on Trysten's word, from the guide's sketch, before D1's types
+  exist. Until they land the page keeps its own copy of the day shapes in `web/src/day.ts`;
+  it will import the shared types and drop the copy when D1 is done. The page checks for
+  `progress.day` and keeps today's cues when it is absent, so it works against the server as
+  it is until D2 lands.
 
 ---
 
@@ -132,17 +152,18 @@ pay takings at night, and the shop is earned.
   slots and quality are in the schema but may be unused until slice 3.
 - **Notes:**
 
-### S2 · Rules · blocked: the recipe is not recorded yet
-- **What:** the Innkeeper.
-- **Depends on:** nothing. Needs Trysten's answer to open question 1 in the guide.
+### S2 · Rules · open
+- **What:** the Innkeeper: Person + Spirits.
+- **Depends on:** nothing.
 - **Guide:** "Buildings", "Open questions".
 - **Touches:** `data/jobs.json`, `data/job-skins.json`, `Recipe Key.md` (generated: `npm run key`).
 - **Done when:** the job is reachable, has a skin, and the job tests pass.
-- **Notes:** 2026-10-11, design: Trysten told the Rules session he settled this with another
-  session. As of commit 621231a no Innkeeper is in `data/jobs.json`, `data/job-skins.json`, or
-  `data/combos.json`, and nothing about it is on this board. Design has asked Trysten for the
-  recipe and for who writes the job. Until that is recorded here, nobody should add it. If you
-  are the session he settled it with, write the recipe on this line.
+- **Notes:** 2026-10-11, design: settled by Trysten. The recipe is Person + Spirits =
+  Innkeeper, a mundane job. The bake's draft for that pair ("Bartender") is not important and is
+  overwritten: the hand-written job takes its place. The draft row in `data/baked-combos.json`
+  is a Bake file, so if it gets in the way of loading, ask infinite-spell-craft-7e to turn it
+  down (`npm run bake -- reject`) and do not edit it yourself. Wants for score and the skin:
+  `brewing, liquid, plant, animal`, matching the Tavern in the guide.
 
 ### S3 · Backend · open
 - **What:** save and serve the town.
@@ -169,7 +190,8 @@ pay takings at night, and the shop is earned.
   each need as met or not, the Shop bookmark hidden until the stall stands.
 - **Done when:** a player can buy a plot, see what a plan needs, raise it, and watch it appear;
   empty plots show their price; a plot past the player's deeds says which level opens it.
-- **Notes:**
+- **Notes:** Trysten, 2026-10-11: the way in is a Town button like the Shop's bookmark, and it
+  swaps the board between crafting and the town (the book stays where it is).
 
 ### S5 · Bake · blocked: the bake is parked on Trysten's word
 - **What:** approve the town's staples first.
@@ -351,6 +373,8 @@ Add a line: ticket id, your session name, the question. Answers are written bene
 
 ## Log
 
+- 2026-10-11: Trysten settled the Innkeeper: Person + Spirits, overwriting the bake's
+  "Bartender" draft. S2 is open again.
 - 2026-10-11: board opened by the design session, with slices 1 to 4.
 - 2026-10-11: infinite-spell-craft-7e holds Backend and Bake, and has claimed D2. The bake is
   parked, so design changed the guarantee: the town never waits on it. The test is now "never
