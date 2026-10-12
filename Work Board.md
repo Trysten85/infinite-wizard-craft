@@ -128,7 +128,7 @@ pay takings at night, and the shop is earned.
   need met, plot price, deeds for a level, takings), a new `data/buildings.json` with the six
   buildings, `src/server/gameData.ts` (load and check it), `config/balance.json`, tests.
 - **Done when:** the six buildings load and are checked against the tag list and the jobs; the
-  reachable-needs test in the guide passes or names exactly what the bake must approve; stock
+  never-blocked test in the guide passes with no baked row approved; stock
   slots and quality are in the schema but may be unused until slice 3.
 - **Notes:**
 
@@ -171,17 +171,18 @@ pay takings at night, and the shop is earned.
   empty plots show their price; a plot past the player's deeds says which level opens it.
 - **Notes:**
 
-### S5 · Bake · open
+### S5 · Bake · blocked: the bake is parked on Trysten's word
 - **What:** approve the town's staples first.
-- **Depends on:** nothing.
-- **Guide:** "Tests to write: reachable needs".
+- **Depends on:** nothing. Nothing depends on it.
+- **Guide:** "What is guaranteed and what is found".
 - **Touches:** `data/baked-combos.json`.
 - **Done when:** the drafts for these pairs have been reviewed first, under whatever name
   Trysten's verdict gives them: steam + spirits, tree + spirits, fire + mud, mud + sand, earth +
   forge, steam + animal, water + food, life + spirits, light + iron, fire + tea, iron + herb,
-  steam + tree, metal + glass. No building needs any of them by name. At least three approved
-  things carry each of `brewing`, `forging`, `enchanting`, `knowledge`, and `industrial`, since
-  buildings want those tags. Spirits + Person ("Bartender") is left for S2 to settle.
+  steam + tree, metal + glass. No building needs any of them by name, and no test waits on them.
+  Approved things carrying `brewing`, `enchanting`, or `knowledge` would make those wants easier
+  to find, which is the only reason to review these first. Spirits + Person ("Bartender") is
+  left for S2 to settle.
 - **Notes:** parked on Trysten's word (2026-10-11): the combo bake is not a priority now and may
   be overwritten by quest and main gameplay work. All 727 pairs are drafts with a suggested
   verdict in `data/combo-triage.csv`, waiting on his review. Nothing baked is in the game. The
@@ -339,10 +340,22 @@ Add a line: ticket id, your session name, the question. Answers are written bene
     changed in the guide), and the pedlar no longer sells by `rare`. S5 now asks for at least
     three approved things for each of `brewing`, `forging`, `enchanting`, `knowledge`, and
     `industrial`.
+- **D2, D4 · infinite-spell-craft-e6 (Page):** two numbers I would otherwise have to hard-code
+  on the page, asked for in D2 as Backend offered. (1) What turning in early gives: the guide
+  says nothing is lost without a clear warning, and turning in early swaps `candles` for
+  `earlyCandles`, so the button has to say "the evening will have 1 candle". Could `progress.day`
+  carry that count (say `turnInCandles`) beside `canTurnIn`? (2) The candle cost of sitting with
+  the visitor, so the cue can show it without the page knowing the evening table (say
+  `visitorCandles`). If a general map of evening costs is planned for E2, either field can be
+  that map's first entry.
 
 ## Log
 
 - 2026-10-11: board opened by the design session, with slices 1 to 4.
+- 2026-10-11: infinite-spell-craft-7e holds Backend and Bake, and has claimed D2. The bake is
+  parked, so design changed the guarantee: the town never waits on it. The test is now "never
+  blocked" (a building can always be raised and can always reach Good from fixed recipes); it no
+  longer asks for a fixed recipe behind every want. S1 and S5 are changed to match.
 - 2026-10-11: the Rules session relayed two things from Trysten. The meal keeps its 20% gold
   and XP lift and `levels.xpStep` is left alone (guide open question 2, now settled). The
   Innkeeper is said to be settled with another session, but nothing is recorded, so S2 is

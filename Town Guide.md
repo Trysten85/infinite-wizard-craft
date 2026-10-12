@@ -295,6 +295,21 @@ What each gives back to crafting, by tier:
   `shifts.qualities`, times the Cheer band. Paid through the ledger with reason `takings`.
 - An empty building is Meh and still pays. Nothing is ever ruined.
 
+**What is guaranteed and what is found.** The town never waits on the overnight bake, and never
+on the model's luck:
+
+- A building can always be raised: tier 1 needs are hand-written things.
+- A building can always reach Good: at least half of each building's wants are carried by things
+  with fixed recipes. Counted on 2026-10-11, every building has two or three such wants.
+- **The last want or two must be found.** `brewing` and `enchanting` are carried by nothing with
+  a fixed recipe today, and `knowledge` by one spell. A player gets them by combining: the model
+  gives those tags to what it makes (26 and 77 of the 727 baked drafts carry them). Hunting for
+  "something brewed for the Tavern" is the reason to go back to the board, which is the point.
+- Tiers 2 and 3 ask for things made at depth 5 and depth 8. Almost nothing hand-written is that
+  deep, so those tiers lean on the player's own discoveries by design, as the quest "Make
+  something ten steps deep" already does. Material tags (plant, metal, liquid) are handed down
+  from ingredients, so a deep thing carrying a want can always be made.
+
 ### Your own building
 
 When the player's job has a building standing:
@@ -398,11 +413,11 @@ Nothing a player has is taken away.
   stock, tier, enchantment, and rank; every lift capped at Perfect; takings by tier, quality, and
   Cheer band; each perk type; an enchantment's length and its ending; a regular staying a regular.
 - **The shop:** refused before the stall; shelves by tier; the saved-game rule.
-- **Reachable needs:** every named need has a path by fixed recipes from the starting four, and
-  every wanted tag is carried by at least three things with a fixed recipe (hand-written, or a
-  baked row marked `ok`). Model this on `tests/buildable.test.ts`. Today no fixed thing carries
-  `brewing` or `enchanting`, so this test waits on the bake's review. It does not wait on any one
-  name: whichever brewed things Trysten approves will do.
+- **Never blocked:** every named need has a path by fixed recipes from the starting four, and
+  every building can reach Good from fixed recipes alone: at least half its wants are each
+  carried by a stockable thing (a material or a spell) with a fixed recipe. Model this on
+  `tests/buildable.test.ts`. The test does **not** ask for a fixed recipe behind every want. See
+  "What is guaranteed and what is found" under "Stock and quality".
 - **Pace:** `npm run pace` prints, per level, the gold a player earns and the gold the town can
   take. Aim for the town to take about two thirds through level 5.
 
