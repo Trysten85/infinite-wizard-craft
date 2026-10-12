@@ -3,6 +3,7 @@ import type {
   EventOutcome,
   EventView,
   GameEntry,
+  Ledger,
   PlayerProgress,
   ResponseType,
   Rewards,
@@ -12,8 +13,9 @@ import type {
 } from "../../src/shared/schema";
 
 // What comes back from anything that can change the player's standing: what that action earned,
-// and where the player stands now.
-export type Earned = { rewards: Rewards; progress: PlayerProgress };
+// and where the player stands now. `night` is the ledger, when the action brought night on. A
+// server from before the day sends none.
+export type Earned = { rewards: Rewards; progress: PlayerProgress; night?: Ledger | null };
 
 // A refusal from the server, with the HTTP status it came with.
 export class ApiError extends Error {
@@ -83,6 +85,11 @@ export function respondToEvent(player: string, type: ResponseType, beat: number)
 // Takes up a job the player has discovered, so the server's prompts know what they work as.
 export function chooseJob(player: string, job: string): Promise<Earned> {
   return post(`/api/players/${player}/job`, { job });
+}
+
+// Ends the day: going to bed from dusk, or calling it a day before then, which brings dusk on.
+export function endDay(player: string): Promise<Earned> {
+  return post(`/api/players/${player}/day/end`, {});
 }
 
 // The order board for the player's job: the orders waiting, and what could fill them.

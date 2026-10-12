@@ -1,5 +1,6 @@
-import type { RefObject } from "react";
+import { useEffect, useState, type RefObject } from "react";
 import type { GameEntry, PlayerProgress, RankView } from "../../src/shared/schema";
+import { bedOffer, noonShare, oilText, orderCue, phaseName, sunShare, sunText, type Day } from "./day";
 
 type Props = {
   progress: PlayerProgress;
@@ -12,89 +13,173 @@ type Props = {
   // The job cell, so a drag can tell when it is over it.
   jobRef: RefObject<HTMLDivElement | null>;
   onOpenOrders: () => void;
+  // True while the server is being asked to end the day.
+  dayBusy: boolean;
+  onEndDay: () => void;
+  // Brings last night's ledger back up.
+  onShowLedger: () => void;
 };
 
-// The player's standing, in the board's bottom-right corner: job, gold, reputation, and level.
-// The job cell is a drop target: letting a job bubble go on it takes that job up. It is also
-// the way in to the job's order board, and says when orders are waiting there.
-export function StatusBar({ progress, job, rank, jobDrag, jobRef, onOpenOrders }: Props) {
-  const { gold, rep, repBand, level, levelInto, levelSpan, shiftReady, shiftIn } = progress;
+// The player's standing, in the board's bottom-right corner: the day along the top, and under it
+// job, gold, reputation, and level. The job cell is a drop target: letting a job bubble go on it
+// takes that job up. It is also the way in to the job's order board, and says when orders are
+// waiting there.
+export function StatusBar({ progress, job, rank, jobDrag, jobRef, onOpenOrders, dayBusy, onEndDay, onShowLedger }: Props) {
+  const { gold, rep, repBand, level, levelInto, levelSpan, shiftReady, shiftIn, day } = progress;
+  // With the day served, the cue under the job reads from it. Before that it counts discoveries.
+  const cue = day ? orderCue(day, !!shiftReady) : null;
 
   return (
-    <dl className="hud-box status" aria-label="Status">
-      <div className={`stat job ${jobDrag} ${job && shiftReady ? "orders-ready" : ""}`} ref={jobRef}>
-        <dt>Job</dt>
-        <dd className="stat-value">
-          {jobDrag !== "none" ? (
-            <span className="job-invite">Drop to take this job</span>
-          ) : job ? (
-            <button className="job-open" onClick={onOpenOrders} title="Open the order board">
-              <span key={job.id} className="job-name bump">
-                {job.name}
-                {rank && <span className="rep-band">{rank.name}</span>}
+    <div className="hud-box status">
+      {day && <DayStrip day={day} busy={dayBusy} onEndDay={onEndDay} onShowLedger={onShowLedger} />}
+      <dl className="stats" aria-label="Status">
+        <div className={`stat job ${jobDrag} ${job && shiftReady ? "orders-ready" : ""}`} ref={jobRef}>
+          <dt>Job</dt>
+          <dd className="stat-value">
+            {jobDrag !== "none" ? (
+              <span className="job-invite">Drop to take this job</span>
+            ) : job ? (
+              <button className="job-open" onClick={onOpenOrders} title="Open the order board">
+                <span key={job.id} className="job-name bump">
+                  {job.name}
+                  {rank && <span className="rep-band">{rank.name}</span>}
+                </span>
+                {/* A server that isn't serving shifts yet sends neither of these, and the line stays off. */}
+                {cue ? (
+                  <span className={`job-cue ${cue.ready ? "ready" : ""}`}>{cue.text}</span>
+                ) : shiftReady ? (
+                  <span className="job-cue ready">Orders are waiting</span>
+                ) : (
+                  shiftIn !== undefined && (
+                    <span className="job-cue">
+                      Orders after {shiftIn} more {shiftIn === 1 ? "discovery" : "discoveries"}
+                    </span>
+                  )
+                )}
+              </button>
+            ) : (
+              <button className="job-open" onClick={onOpenOrders} title="Open the order board">
+                <span className="job-empty">Drop a job here</span>
+              </button>
+            )}
+          </dd>
+        </div>
+
+        <div className="stat">
+          <dt>Gold</dt>
+          {/* Remounted whenever the amount changes, which replays the bump. */}
+          <dd key={gold} className="stat-value bump">
+            <span className="coin" aria-hidden="true" />
+            {gold}
+          </dd>
+        </div>
+
+        <div className="stat">
+          <dt>Reputation</dt>
+          <dd key={rep} className="stat-value bump">
+            <svg className="stat-icon" viewBox="0 0 16 16" aria-hidden="true">
+              <path d="M8 1.5 13.5 3.5v4c0 3.3-2.3 5.6-5.5 7-3.2-1.4-5.5-3.7-5.5-7v-4z" />
+            </svg>
+            {rep}
+            {repBand && <span className="rep-band">{repBand}</span>}
+          </dd>
+        </div>
+
+        <div className="stat level">
+          <dt>Level</dt>
+          <dd className="stat-value">
+            <span key={level} className="level-badge bump">
+              {level}
+            </span>
+            <span className="xp">
+              <span
+                className="xp-bar"
+                role="progressbar"
+                aria-label="Experience"
+                aria-valuemin={0}
+                aria-valuemax={levelSpan}
+                aria-valuenow={levelInto}
+              >
+                <span style={{ width: `${(levelInto / levelSpan) * 100}%` }} />
               </span>
-              {/* A server that isn't serving shifts yet sends neither of these, and the line stays off. */}
-              {shiftReady ? (
-                <span className="job-cue ready">Orders are waiting</span>
-              ) : (
-                shiftIn !== undefined && (
-                  <span className="job-cue">
-                    Orders after {shiftIn} more {shiftIn === 1 ? "discovery" : "discoveries"}
-                  </span>
-                )
-              )}
-            </button>
-          ) : (
-            <button className="job-open" onClick={onOpenOrders} title="Open the order board">
-              <span className="job-empty">Drop a job here</span>
-            </button>
-          )}
-        </dd>
-      </div>
-
-      <div className="stat">
-        <dt>Gold</dt>
-        {/* Remounted whenever the amount changes, which replays the bump. */}
-        <dd key={gold} className="stat-value bump">
-          <span className="coin" aria-hidden="true" />
-          {gold}
-        </dd>
-      </div>
-
-      <div className="stat">
-        <dt>Reputation</dt>
-        <dd key={rep} className="stat-value bump">
-          <svg className="stat-icon" viewBox="0 0 16 16" aria-hidden="true">
-            <path d="M8 1.5 13.5 3.5v4c0 3.3-2.3 5.6-5.5 7-3.2-1.4-5.5-3.7-5.5-7v-4z" />
-          </svg>
-          {rep}
-          {repBand && <span className="rep-band">{repBand}</span>}
-        </dd>
-      </div>
-
-      <div className="stat level">
-        <dt>Level</dt>
-        <dd className="stat-value">
-          <span key={level} className="level-badge bump">
-            {level}
-          </span>
-          <span className="xp">
-            <span
-              className="xp-bar"
-              role="progressbar"
-              aria-label="Experience"
-              aria-valuemin={0}
-              aria-valuemax={levelSpan}
-              aria-valuenow={levelInto}
-            >
-              <span style={{ width: `${(levelInto / levelSpan) * 100}%` }} />
+              <span className="xp-count">
+                {levelInto} / {levelSpan} XP
+              </span>
             </span>
-            <span className="xp-count">
-              {levelInto} / {levelSpan} XP
-            </span>
-          </span>
-        </dd>
+          </dd>
+        </div>
+      </dl>
+    </div>
+  );
+}
+
+type DayProps = { day: Day; busy: boolean; onEndDay: () => void; onShowLedger: () => void };
+
+// The day, as a strip along the top of the status box: which day it is, a meter the sun crosses
+// from dawn to dusk with noon marked on it, and from dusk the candles left to spend. The way to
+// end the day is here too, and it says what would be given up before anything happens.
+function DayStrip({ day, busy, onEndDay, onShowLedger }: DayProps) {
+  const [asking, setAsking] = useState(false);
+  const offer = bedOffer(day);
+  const oil = oilText(day);
+
+  // A question asked at one time of day isn't the question at another.
+  useEffect(() => setAsking(false), [day.number, day.phase]);
+
+  return (
+    <section className={`day ${day.phase}`} aria-label="The day">
+      <p className="day-name">
+        <strong>Day {day.number}</strong> {phaseName(day)}
+      </p>
+
+      <div className="sun-meter" role="img" aria-label={sunText(day)} title="Each new discovery moves the sun on a notch.">
+        <span className="sun-track">
+          <span className="sun-past" style={{ width: `${sunShare(day) * 100}%` }} />
+        </span>
+        <span className="sun-noon" style={{ left: `${noonShare(day) * 100}%` }} />
+        <span className="sun" style={{ left: `${sunShare(day) * 100}%` }} />
+        <span className="sun-dusk" />
       </div>
-    </dl>
+
+      {day.phase === "evening" && (
+        <span className="candles" role="img" aria-label={`${day.candles} of ${day.candlesMax} candles left`}>
+          {Array.from({ length: day.candlesMax }, (_, index) => (
+            <span key={index} className={`candle ${index < day.candles ? "lit" : "spent"}`} />
+          ))}
+        </span>
+      )}
+
+      <p className="day-links">
+        {day.tonight && (
+          <span className={`day-tonight ${day.tonight.taken ? "taken" : ""}`} title={day.tonight.line}>
+            Tonight: {day.tonight.name}
+          </span>
+        )}
+        {offer && (
+          <button className="link" aria-expanded={asking} onClick={() => setAsking(!asking)}>
+            {offer.label.toLowerCase()}
+          </button>
+        )}
+        {day.lastLedger && (
+          <button className="link" onClick={onShowLedger}>
+            last night
+          </button>
+        )}
+      </p>
+
+      {oil && <p className="day-oil">{oil}, unless you spend a candle first.</p>}
+
+      {asking && offer && (
+        <div className="day-ask" role="group" aria-label={offer.label}>
+          <p>{offer.warning}</p>
+          <button disabled={busy} onClick={onEndDay}>
+            {busy ? "…" : offer.label}
+          </button>
+          <button className="link" onClick={() => setAsking(false)}>
+            not yet
+          </button>
+        </div>
+      )}
+    </section>
   );
 }

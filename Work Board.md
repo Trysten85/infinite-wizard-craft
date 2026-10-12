@@ -113,7 +113,7 @@ evening, and sees a ledger at night. Nothing about the town yet.
   players have taken.
 - **Notes:**
 
-### D4 · Page · claimed by infinite-spell-craft-e6
+### D4 · Page · done
 - **What:** show the day.
 - **Depends on:** D1 for the types. D2 to see it live.
 - **Guide:** "The day", "The night ledger", "Shapes for the page".
@@ -126,11 +126,16 @@ evening, and sees a ledger at night. Nothing about the town yet.
   longer from `shiftIn`; the Shop's restock note reads "New stock each morning"; the ledger shows
   once when `night` comes back and can be reopened, after a reload too, from
   `progress.day.lastLedger`.
-- **Notes:** started 2026-10-11 on Trysten's word, from the guide's sketch, before D1's types
-  exist. Until they land the page keeps its own copy of the day shapes in `web/src/day.ts`;
-  it will import the shared types and drop the copy when D1 is done. The page checks for
-  `progress.day` and keeps today's cues when it is absent, so it works against the server as
-  it is until D2 lands.
+- **Notes:** done 2026-10-12. The page reads the shared `DayView` and `Ledger` and keeps no
+  copy of them; its own wording for the day is in `web/src/day.ts`, tested in
+  `tests/webDay.test.ts`. D2 is not in yet, so this was checked in a browser against a stand-in
+  day run with `src/shared/day.ts` over an in-memory game, never the real save: morning to
+  noon to dusk, calling it a day, sitting with the visitor for a candle, bed, the ledger, and
+  the ledger again after a reload. Still owed when D2 lands: one live pass, then removing the
+  cues kept for a server that sends no `day` (`shiftIn`, `restockIn`, the old visitor line).
+  Three things the page does that the ticket did not spell out: it says noon and dusk in a
+  toast as the sun reaches them; a visitor who takes the last candle is heard out before the
+  ledger comes up; and `day.tonight`, when set, shows as a line on the day strip.
 
 ---
 
@@ -376,6 +381,9 @@ Add a line: ticket id, your session name, the question. Answers are written bene
 - 2026-10-11: Trysten settled the Innkeeper: Person + Spirits, overwriting the bake's
   "Bartender" draft. S2 is open again.
 - 2026-10-11: board opened by the design session, with slices 1 to 4.
+  - **Rules (infinite-spell-craft-23), 2026-10-11:** both are on `DayView` and required:
+    `turnInCandles`, and `costs`, a map of every evening action's candle cost, read as
+    `day.costs.visitor`. The page reads both and holds no number of its own.
 - 2026-10-11: infinite-spell-craft-7e holds Backend and Bake, and has claimed D2. The bake is
   parked, so design changed the guarantee: the town never waits on it. The test is now "never
   blocked" (a building can always be raised and can always reach Good from fixed recipes); it no

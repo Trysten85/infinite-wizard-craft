@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { ShiftBoard, ShiftOption, ShiftOrder, ShiftResult, ShiftSlot } from "../../src/shared/schema";
 import { coveredTags, meetsTier, previewRange } from "../../src/shared/shifts";
+import { ordersClosedText, type Day } from "./day";
 import { Gold } from "./Gold";
 import { previewText } from "./shiftPreview";
 
@@ -14,6 +15,8 @@ type Props = {
   board: ShiftBoard | null;
   // Why there is no board to show, when the server couldn't give one.
   problem: string;
+  // Where the player is in their day. Absent on a server from before the day.
+  day?: Day;
   // How the last order went, once one has been filled.
   result: ShiftResult | null;
   // True while a filled order is on its way to the server.
@@ -27,7 +30,7 @@ type Props = {
 // The order board for the player's job. A shift is one order filled by picking a base, a method,
 // and an optional touch. It reads as a puzzle: the order asks for some tags, and each thing that
 // could go in a slot shows which of them it brings.
-export function OrderBoard({ board, problem, result, busy, onWork, onNext, onClose }: Props) {
+export function OrderBoard({ board, problem, day, result, busy, onWork, onNext, onClose }: Props) {
   const card = useRef<HTMLDivElement>(null);
   const close = useRef(onClose);
   useEffect(() => {
@@ -68,7 +71,11 @@ export function OrderBoard({ board, problem, result, busy, onWork, onNext, onClo
           <Closed onClose={onClose}>You have no job yet. Drop a job on the Job cell to take one up, and its orders will come here.</Closed>
         ) : !board.ready || board.orders.length === 0 ? (
           <Closed onClose={onClose}>
-            No orders are waiting. The next shift opens after {board.shiftIn} more {board.shiftIn === 1 ? "discovery" : "discoveries"}.
+            {day
+              ? ordersClosedText(day)
+              : board.shiftIn === undefined
+                ? "No orders are waiting."
+                : `No orders are waiting. The next shift opens after ${board.shiftIn} more ${board.shiftIn === 1 ? "discovery" : "discoveries"}.`}
           </Closed>
         ) : (
           <Bench board={board} busy={busy} onWork={onWork} onClose={onClose} />

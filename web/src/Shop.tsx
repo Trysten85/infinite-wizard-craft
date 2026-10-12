@@ -13,11 +13,13 @@ type Props = {
   gold: number;
   // The slot being bought right now, if any. Nothing else can be bought until it finishes.
   buying: number | null;
+  // The shop restocks each morning. False for a server from before the day, which counts discoveries.
+  daily: boolean;
   onBuy: (slot: ShopSlot) => void;
 };
 
 // The shop's page in the book: what is on the shelf today, and the shopkeeper who sells it.
-export function Shop({ view, gold, buying, onBuy }: Props) {
+export function Shop({ view, gold, buying, daily, onBuy }: Props) {
   return (
     <section className="shop" aria-label="Shop">
       <h2 className="page-title">The Shop</h2>
@@ -32,7 +34,11 @@ export function Shop({ view, gold, buying, onBuy }: Props) {
       </ul>
 
       <Shopkeeper />
-      <p className="shop-note">{view ? restockNote(view.restockIn) : "The shopkeeper is setting out his stock."}</p>
+      <p className="shop-note">{!view
+          ? "The shopkeeper is setting out his stock."
+          : daily || view.restockIn === undefined
+            ? "New stock each morning."
+            : restockNote(view.restockIn)}</p>
     </section>
   );
 }

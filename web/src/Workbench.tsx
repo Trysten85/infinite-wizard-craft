@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type {
   EventView,
   GameEntry,
+  Ledger,
   PlayerProgress,
   ResponseType,
   ShiftBoard,
@@ -14,6 +15,7 @@ import {
   buy,
   chooseJob,
   combine,
+  endDay,
   fetchEvent,
   fetchPlayer,
   fetchShift,
@@ -25,10 +27,12 @@ import {
   type Earned,
 } from "./api";
 import { Board, type BubbleEffect } from "./Board";
+import { visitorCue } from "./day";
 import { besideTarget, clampToBoard, newBubbleId, parseBoard, spawnPoint, type Bubble, type Size } from "./bubbles";
 import { EntryBubble } from "./EntryBubble";
 import { EventCard, type EventEnding } from "./EventCard";
 import { Gold } from "./Gold";
+import { NightLedger } from "./NightLedger";
 import { OrderBoard, type ShiftChoice } from "./OrderBoard";
 import { Organizer } from "./Organizer";
 import { parseOrganize, serializeOrganize } from "./organize";
@@ -109,6 +113,9 @@ export function Workbench({ player, onLeave }: { player: string; onLeave: () => 
   const [ordersOpen, setOrdersOpen] = useState(false);
   const [shiftResult, setShiftResult] = useState<ShiftResult | null>(null);
   const [shiftBusy, setShiftBusy] = useState(false);
+  // The night ledger on show: the one night just brought, or last night's, asked for again.
+  const [ledger, setLedger] = useState<{ page: Ledger; fresh: boolean } | null>(null);
+  const [dayBusy, setDayBusy] = useState(false);
   const [bubbles, setBubbles] = useState<Bubble[]>([]);
   // False until the saved board has been read, so the empty first render never overwrites it.
   const [loaded, setLoaded] = useState(false);
@@ -138,6 +145,8 @@ export function Workbench({ player, onLeave }: { player: string; onLeave: () => 
   const pages = usePageTurn();
   // The level last shown, kept outside state so that requests finishing out of order agree on it.
   const shownLevel = useRef(1);
+  // The day and the time of day last shown, kept the same way, so each noon and dusk is said once.
+  const shownDay = useRef<{ number: number; phase: string } | null>(null);
   const boardKey = `iwc-board:${player}`;
 
   const byId = new Map(entries.map((entry) => [entry.id, entry]));
@@ -155,6 +164,7 @@ export function Workbench({ player, onLeave }: { player: string; onLeave: () => 
           setEntries(found.entries);
           setProgress(found.progress);
           shownLevel.current = found.progress.level;
+          shownDay.current = found.progress.day ? { number: found.progress.day.number, phase: found.progress.day.phase } : null;
           // A focus saved on a board from before it became the corner spellbook is left off.
           const loose = found.entries.filter((entry) => entry.kind !== "focus");
           setBubbles(parseBoard(localStorage.getItem(boardKey), new Set(loose.map((entry) => entry.id))));
@@ -194,7 +204,7 @@ export function Workbench({ player, onLeave }: { player: string; onLeave: () => 
   }
 
   // Takes in the player's new standing after an action, and announces what the action earned.
-  function earn({ rewards, progress: next }: Earned) {
+  function earn({ rewards, progress: next, night }: Earned) {
     const fresh: Toast[] = rewards.quests.map((quest) => ({
       id: `quest-${quest.id}`,
       label: "Quest complete:",
@@ -209,8 +219,40 @@ export function Workbench({ player, onLeave }: { player: string; onLeave: () => 
         name: `Level ${next.level}`,
       });
     shownLevel.current = next.level;
+    // Noon and dusk, as the sun reaches them. A new day says so with its ledger instead.
+    const was = shownDay.current;
+    if (next.day && was && was.number === next.day.number && was.phase !== next.day.phase) {
+      if (next.day.phase === "afternoon")
+        fresh.push({ id: `noon-${next.day.number}`, label: "Noon:", name: next.shiftReady ? "orders are on the board" : "half the day is gone" });
+      if (next.day.phase === "evening")
+        fresh.push({
+          id: `dusk-${next.day.number}`,
+          label: "Dusk:",
+          name: `${next.day.candles} ${next.day.candles === 1 ? "candle" : "candles"} to spend this evening`,
+        });
+    }
+    shownDay.current = next.day ? { number: next.day.number, phase: next.day.phase } : null;
     setProgress(next);
     if (fresh.length > 0) setToasts((current) => [...current, ...fresh]);
+    if (night) {
+      // Morning comes with the ledger: the shop has new stock, and yesterday's orders are gone.
+      setLedger({ page: night, fresh: true });
+      restock();
+      readShift();
+    }
+  }
+
+  // Goes to bed, or calls it a day before dusk. The server decides which, and what follows.
+  async function goToBed() {
+    setDayBusy(true);
+    setError("");
+    try {
+      earn(await endDay(player));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setDayBusy(false);
+    }
   }
 
   function boardSize(): Size {
@@ -479,8 +521,8 @@ export function Workbench({ player, onLeave }: { player: string; onLeave: () => 
     setEventBusy("responding");
     setError("");
     try {
-      const { rewards, progress: standing, ...result } = await respondToEvent(player, type, event.beat);
-      earn({ rewards, progress: standing });
+      const { rewards, progress: standing, night, ...result } = await respondToEvent(player, type, event.beat);
+      earn({ rewards, progress: standing, night });
       if (result.next) {
         // The conversation goes on. Its next part carries everything said so far.
         setEvent(result.next);
@@ -533,7 +575,11 @@ export function Workbench({ player, onLeave }: { player: string; onLeave: () => 
   // Someone is waiting if the server has an event ready, or the player put one aside.
   const someoneWaiting = !eventOpen && (event !== null || progress.eventReady);
   // An event has been earned and the server is still writing it: none to go, and none ready.
-  const someoneComing = loaded && event === null && !progress.eventReady && progress.eventIn === 0;
+  // Once the day is served a visitor is only seen from dusk, so before then there is no one to wait on.
+  const day = progress.day;
+  const someoneComing = loaded && event === null && !progress.eventReady && progress.eventIn === 0 && (!day || day.phase === "evening");
+  // How a visitor the player hasn't met yet is offered. One already let in can be gone back to at any time.
+  const visitor = day && event === null ? visitorCue(day) : null;
 
   // The server only says an event is ready in answer to something, so a player sitting idle
   // would never hear. While one is on its way, ask now and then until it arrives.
@@ -648,7 +694,7 @@ export function Workbench({ player, onLeave }: { player: string; onLeave: () => 
   }
 
   return (
-    <main className="workbench">
+    <main className={`workbench ${day?.phase ?? ""}`}>
       <div className="board-column">
         <header className="topbar">
           <h1>Infinite Wizard Craft</h1>
@@ -721,6 +767,9 @@ export function Workbench({ player, onLeave }: { player: string; onLeave: () => 
             jobDrag={dragged?.kind !== "job" ? "none" : drag.zone === "job" ? "over" : "dragging"}
             jobRef={jobRef}
             onOpenOrders={openOrders}
+            dayBusy={dayBusy}
+            onEndDay={goToBed}
+            onShowLedger={() => setLedger(day?.lastLedger ? { page: day.lastLedger, fresh: false } : null)}
           />
           <div className="toasts">
             {error && (
@@ -731,15 +780,18 @@ export function Workbench({ player, onLeave }: { player: string; onLeave: () => 
                 </button>
               </p>
             )}
-            {someoneWaiting && (
-              <button
-                className="event-waiting"
-                disabled={eventBusy !== ""}
-                onClick={() => (event ? setEventOpen(true) : showEvent("waiting"))}
-              >
-                Someone is at your stall. See who it is.
-              </button>
-            )}
+            {someoneWaiting &&
+              (visitor && visitor.kind !== "sit" ? (
+                <p className="event-coming">{visitor.text}</p>
+              ) : (
+                <button
+                  className="event-waiting"
+                  disabled={eventBusy !== ""}
+                  onClick={() => (event ? setEventOpen(true) : showEvent("waiting"))}
+                >
+                  {visitor ? visitor.text : "Someone is at your stall. See who it is."}
+                </button>
+              ))}
             {someoneComing && !someoneWaiting && <p className="event-coming">Someone is on their way…</p>}
             <div role="status">
               {toasts.map((toast) => (
@@ -765,6 +817,7 @@ export function Workbench({ player, onLeave }: { player: string; onLeave: () => 
             <OrderBoard
               board={shift}
               problem={shiftProblem}
+              day={day}
               result={shiftResult}
               busy={shiftBusy}
               onWork={work}
@@ -782,6 +835,8 @@ export function Workbench({ player, onLeave }: { player: string; onLeave: () => 
               onClose={closeEvent}
             />
           )}
+          {/* A visitor who took the last candle is heard out first. The ledger waits for their card to close. */}
+          {ledger && !(event && eventOpen) && <NightLedger ledger={ledger.page} fresh={ledger.fresh} onClose={() => setLedger(null)} />}
         </Board>
       </div>
 
@@ -813,7 +868,7 @@ export function Workbench({ player, onLeave }: { player: string; onLeave: () => 
                 onInspect={(entry) => setSelectedId(entry.id)}
               />
             ) : (
-              <Shop view={shop} gold={progress.gold} buying={buying} onBuy={buyFromShop} />
+              <Shop view={shop} gold={progress.gold} buying={buying} daily={!!day} onBuy={buyFromShop} />
             )}
           </div>
         </div>
