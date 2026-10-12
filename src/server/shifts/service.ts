@@ -1,7 +1,8 @@
+import { shiftOpen } from "../../shared/day";
 import type { GameEntry, Rewards, ShiftBoard, ShiftOrder, ShiftResult } from "../../shared/schema";
-import { payFor, rankFor, rankView, resolveQuality, shiftIn } from "../../shared/shifts";
+import { payFor, rankFor, rankView, resolveQuality } from "../../shared/shifts";
 import { RuleError } from "../combiner";
-import { craftedCount } from "../crafted";
+import type { DayService, DayTurn } from "../day";
 import type { GameData } from "../gameData";
 import type { ProgressService } from "../progress";
 import type { Store, StoredShiftOrder } from "../store";
@@ -10,17 +11,19 @@ import { chosenFrom, optionsFor, resultLine, stockOrder } from "./orders";
 export type ShiftService = ReturnType<typeof createShifts>;
 
 // Saves work shifts and serves them. The rules live elsewhere: src/shared/shifts.ts judges a
-// shift and works out its pay, and orders.ts builds orders and options. This keeps each player's
-// board, pays out, and writes the log.
+// shift and works out its pay, orders.ts builds orders and options, and the day says when a
+// shift is open: one a day, from noon until night. This keeps each player's board, pays out, and
+// writes the log.
 export function createShifts(deps: {
   data: GameData;
   store: Store;
   progress: ProgressService;
+  day: DayService;
   listDiscovered: (player: string) => GameEntry[];
   // A number from 0 up to, not including, 1. Tests pass their own so shifts are repeatable.
   random?: () => number;
 }) {
-  const { data, store, progress, listDiscovered, random = Math.random } = deps;
+  const { data, store, progress, day, listDiscovered, random = Math.random } = deps;
   const rules = data.balance.shifts;
 
   const toOrder = (order: StoredShiftOrder): ShiftOrder => ({ id: order.id, text: order.text, tags: order.tags, tier: order.tier });
@@ -46,16 +49,14 @@ export function createShifts(deps: {
 
   function board(player: string): ShiftBoard {
     const at = situation(player);
-    const untilShift = shiftIn(craftedCount(store, player), store.getStats(player).shiftAt, rules);
     if (!at) {
-      // No job taken up: nothing to show but the wait, which only starts counting with a job.
-      return { job: null, rank: null, ready: false, shiftIn: untilShift, slots: { base: "", method: "", touch: "" }, orders: [], options: { base: [], method: [], touch: [] }, rules };
+      // No job taken up: there is no board to show.
+      return { job: null, rank: null, ready: false, slots: { base: "", method: "", touch: "" }, orders: [], options: { base: [], method: [], touch: [] }, rules };
     }
     return {
       job: at.job,
       rank: rankView(store.countShifts(player, at.job.id), rules),
-      ready: untilShift === 0,
-      shiftIn: untilShift,
+      ready: shiftOpen(day.today(player), data.balance.day, true),
       slots: { base: at.skin.base.name, method: at.skin.method.name, touch: at.skin.touch.name },
       orders: ordersFor(player, at).map(toOrder),
       options: at.options,
@@ -65,12 +66,12 @@ export function createShifts(deps: {
 
   // Works one order. The page says which order and what to fill it with, and nothing else:
   // the quality, the pay, and the line are all decided here.
-  function work(player: string, choice: { order: number; base: string; method: string; touch?: string | null }): { result: ShiftResult; rewards: Rewards } {
+  function work(player: string, choice: { order: number; base: string; method: string; touch?: string | null }): { result: ShiftResult; rewards: Rewards } & DayTurn {
     const at = situation(player);
     if (!at) throw new RuleError("Take up a job before you work a shift.", "no-job");
-    const crafted = craftedCount(store, player);
-    const wait = shiftIn(crafted, store.getStats(player).shiftAt, rules);
-    if (wait > 0) throw new RuleError(`Your next shift opens after ${wait} more ${wait === 1 ? "discovery" : "discoveries"}.`, "shift-not-ready");
+    const today = day.today(player);
+    if (today.shiftDone) throw new RuleError("You have worked today's shift. New orders come at noon tomorrow.", "shift-not-ready");
+    if (!shiftOpen(today, data.balance.day, true)) throw new RuleError("The order board opens at noon.", "shift-not-ready");
     const order = ordersFor(player, at).find((item) => item.id === choice.order);
     if (!order) throw new RuleError("That order is not on your board.");
     const chosen = chosenFrom(at.options, choice);
@@ -86,12 +87,13 @@ export function createShifts(deps: {
     if (pay.gold !== 0) store.addLedger(player, pay.gold, "shift", String(shiftId));
     if (pay.rep !== 0) store.changeStats(player, { rep: pay.rep });
     store.finishShiftOrder(order.id);
-    store.setShiftAt(player, crafted);
 
     const shiftsDone = store.countShifts(player, at.job.id);
     const rankUp = rankFor(shiftsDone, rules).id !== at.rank.id ? rankView(shiftsDone, rules) : null;
     // The shift's XP can finish a quest or raise a level, which settling pays out.
-    return { result: { order: toOrder(order), quality: { id: quality.id, name: quality.name }, line, ...pay, rankUp }, rewards: progress.settle(player) };
+    const rewards = progress.settle(player);
+    // A shift takes a piece of the day, and can bring dusk on.
+    return { result: { order: toOrder(order), quality: { id: quality.id, name: quality.name }, line, ...pay, rankUp }, rewards, ...day.after(player, "shift") };
   }
 
   return { board, work };

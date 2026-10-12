@@ -3,20 +3,22 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { createApp } from "../src/server/app";
-import { craftedCount } from "../src/server/crafted";
 import { openStore } from "../src/server/store";
 import { QUALITIES, type ShiftBoard, type ShiftOrder } from "../src/shared/schema";
 import { payFor } from "../src/shared/shifts";
-import { data, newGame } from "./helpers";
+import { data, DUSK, newGame, NOON } from "./helpers";
 
 const rules = data.balance.shifts;
+const { shiftNotches } = data.balance.day;
 type Game = ReturnType<typeof newGame>;
 
-// A player who has discovered two jobs and taken up the first of those named.
+// A player who has discovered two jobs and taken up the first of those named. It is noon, so
+// the order board is open.
 function working(job = "blacksmith", seed = 1): Game {
   const game = newGame(seed);
   for (const id of ["person", "forge", "blacksmith", "farmer"]) game.store.addDiscovery("ann", id);
   game.progress.chooseJob("ann", job);
+  game.setDay("ann", { sun: NOON });
   return game;
 }
 
@@ -26,8 +28,8 @@ function fill(board: ShiftBoard, order: ShiftOrder) {
   return { order: order.id, base: best("base"), method: best("method"), touch: best("touch") };
 }
 
-// Opens the next shift without waiting on discoveries.
-const reopen = (game: Game, player = "ann") => game.store.setShiftAt(player, -1000);
+// Opens the next shift without playing through to the next noon.
+const reopen = (game: Game, player = "ann") => game.setDay(player, { sun: NOON, shiftDone: false });
 
 describe("the order board", () => {
   it("is empty until a job is taken up", () => {
@@ -37,10 +39,10 @@ describe("the order board", () => {
     expect(game.progress.getProgress("ann")).toMatchObject({ shiftReady: false });
   });
 
-  it("shows a full board for the job taken up, open at once, with the job's own names and staples", () => {
+  it("shows a full board for the job taken up, open from noon, with the job's own names and staples", () => {
     const game = working();
     const board = game.shifts.board("ann");
-    expect(board).toMatchObject({ job: { id: "blacksmith", name: "Blacksmith" }, rank: { id: "apprentice", shifts: 0 }, ready: true, shiftIn: 0 });
+    expect(board).toMatchObject({ job: { id: "blacksmith", name: "Blacksmith" }, rank: { id: "apprentice", shifts: 0 }, ready: true });
     expect(board.orders).toHaveLength(rules.board);
     expect(board.slots).toEqual({ base: "Metal", method: "Method", touch: "Finish" });
     expect(board.options.base.map((option) => option.id)).toContain("staple:scrap-iron");
@@ -48,7 +50,7 @@ describe("the order board", () => {
     expect(board.options.method.map((option) => option.id)).not.toContain("staple:fold");
     expect(board.rules).toEqual(rules);
     for (const order of board.orders) expect(order.tags.length).toBeGreaterThanOrEqual(2);
-    expect(game.progress.getProgress("ann")).toMatchObject({ shiftReady: true, shiftIn: 0 });
+    expect(game.progress.getProgress("ann")).toMatchObject({ shiftReady: true, day: { shiftDone: false } });
   });
 
   it("offers the player's own things that fit, beside the staples", () => {
@@ -155,36 +157,67 @@ describe("working a shift", () => {
   });
 });
 
-describe("when the next shift opens", () => {
-  it("is after a set number of things made by combining, and not before", () => {
-    const game = working();
-    const first = game.shifts.board("ann");
-    game.shifts.work("ann", fill(first, first.orders[0]!));
-    expect(game.shifts.board("ann")).toMatchObject({ ready: false, shiftIn: rules.every });
-    expect(game.progress.getProgress("ann")).toMatchObject({ shiftReady: false, shiftIn: rules.every });
+describe("the day's shift", () => {
+  const workOne = (game: Game) => {
     const board = game.shifts.board("ann");
-    expect(() => game.shifts.work("ann", fill(board, board.orders[0]!))).toThrowError(expect.objectContaining({ code: "shift-not-ready" }));
+    return game.shifts.work("ann", fill(board, board.orders[0]!));
+  };
 
-    const things = [...data.entries.values()].filter((entry) => entry.kind === "material").map((entry) => entry.id);
-    const fresh = things.filter((id) => !game.store.getDiscoveries("ann").includes(id));
-    for (const id of fresh.slice(0, rules.every - 1)) game.store.addDiscovery("ann", id);
-    expect(game.shifts.board("ann")).toMatchObject({ ready: false, shiftIn: 1 });
-    game.store.addDiscovery("ann", fresh[rules.every - 1]!);
-    expect(game.shifts.board("ann")).toMatchObject({ ready: true, shiftIn: 0 });
-    expect(game.progress.getProgress("ann").shiftReady).toBe(true);
-    const open = game.shifts.board("ann");
-    expect(game.shifts.work("ann", fill(open, open.orders[0]!)).result.gold).toBeGreaterThan(0);
+  it("opens at noon and not before", () => {
+    const game = working();
+    game.setDay("ann", { sun: NOON - 1 });
+    expect(game.shifts.board("ann")).toMatchObject({ ready: false });
+    expect(game.shifts.board("ann").orders).toHaveLength(rules.board);
+    expect(game.progress.getProgress("ann").shiftReady).toBe(false);
+    expect(() => workOne(game)).toThrowError(expect.objectContaining({ code: "shift-not-ready", message: expect.stringMatching(/opens at noon/) }));
+    game.setDay("ann", { sun: NOON });
+    expect(game.shifts.board("ann").ready).toBe(true);
+    expect(workOne(game).result.gold).toBeGreaterThan(0);
   });
 
-  it("is not brought on by buying things or being given them", () => {
-    const { store } = newGame();
-    store.addDiscovery("ann", "mud");
-    expect(craftedCount(store, "ann")).toBe(1);
-    store.addLedger("ann", -5, "shop", "iron");
-    store.addDiscovery("ann", "iron");
-    store.addLedger("ann", 0, "gift", "glass");
-    store.addDiscovery("ann", "glass");
-    expect(craftedCount(store, "ann")).toBe(1);
+  it("is one a day, and moves the sun on", () => {
+    const game = working();
+    const worked = workOne(game);
+    expect(worked).toMatchObject({ night: null, dusk: null });
+    expect(game.day.today("ann")).toMatchObject({ sun: NOON + shiftNotches, shiftDone: true });
+    expect(game.shifts.board("ann").ready).toBe(false);
+    expect(game.progress.getProgress("ann")).toMatchObject({ shiftReady: false, day: { shiftDone: true } });
+    expect(() => workOne(game)).toThrowError(expect.objectContaining({ code: "shift-not-ready", message: expect.stringMatching(/worked today's shift/) }));
+    // Still shut that evening, and open again from the next noon.
+    game.dusk("ann");
+    expect(game.shifts.board("ann").ready).toBe(false);
+    game.day.end("ann");
+    expect(game.progress.getProgress("ann")).toMatchObject({ shiftReady: false, day: { number: 2, shiftDone: false } });
+    game.setDay("ann", { sun: NOON });
+    expect(workOne(game).result.gold).toBeGreaterThan(0);
+  });
+
+  it("is not saved up: days without a shift leave only today's", () => {
+    const game = working();
+    for (let night = 0; night < 3; night++) {
+      game.dusk("ann");
+      game.day.end("ann");
+    }
+    game.setDay("ann", { sun: NOON });
+    workOne(game);
+    expect(() => workOne(game)).toThrowError(expect.objectContaining({ code: "shift-not-ready" }));
+    expect(game.store.listShifts("ann")).toHaveLength(1);
+  });
+
+  it("brings dusk on when it carries the sun there, and can still be worked in the evening", () => {
+    const late = working();
+    late.setDay("ann", { sun: DUSK - shiftNotches });
+    const worked = workOne(late);
+    expect(worked.night).toBeNull();
+    expect(data.dayText.dusk).toContain(worked.dusk);
+    expect(late.progress.getProgress("ann").day).toMatchObject({ phase: "evening", sun: DUSK, candles: 3 });
+
+    const evening = working();
+    evening.setDay("ann", { sun: DUSK, oil: 2 });
+    expect(evening.shifts.board("ann").ready).toBe(true);
+    expect(workOne(evening)).toMatchObject({ night: null, dusk: null });
+    // A shift is not a discovery, so it burns none of the midnight oil.
+    expect(evening.day.today("ann")).toMatchObject({ sun: DUSK, oil: 2, shiftDone: true });
   });
 });
 
@@ -215,7 +248,7 @@ describe("rank", () => {
 
 describe("the shift routes", () => {
   const post = (body: unknown) => ({ method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-  const appFor = (game: Game) => createApp(game.combiner, { progress: game.progress, shop: game.shop, events: game.events, shifts: game.shifts });
+  const appFor = (game: Game) => createApp(game.combiner, { progress: game.progress, shop: game.shop, day: game.day, events: game.events, shifts: game.shifts });
 
   it("serve the board and work an order from it", async () => {
     const game = working();
@@ -228,7 +261,8 @@ describe("the shift routes", () => {
     const body = (await worked.json()) as Record<string, any>;
     expect(body.result).toMatchObject({ order: { id: board.orders[0]!.id }, quality: { id: expect.any(String), name: expect.any(String) }, line: expect.any(String), rankUp: null });
     expect(body.rewards).toMatchObject({ gold: expect.any(Number), quests: expect.any(Array) });
-    expect(body.progress).toMatchObject({ shiftReady: false, shiftIn: rules.every });
+    expect(body).toMatchObject({ night: null, dusk: null });
+    expect(body.progress).toMatchObject({ shiftReady: false, day: { shiftDone: true, sun: NOON + shiftNotches } });
     expect(body.shift).toMatchObject({ ready: false, rank: { shifts: 1 } });
     expect(body.shift.orders).toHaveLength(rules.board);
   });
@@ -258,13 +292,11 @@ describe("a saved game from before shifts", () => {
     const path = join(dir, "game.db");
     const first = openStore(path);
     first.changeStats("ann", { rep: 3 });
-    expect(first.getStats("ann").shiftAt).toBeNull();
     const orderId = first.addShiftOrder("ann", { job: "blacksmith", tags: ["metal", "forging"], tier: 0, text: "A hinge." });
     first.addShift("ann", { job: "blacksmith", orderTags: ["metal"], inputs: ["staple:scrap-iron", "staple:hammer"], quality: "good", line: "It does the job.", gold: 10, xp: 10, rep: 0 });
-    first.setShiftAt("ann", 4);
     first.close();
     const second = openStore(path);
-    expect(second.getStats("ann")).toMatchObject({ rep: 3, shiftAt: 4 });
+    expect(second.getStats("ann")).toMatchObject({ rep: 3 });
     expect(second.listOpenShiftOrders("ann", "blacksmith").map((order) => order.id)).toEqual([orderId]);
     expect(second.countShifts("ann", "blacksmith")).toBe(1);
     expect(second.getShiftXp("ann")).toBe(10);

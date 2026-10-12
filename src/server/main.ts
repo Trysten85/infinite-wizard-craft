@@ -8,6 +8,7 @@ import { PLAYER_MARKER } from "./bakePace";
 import { createCombiner } from "./combiner";
 import { createMadeFrom } from "./comboContext";
 import { createComboGenerator } from "./comboGenerator";
+import { createDay } from "./day";
 import { createEvents } from "./events/service";
 import { createModelEventWriter } from "./events/writer";
 import { loadGameData } from "./gameData";
@@ -18,6 +19,7 @@ import { RECIPE_KEY_FILE, renderRecipeKey } from "./recipeKey";
 import { createShifts } from "./shifts/service";
 import { createShop } from "./shop";
 import { openStore } from "./store";
+import { createTown } from "./town";
 
 const root = process.cwd();
 const port = Number(process.env.PORT ?? 3001);
@@ -55,11 +57,13 @@ if (blocklist.size === 0) console.warn("Blocklist.md not found or empty: generat
 const combiner = createCombiner({ data, store, generate, blocklist });
 // Events are written whole before the player hears of them, so one is only "ready" once it exists.
 const progress = createProgress({ data, store, listDiscovered: combiner.listDiscovered, eventsWrittenAhead: true });
+const day = createDay({ data, store, progress });
+const town = createTown({ data, store, progress, day, listDiscovered: combiner.listDiscovered });
 const shop = createShop({ data, store, progress, listDiscovered: combiner.listDiscovered });
 const writer = createModelEventWriter({ client: turns.inBackground(createModelClient(model, "events")), log: store.logModelCall, voice, blocklist });
-const events = createEvents({ data, store, progress, listDiscovered: combiner.listDiscovered, writer, writeAhead: true });
-const shifts = createShifts({ data, store, progress, listDiscovered: combiner.listDiscovered });
-const app = createApp(combiner, { progress, shop, events, shifts });
+const events = createEvents({ data, store, progress, day, listDiscovered: combiner.listDiscovered, writer, writeAhead: true });
+const shifts = createShifts({ data, store, progress, day, listDiscovered: combiner.listDiscovered });
+const app = createApp(combiner, { progress, shop, day, town, events, shifts });
 
 serve({ fetch: app.fetch, port }, () => {
   const effort = model.effort.combos ? `, ${model.effort.combos} effort for combinations and ${model.effort.events} for events` : "";

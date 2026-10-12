@@ -23,7 +23,9 @@ if (command === "delete-person" && id) {
 } else {
   const stats = store.getStats(player);
   const people = store.listPeople(player);
-  console.log(`${player}: rep ${stats.rep}, ${stats.eventPoints} points toward the next event\n`);
+  const day = store.getDay(player);
+  const seen = day.visitorDay === day.state.number ? "has seen today's visitor" : "has not seen today's visitor";
+  console.log(`${player}: rep ${stats.rep}, day ${day.state.number} with the sun at ${day.state.sun}, ${seen}\n`);
   console.log("People");
   for (const person of people) {
     const flag = person.flag ? `, follow-up "${person.flag}" from day ${person.flagDay}` : "";

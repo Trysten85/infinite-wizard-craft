@@ -1,10 +1,10 @@
 import type { GameEntry, Rewards, ShopSlot, ShopView } from "../shared/schema";
 import { RuleError } from "./combiner";
-import { craftedCount } from "./crafted";
 import { levelForSpellTier, type GameData } from "./gameData";
 import { buildPath } from "./paths";
 import { repBandFor, type ProgressService } from "./progress";
 import type { Store } from "./store";
+import { perksGiven, standingBuildings } from "./town";
 
 export type ShopService = ReturnType<typeof createShop>;
 
@@ -25,6 +25,23 @@ export function createShop(deps: {
 
   const pickRandom = <T>(items: T[]): T | undefined => items[Math.floor(random() * items.length)];
 
+  // What the town gives the shop. There is no shop until a building opens one, a later tier of
+  // it adds the tailored shelves, and a later one still takes a share off every price.
+  function standingOf(player: string) {
+    const built = standingBuildings(data, store, player);
+    return {
+      open: perksGiven(built, "opens-shop").length > 0,
+      tailored: perksGiven(built, "shop-shelves").some(({ perk }) => perk.shelves === "tailored"),
+      discount: Math.min(1, perksGiven(built, "shop-discount").reduce((total, { perk }) => total + perk.share, 0)),
+    };
+  }
+  const opener = [...data.buildings.values()].find((building) => building.tiers[0]?.perks.some((perk) => perk.type === "opens-shop"));
+
+  function refuseIfShut(player: string): void {
+    if (standingOf(player).open) return;
+    throw new RuleError(opener ? `There is no shop in town yet. A ${opener.name} would open one.` : "There is no shop in town yet.", "no-shop");
+  }
+
   // The shop sells materials and spells the player does not have. Elements, schools, jobs, and
   // the focus are progression and are never for sale.
   function pool(have: Set<string>): GameEntry[] {
@@ -44,7 +61,7 @@ export function createShop(deps: {
       store.setPrice(player, entry.id, base);
     }
     const shift = repBandFor(store.getStats(player).rep, data.balance).shopPrice;
-    return Math.max(1, Math.round(base * (1 + shift)));
+    return Math.max(1, Math.round(base * (1 + shift) * (1 - standingOf(player).discount)));
   }
 
   // True if the player already holds everything some recipe for this entry asks for. There is no
@@ -124,14 +141,13 @@ export function createShop(deps: {
     };
 
     // The tailored slots choose first, so a random pick never takes the thing a player most needs.
-    // They never offer something the player could make for free in one move.
+    // They never offer something the player could make for free in one move. A shop that has
+    // not earned its tailored shelves has only the random ones.
     const hasFocus = discovered.some((entry) => entry.kind === "focus");
     const worthSelling = () => available.filter((entry) => !canMakeNow(entry, have, hasFocus));
-    const tailored = [
-      () => nextStep(discovered, have, worthSelling()),
-      () => forJob(player, have, worthSelling()),
-      () => forLevel(player, discovered, worthSelling()),
-    ];
+    const tailored = standingOf(player).tailored
+      ? [() => nextStep(discovered, have, worthSelling()), () => forJob(player, have, worthSelling()), () => forLevel(player, discovered, worthSelling())]
+      : [];
     const picks: (Pick | undefined)[] = [];
     for (const choose of tailored) {
       const pick = choose();
@@ -147,13 +163,14 @@ export function createShop(deps: {
       const entry = pick?.entry ?? pickRandom(available);
       if (entry) add(entry, pick ? "tailored" : "random", pick?.reason ?? "");
     }
-    store.setShop(player, craftedCount(store, player), slots);
+    store.setShop(player, store.getDay(player).state.number, slots);
   }
 
   function view(player: string): ShopView {
-    const crafted = craftedCount(store, player);
+    refuseIfShut(player);
+    // The shelf is stocked afresh each morning.
     let stock = store.getShop(player);
-    if (!stock || crafted - stock.stockedAt >= rules.restockEvery) {
+    if (!stock || stock.stockedDay !== store.getDay(player).state.number) {
       restock(player);
       stock = store.getShop(player)!;
     }
@@ -174,7 +191,7 @@ export function createShop(deps: {
         },
       ];
     });
-    return { slots, restockIn: rules.restockEvery - (crafted - stock.stockedAt) };
+    return { slots };
   }
 
   // Buying is a shortcut: the player gets the entry as if they had made it. It pays XP, not gold.

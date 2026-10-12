@@ -19,16 +19,16 @@ import {
 import { createEvents } from "../src/server/events/service";
 import { createFakeClient } from "../src/server/llm/fake";
 import { GenerationError } from "../src/server/llm/generate";
-import { eventThreshold, repBandFor, xpToReach } from "../src/server/progress";
+import { repBandFor, xpToReach } from "../src/server/progress";
 import type { Person } from "../src/server/store";
 import { RESPONSE_TYPES, type ResponseType, type Stakes } from "../src/shared/schema";
-import { data, newGame, TO_FIRE_BOLT } from "./helpers";
+import { data, DUSK, newGame, TO_FIRE_BOLT } from "./helpers";
 
 const rules = data.balance.events;
 const seed = (id: string) => data.eventSeeds.find((item) => item.id === id)!;
 const novice: PlayerSnapshot = { level: 1, job: null, tags: new Set(), topTags: [], hasSpell: false };
 const smith: PlayerSnapshot = { level: 3, job: { id: "blacksmith", name: "Blacksmith", wantedTags: ["forging", "metal"] }, tags: new Set(["metal", "forging", "brewing"]), topTags: ["metal", "brewing"], hasSpell: true };
-const person = (overrides: Partial<Person>): Person => ({ id: 1, name: "Pim", pronoun: null, role: "neighbor", traits: ["shy"], facts: [], fondness: 0, status: "active", firstDay: 1, lastDay: 1, flag: null, flagDay: null, ...overrides });
+const person = (overrides: Partial<Person>): Person => ({ id: 1, name: "Pim", job: null, pronoun: null, role: "neighbor", traits: ["shy"], facts: [], fondness: 0, status: "active", firstDay: 1, lastDay: 1, flag: null, flagDay: null, ...overrides });
 
 // A writer that records every brief and every spell question it is given.
 function recordingWriter() {
@@ -123,18 +123,16 @@ describe("bringing someone back", () => {
 });
 
 describe("standing", () => {
-  it("falls into bands that shift prices, request pay, and how soon events come", () => {
+  it("falls into bands that shift prices and request pay", () => {
     expect(repBandFor(-6, data.balance).name).toBe("Wobbly");
     expect(repBandFor(0, data.balance).name).toBe("Fine");
     expect(repBandFor(6, data.balance).name).toBe("Liked");
     expect(repBandFor(40, data.balance).name).toBe("Beloved");
-    expect(eventThreshold(0, data.balance)).toBe(15);
-    expect(eventThreshold(20, data.balance)).toBeLessThan(15);
-    expect(eventThreshold(-20, data.balance)).toBeGreaterThan(15);
   });
 
   it("makes the shop a little cheaper for a liked player and dearer for a wobbly one", () => {
-    const { shop, store } = newGame();
+    const { shop, store, stall } = newGame();
+    stall("ann");
     const before = shop.view("ann").slots[0]!.price;
     store.changeStats("ann", { rep: 20 });
     expect(shop.view("ann").slots[0]!.price).toBe(Math.max(1, Math.round(before * 0.9)));
@@ -148,40 +146,129 @@ async function openUp(game: ReturnType<typeof newGame>, type: ResponseType = "ge
   return (await game.events.respond(player, type)).next!;
 }
 
-describe("earning an event", () => {
-  it("takes fifteen points: one per discovery, two per quest, one per spell learned, three per level", async () => {
-    const { progress, play, store } = newGame();
-    expect(progress.getProgress("ann")).toMatchObject({ eventReady: false, eventIn: 15 });
-    await play("ann", [["fire", "air"]]);
-    // One discovery, plus the first two tutorial quests: Light is also a new element.
-    expect(progress.getProgress("ann").eventIn).toBe(15 - 1 - 2 - 2);
-    await play("ann", TO_FIRE_BOLT.slice(1, 6));
-    progress.settle("ann");
-    const before = store.getStats("ann").eventPoints;
-    await play("ann", [TO_FIRE_BOLT[6]!]);
-    progress.settle("ann");
-    // Fire Bolt: a discovery, and the cantrip quest.
-    expect(store.getStats("ann").eventPoints - before).toBe(1 + 2);
-    const learnedAt = store.getStats("ann").eventPoints;
-    progress.learn("ann", "spell-fire-bolt");
-    expect(store.getStats("ann").eventPoints - learnedAt).toBe(1 + 2);
-    expect(progress.getProgress("ann").eventReady).toBe(true);
-    // Level two, and the quest for reaching it.
-    const levelAt = store.getStats("ann").eventPoints;
-    store.changeStats("ann", { bonusXp: xpToReach(2, data.balance) });
-    progress.settle("ann");
-    expect(store.getStats("ann").eventPoints - levelAt).toBe(3 + 2);
+describe("the day's visitor", () => {
+  // Sits with tonight's visitor from the door to the end, and returns how it came out.
+  async function sitWith(game: ReturnType<typeof newGame>, player = "ann") {
+    await game.events.current(player);
+    const heart = await openUp(game, "fair", player);
+    return game.events.respond(player, heart.responses[0]!.type);
+  }
+
+  it("is written once the day is under way, and only seen from dusk", async () => {
+    const { writer, briefs } = recordingWriter();
+    const game = newGame(1, writer);
+    // Nobody is written for a player who has only opened the page.
+    expect(game.progress.getProgress("ann")).toMatchObject({ eventReady: false, eventIn: 0 });
+    expect(await game.events.current("ann")).toEqual({ event: null });
+    expect(briefs).toHaveLength(0);
+    game.setDay("ann", { sun: 1 });
+    expect(game.progress.getProgress("ann").eventReady).toBe(true);
+    expect(await game.events.current("ann")).toEqual({ event: null });
+    expect(briefs).toHaveLength(1);
+    expect(game.store.listEvents("ann")[0]).toMatchObject({ day: 1, state: "pending" });
+    await expect(game.events.respond("ann", "fair")).rejects.toMatchObject({ code: "not-evening" });
+    game.setDay("ann", { sun: DUSK - 1 });
+    expect((await game.events.current("ann")).event).toBeNull();
+    game.setDay("ann", { sun: DUSK });
+    expect((await game.events.current("ann")).event).toMatchObject({ beat: 1 });
+    expect(briefs).toHaveLength(1);
   });
 
-  it("does not count things bought in the shop", () => {
-    const { shop, store, progress } = newGame();
-    store.addLedger("ann", 1000, "quest", "test-grant");
-    progress.settle("ann");
-    const before = store.getStats("ann").eventPoints;
-    const { rewards } = shop.buy("ann", 0);
-    // A purchase can complete a tutorial quest, which pays its two points, but the purchase itself pays none.
-    expect(rewards.quests.length).toBeGreaterThan(0);
-    expect(store.getStats("ann").eventPoints - before).toBe(2 * rewards.quests.length);
+  it("takes one candle, when the conversation ends and not before", async () => {
+    const game = newGame();
+    game.dusk("ann");
+    await game.events.current("ann");
+    const candles = () => game.progress.getProgress("ann").day!.candles;
+    expect(candles()).toBe(3);
+    const reaction = await game.events.respond("ann", "fair");
+    expect(reaction).toMatchObject({ night: null, dusk: null });
+    expect(candles()).toBe(3);
+    const result = await game.events.respond("ann", reaction.next!.responses[0]!.type);
+    expect(result).toMatchObject({ next: null, night: null });
+    expect(candles()).toBe(3 - data.balance.day.costs.visitor);
+  });
+
+  it("takes its candle at the door too, if the player turns them away", async () => {
+    const game = newGame();
+    game.dusk("ann");
+    await game.events.current("ann");
+    await game.events.respond("ann", "avoid");
+    expect(game.progress.getProgress("ann").day!.candles).toBe(2);
+  });
+
+  it("brings night when it takes the last candle, and the ledger comes back with the answer", async () => {
+    const game = newGame();
+    game.dusk("ann");
+    game.setDay("ann", { spent: 2 });
+    const result = await sitWith(game);
+    expect(result.night).toMatchObject({ day: 1, fell: "last-candle" });
+    expect(game.progress.getProgress("ann").day).toMatchObject({ number: 2, sun: 0, phase: "morning", lastLedger: { day: 1 } });
+  });
+
+  it("is refused when the candles are too few, and nothing is changed", async () => {
+    const game = newGame();
+    game.dusk("ann");
+    await game.events.current("ann");
+    // Night falls with the last candle, so this cannot come about by playing yet. A later
+    // evening action that costs two will meet it.
+    game.setDay("ann", { spent: 3 });
+    await expect(game.events.respond("ann", "fair")).rejects.toMatchObject({ code: "no-candles" });
+    expect(game.store.listEvents("ann")[0]).toMatchObject({ state: "pending" });
+    expect(game.store.listPeople("ann")[0]!.fondness).toBe(0);
+  });
+
+  it("comes once a day: nobody new is written the day one has been seen", async () => {
+    const { writer, briefs } = recordingWriter();
+    const game = newGame(1, writer);
+    game.dusk("ann");
+    await sitWith(game);
+    const arrivals = () => briefs.filter((brief) => brief.stage === "arrival").length;
+    expect(arrivals()).toBe(1);
+    expect(game.progress.getProgress("ann").eventReady).toBe(false);
+    expect(await game.events.current("ann")).toEqual({ event: null });
+    expect(arrivals()).toBe(1);
+    // Bed, and the next one is written once the next morning is under way.
+    game.day.end("ann");
+    await game.events.current("ann");
+    expect(arrivals()).toBe(1);
+    game.setDay("ann", { sun: 1 });
+    expect(game.progress.getProgress("ann").eventReady).toBe(true);
+    await game.events.current("ann");
+    expect(arrivals()).toBe(2);
+    expect(game.store.listEvents("ann").map((event) => event.day)).toEqual([1, 2]);
+  });
+
+  it("waits if the player does not sit with them, and nobody new is written meanwhile", async () => {
+    const { writer, briefs } = recordingWriter();
+    const game = newGame(1, writer);
+    game.dusk("ann");
+    const first = (await game.events.current("ann")).event!;
+    game.day.end("ann");
+    game.dusk("ann");
+    game.day.end("ann");
+    expect(game.day.today("ann").number).toBe(3);
+    // The same visitor, still out of sight by day and at the door by dusk.
+    expect((await game.events.current("ann")).event).toBeNull();
+    game.dusk("ann");
+    expect((await game.events.current("ann")).event).toMatchObject({ id: first.id, beat: 1 });
+    expect(briefs.filter((brief) => brief.stage === "arrival")).toHaveLength(1);
+    // What happens with them happens today, whenever they were written.
+    await game.events.respond("ann", "avoid");
+    expect(game.store.listPeople("ann")[0]!.lastDay).toBe(3);
+    expect(game.store.getDay("ann").visitorDay).toBe(3);
+  });
+
+  it("carries on tomorrow evening if the player goes to bed in the middle of the conversation", async () => {
+    const game = newGame();
+    game.dusk("ann");
+    await game.events.current("ann");
+    const heart = await openUp(game, "fair");
+    game.day.end("ann");
+    expect((await game.events.current("ann")).event).toBeNull();
+    game.dusk("ann");
+    expect((await game.events.current("ann")).event).toEqual(heart);
+    expect((await game.events.respond("ann", heart.responses[0]!.type)).next).toBeNull();
+    expect(game.progress.getProgress("ann").day).toMatchObject({ number: 2, candles: 2 });
   });
 });
 
@@ -189,22 +276,16 @@ describe("an event", () => {
   async function ready(game: ReturnType<typeof newGame>, player = "ann") {
     await game.play(player, TO_FIRE_BOLT);
     game.progress.learn(player, "spell-fire-bolt");
+    game.dusk(player);
     return (await game.events.current(player)).event!;
   }
 
-  it("is not written until it is due", async () => {
-    const { writer, briefs } = recordingWriter();
-    const game = newGame(1, writer);
-    expect(await game.events.current("ann")).toEqual({ event: null, eventIn: 15 });
-    expect(briefs).toHaveLength(0);
-  });
-
-  it("opens with someone arriving, is written once, and spends the points that earned it", async () => {
+  it("opens with someone arriving, and is written once", async () => {
     const { writer, briefs } = recordingWriter();
     const game = newGame(1, writer);
     await game.play("ann", TO_FIRE_BOLT);
     game.progress.learn("ann", "spell-fire-bolt");
-    const points = game.store.getStats("ann").eventPoints;
+    game.dusk("ann");
     const [first, second] = await Promise.all([game.events.current("ann"), game.events.current("ann")]);
     expect(briefs).toHaveLength(1);
     expect(briefs[0]).toMatchObject({ stage: "arrival", soFar: null });
@@ -212,7 +293,6 @@ describe("an event", () => {
     expect(first.event).toMatchObject({ beat: 1, beats: 2, earlier: [], person: { returning: false } });
     // The first reaction is always one of the opening types, whatever the seed.
     expect(first.event!.responses.map((response) => response.type)).toEqual(rules.openingTypes);
-    expect(game.store.getStats("ann").eventPoints).toBe(points - 15);
     expect(game.store.listPeople("ann")).toHaveLength(1);
     expect((await game.events.current("ann")).event!.id).toBe(first.event!.id);
     expect(briefs).toHaveLength(1);
@@ -280,7 +360,7 @@ describe("an event", () => {
   it("never lets a generous response cost more gold than the player has", async () => {
     const game = newGame();
     for (const id of ["light", "mud"]) game.store.addDiscovery("ann", id);
-    game.store.changeStats("ann", { eventPoints: 30 });
+    game.dusk("ann");
     game.progress.settle("ann");
     game.store.addLedger("ann", -game.progress.getProgress("ann").gold, "shop", "test-drain");
     await game.events.current("ann");
@@ -332,31 +412,29 @@ function heldWriter() {
 const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 describe("an event written ahead", () => {
-  // A player who has just earned an event, in a game that writes events the way the server does.
+  // A player at dusk, whose visitor is still to be written, in a game that writes events the way
+  // the server does.
   function due(writer: EventWriter, store?: ReturnType<typeof newGame>["store"]) {
     const game = newGame(1, writer, { writeAhead: true, store });
-    if (!store) game.store.changeStats("ann", { eventPoints: 15 });
+    if (!store) game.dusk("ann");
     return game;
   }
 
   it("stays out of sight until all of it is written, and asking for it never waits", async () => {
     const { writer, briefs, release } = heldWriter();
     const game = due(writer);
-    expect(await game.events.current("ann")).toEqual({ event: null, eventIn: 0 });
+    expect(await game.events.current("ann")).toEqual({ event: null });
     while (game.store.listEvents("ann").length === 0) await tick();
     // The person has arrived on paper, but the player has not been told.
     expect(game.store.listEvents("ann")[0]!.state).toBe("writing");
-    expect(await game.events.current("ann")).toEqual({ event: null, eventIn: 0 });
-    expect(game.progress.getProgress("ann")).toMatchObject({ eventReady: false, eventIn: 0 });
-    expect(game.store.getStats("ann").eventPoints).toBe(15);
+    expect(await game.events.current("ann")).toEqual({ event: null });
+    expect(game.progress.getProgress("ann").eventReady).toBe(false);
     await expect(game.events.respond("ann", "fair")).rejects.toThrow(/Nothing is waiting/);
 
     release();
     await game.events.idle("ann");
     expect(game.store.listEvents("ann")[0]!.state).toBe("pending");
-    expect(game.progress.getProgress("ann")).toMatchObject({ eventReady: true, eventIn: 0 });
-    // The points are spent when the event reaches the player.
-    expect(game.store.getStats("ann").eventPoints).toBe(0);
+    expect(game.progress.getProgress("ann").eventReady).toBe(true);
     expect(briefs.map((brief) => brief.stage)).toEqual(["arrival", "heart", "heart"]);
     expect(briefs.slice(1).map((brief) => brief.soFar!.choice).sort()).toEqual(["Be fair about it.", "Be generous about it."]);
   });
@@ -421,14 +499,18 @@ describe("an event written ahead", () => {
   it("does not start a second event while one is being written or waiting", async () => {
     const { writer, briefs } = recordingWriter();
     const game = due(writer);
-    game.store.changeStats("ann", { eventPoints: 30 });
     game.events.prepare("ann");
     await game.events.idle("ann");
     game.events.prepare("ann");
     await game.events.idle("ann");
     expect(briefs.filter((brief) => brief.stage === "arrival")).toHaveLength(1);
-    // Once it is over, the points left over bring the next one.
+    // Nor once it is over, the same day. The next one is written the next morning.
     await game.events.respond("ann", "avoid");
+    game.events.prepare("ann");
+    await game.events.idle("ann");
+    expect(briefs.filter((brief) => brief.stage === "arrival")).toHaveLength(1);
+    game.day.end("ann");
+    game.setDay("ann", { sun: 1 });
     game.events.prepare("ann");
     await game.events.idle("ann");
     expect(briefs.filter((brief) => brief.stage === "arrival")).toHaveLength(2);
@@ -455,11 +537,11 @@ describe("an event written ahead", () => {
   it("is reported by the routes only once it is waiting", async () => {
     const { writer, release } = heldWriter();
     const game = due(writer);
-    const app = createApp(game.combiner, { progress: game.progress, shop: game.shop, events: game.events });
+    const app = createApp(game.combiner, { progress: game.progress, shop: game.shop, day: game.day, events: game.events });
     // Loading the page is enough to start the writing.
     const loading = (await (await app.request("/api/players/ann")).json()) as Record<string, any>;
-    expect(loading.progress).toMatchObject({ eventReady: false, eventIn: 0 });
-    expect(await (await app.request("/api/players/ann/event")).json()).toEqual({ event: null, eventIn: 0 });
+    expect(loading.progress.eventReady).toBe(false);
+    expect(await (await app.request("/api/players/ann/event")).json()).toEqual({ event: null });
     release();
     await game.events.idle("ann");
     const ready = (await (await app.request("/api/players/ann")).json()) as Record<string, any>;
@@ -573,17 +655,16 @@ describe("what a person leaves behind", () => {
     expect(game.combiner.listDiscovered("ann").map((entry) => entry.id)).not.toContain(wanted.id);
   });
 
-  it("can be a gift, which the player then has, with its XP but no discovery gold or points", async () => {
+  it("can be a gift, which the player then has, with its XP but no discovery gold, and the sun stays put", async () => {
     const { game, heart, wanted } = await untilPayoff("gift");
-    const before = { xp: game.progress.getProgress("ann").xp, points: game.store.getStats("ann").eventPoints };
+    const before = { xp: game.progress.getProgress("ann").xp, sun: game.day.today("ann").sun };
     const result = await game.events.respond("ann", helpful(heart));
     expect(result.gift).toEqual({ id: wanted.id, name: wanted.name });
     expect(game.combiner.listDiscovered("ann").map((entry) => entry.id)).toContain(wanted.id);
     const questXp = result.rewards.quests.reduce((total, quest) => total + quest.xp, 0);
     expect(game.progress.getProgress("ann").xp).toBe(before.xp + wanted.xp + questXp);
     expect(game.store.getLedgerRefs("ann", "discovery")).not.toContain(wanted.id);
-    const questPoints = result.rewards.quests.length * rules.points.quest;
-    expect(game.store.getStats("ann").eventPoints - before.points).toBe(questPoints);
+    expect(game.day.today("ann").sun).toBe(before.sun);
   });
 
   it("is dropped if the player came by the thing themselves before the visit ended", async () => {
@@ -602,13 +683,13 @@ describe("what a person leaves behind", () => {
     expect(result).toMatchObject({ request: null, hint: null, gift: null });
   });
 
-  it("pays gold, standing, fondness, and two points when a request is filled", () => {
+  it("pays gold, standing, and fondness when a request is filled", () => {
     const { store, progress } = newGame();
     const friend = store.addPerson("ann", { name: "Pim Kettlebrook", role: "neighbor", traits: ["shy"], facts: [] }, 1);
     store.addRequest("ann", { personId: friend.id, eventId: 1, entryId: "glass", ask: "Could you bring me some Glass?", gold: 30 });
     progress.settle("ann");
     expect(progress.getProgress("ann").requests[0]).toMatchObject({ from: "Pim Kettlebrook", state: "open", gold: 30 });
-    const before = { gold: progress.getProgress("ann").gold, points: store.getStats("ann").eventPoints };
+    const before = { gold: progress.getProgress("ann").gold };
 
     store.addLedger("ann", 0, "shop", "glass");
     store.addDiscovery("ann", "glass");
@@ -619,7 +700,6 @@ describe("what a person leaves behind", () => {
     expect(after.gold - before.gold).toBe(30 + rewards.quests.filter((quest) => quest.id !== "request-1").reduce((sum, quest) => sum + quest.gold, 0));
     expect(after.rep).toBe(rules.request.rep);
     expect(store.listPeople("ann")[0]!.fondness).toBe(rules.request.fondness);
-    expect(store.getStats("ann").eventPoints - before.points).toBeGreaterThanOrEqual(2);
     expect(progress.settle("ann")).toEqual({ gold: 0, quests: [] });
   });
 });
@@ -633,7 +713,7 @@ describe("a spell that solves the event", () => {
     for (const id of learned) game.store.addLearned("ann", id);
     const seen = [];
     for (let round = 0; round < rounds; round++) {
-      game.store.changeStats("ann", { eventPoints: 20 });
+      game.dusk("ann");
       await game.events.current("ann");
       const heart = await openUp(game, "fair");
       seen.push({ event: heart, stored: game.store.listEvents("ann").at(-1)! });
@@ -701,7 +781,7 @@ describe("a spell that solves the event", () => {
     for (const id of learned) game.store.addLearned("ann", id);
     // Level two, so that a first-tier spell is one the player can cast.
     game.store.changeStats("ann", { bonusXp: xpToReach(2, data.balance) });
-    const always = createEvents({ data, store: game.store, progress: game.progress, listDiscovered: game.combiner.listDiscovered, writer, random: () => 0.1 });
+    const always = createEvents({ data, store: game.store, progress: game.progress, day: game.day, listDiscovered: game.combiner.listDiscovered, writer, random: () => 0.1 });
     await always.test("ann", seedId);
     await always.respond("ann", "fair");
     return questions.flatMap((question) => question.spells.map((spell) => spell.id));
@@ -767,7 +847,7 @@ describe("a long run of events", () => {
     for (const id of ["light", "mud", "life", "tree", "spellbook", "evocation", "spell-fire-bolt", "person", "forge", "blacksmith"]) game.store.addDiscovery("ann", id);
     game.progress.chooseJob("ann", "blacksmith");
     for (let round = 0; round < 40; round++) {
-      game.store.changeStats("ann", { eventPoints: 20 });
+      game.dusk("ann");
       await game.events.current("ann");
       const heart = await openUp(game);
       await game.events.respond("ann", heart.responses[0]!.type);
@@ -958,19 +1038,24 @@ describe("the parting line", () => {
 });
 
 describe("a test event", () => {
-  it("is written at once, without needing or spending any points", async () => {
+  it("is written at once, at any time of day, and costs no candle", async () => {
     const game = newGame();
-    const before = game.store.getStats("ann").eventPoints;
     const { event, seed } = await game.events.test("ann");
     expect(event).toMatchObject({ beat: 1, beats: 2 });
     expect(data.eventSeeds.map((item) => item.id)).toContain(seed);
-    expect(game.store.getStats("ann").eventPoints).toBe(before);
-    expect(game.progress.getProgress("ann").eventReady).toBe(true);
+    expect(game.progress.getProgress("ann")).toMatchObject({ eventReady: true, day: { phase: "morning" } });
+    // It is in sight in the morning, which the day's own visitor never is.
+    expect((await game.events.current("ann")).event).toMatchObject({ id: event!.id });
     // It is a real event: it can be played through to the end.
     const heart = await openUp(game);
     const result = await game.events.respond("ann", heart.responses[0]!.type);
     expect(result.outcome).toBeTruthy();
+    expect(result).toMatchObject({ night: null, dusk: null });
     expect(game.store.listEvents("ann")[0]!.state).toBe("resolved");
+    // And it is not the day's visitor: tonight's is still to come, and no candle has gone.
+    expect(game.store.getDay("ann")).toMatchObject({ visitorDay: 0, state: { spent: 0 } });
+    game.setDay("ann", { sun: DUSK });
+    expect(game.progress.getProgress("ann").day!.candles).toBe(3);
   });
 
   it("uses the seed asked for, even one the player would not normally qualify for", async () => {
@@ -1015,30 +1100,35 @@ describe("a test event", () => {
 describe("the event routes", () => {
   const post = (body: unknown) => ({ method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
 
-  it("report when the next event is due, serve it, and play it through both beats", async () => {
+  it("hold the visitor until dusk, serve them, and play the visit through both beats for a candle", async () => {
     const game = newGame();
-    const app = createApp(game.combiner, { progress: game.progress, shop: game.shop, events: game.events });
-    expect(await (await app.request("/api/players/ann/event")).json()).toEqual({ event: null, eventIn: 15 });
+    const app = createApp(game.combiner, { progress: game.progress, shop: game.shop, day: game.day, events: game.events });
+    expect(await (await app.request("/api/players/ann/event")).json()).toEqual({ event: null });
     const player = (await (await app.request("/api/players/ann")).json()) as Record<string, any>;
-    expect(player.progress).toMatchObject({ rep: 0, repBand: "Fine", requests: [], hints: [], eventReady: false, eventIn: 15 });
+    expect(player.progress).toMatchObject({ rep: 0, repBand: "Fine", requests: [], hints: [], eventReady: false, eventIn: 0, day: { number: 1, phase: "morning" } });
+    game.setDay("ann", { sun: 1 });
+    expect(await (await app.request("/api/players/ann/event")).json()).toEqual({ event: null });
+    const early = await app.request("/api/players/ann/event/respond", post({ type: "fair" }));
+    expect(early.status).toBe(400);
+    expect(await early.json()).toMatchObject({ code: "not-evening" });
 
-    game.store.changeStats("ann", { eventPoints: 15 });
+    game.setDay("ann", { sun: DUSK });
     const waiting = (await (await app.request("/api/players/ann/event")).json()) as Record<string, any>;
     expect(waiting.event).toMatchObject({ beat: 1, beats: 2 });
     expect(JSON.stringify(waiting)).not.toContain("outcome");
 
     const reaction = (await (await app.request("/api/players/ann/event/respond", post({ type: "fair" }))).json()) as Record<string, any>;
-    expect(reaction).toMatchObject({ outcome: expect.any(String), next: { beat: 2 }, progress: { eventReady: true } });
+    expect(reaction).toMatchObject({ outcome: expect.any(String), next: { beat: 2 }, night: null, progress: { eventReady: true, day: { candles: 3 } } });
     const type = reaction.next.responses[0].type;
     const resolved = (await (await app.request("/api/players/ann/event/respond", post({ type }))).json()) as Record<string, any>;
-    expect(resolved).toMatchObject({ outcome: expect.any(String), effects: expect.any(Object), next: null, progress: { eventReady: false } });
+    expect(resolved).toMatchObject({ outcome: expect.any(String), effects: expect.any(Object), next: null, night: null, progress: { eventReady: false, day: { candles: 2 } } });
     expect((await app.request("/api/players/ann/event/respond", post({ type }))).status).toBe(400);
     expect((await app.request("/api/players/ann/event/respond", post({ type: "heroic" }))).status).toBe(400);
   });
 
   it("write a test event on request, with or without a seed", async () => {
     const game = newGame();
-    const app = createApp(game.combiner, { progress: game.progress, shop: game.shop, events: game.events });
+    const app = createApp(game.combiner, { progress: game.progress, shop: game.shop, day: game.day, events: game.events });
     const any = (await (await app.request("/api/players/ann/event/test", { method: "POST" })).json()) as Record<string, any>;
     expect(any.event.responses.length).toBeGreaterThanOrEqual(2);
     const chosen = (await (await app.request("/api/players/ann/event/test", post({ seed: "the_official" }))).json()) as Record<string, any>;

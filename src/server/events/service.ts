@@ -1,9 +1,11 @@
+import { isEvening } from "../../shared/day";
 import { RESPONSE_TYPES, type EventOutcome, type EventSeed, type EventView, type GameEntry, type HintView, type RequestView, type ResponseType, type Rewards, type Stakes } from "../../shared/schema";
 import { RuleError } from "../combiner";
+import type { DayService, DayTurn } from "../day";
 import { GenerationError } from "../llm/generate";
 import { levelForSpellTier, type GameData } from "../gameData";
 import { buildPath } from "../paths";
-import { eventThreshold, repBandFor, type ProgressService } from "../progress";
+import { repBandFor, type ProgressService } from "../progress";
 import type { Person, Store, StoredEvent } from "../store";
 import {
   eligibleSeeds,
@@ -47,8 +49,15 @@ type Payload = {
   // Second beats written ahead of time, one per way the player might first react, so that the
   // conversation never stalls while the model writes.
   drafts?: Partial<Record<ResponseType, HeartDraft>>;
+  // An event called up with the testing tool. It is not the day's visitor: it can be seen at any
+  // time of day and costs no candle.
+  free?: boolean;
 };
 type HeartDraft = Pick<Payload, "heart" | "responseTypes" | "payoff" | "spell" | "parting">;
+
+// What answering a beat gives back: how it went, anything it paid, and what it did to the day.
+type Answer = EventOutcome & { rewards: Rewards } & DayTurn;
+const NO_TURN: DayTurn = { night: null, dusk: null };
 
 const BEATS = 2;
 const HELPFUL: ResponseType[] = ["generous", "skilled", "fair"];
@@ -62,6 +71,7 @@ export function createEvents(deps: {
   data: GameData;
   store: Store;
   progress: ProgressService;
+  day: DayService;
   listDiscovered: (player: string) => GameEntry[];
   writer: EventWriter;
   // A number from 0 up to, not including, 1.
@@ -71,8 +81,10 @@ export function createEvents(deps: {
   // this is off, an event is written a beat at a time, as the page asks for it.
   writeAhead?: boolean;
 }) {
-  const { data, store, progress, listDiscovered, writer, random = Math.random, writeAhead = false } = deps;
+  const { data, store, progress, day, listDiscovered, writer, random = Math.random, writeAhead = false } = deps;
   const rules = data.balance.events;
+  // What sitting with the visitor costs, in candles.
+  const cost = data.balance.day.costs.visitor;
   // The first reactions that lead on to a second beat. Turning the person away ends it at the door.
   const carryOn = rules.openingTypes.filter((type) => type !== "avoid");
   // One piece of writing at a time per player, however many times the page asks.
@@ -84,21 +96,29 @@ export function createEvents(deps: {
   // Second beats that could not be written ahead, as "event:type". They are written when needed.
   const gaveUp = new Set<string>();
 
+  // The people who can come to the door: those met through events. Townsfolk have their own
+  // places to be, and are not counted against the size of the cast.
+  const castOf = (player: string) => store.listPeople(player).filter((person) => person.job === null);
   const pendingEvent = (player: string) => store.listEvents(player).find((event) => event.state === "pending");
   // An event still being written out of sight.
   const hiddenEvent = (player: string) => store.listEvents(player).find((event) => event.state === "writing");
   const unresolved = (player: string, id: number) => store.listEvents(player).find((event) => event.id === id && event.state !== "resolved");
+  // Whether the player had met this event's person before it. Two events can share a day, so
+  // this goes by the events and not by the day the person was first seen.
+  const metBefore = (player: string, event: StoredEvent) => store.listEvents(player).some((earlier) => earlier.id < event.id && earlier.personId === event.personId);
 
-  // Whether the player has earned their next event. Points are counted when progress is settled.
+  // Whether today's visitor is still to be written. There is one a day, written as soon as the
+  // player has made a start on it, so that the model is never set to work for someone who only
+  // opened the page. A visitor the player has not sat with yet waits, and nobody new is written
+  // until they have been seen.
   function isDue(player: string): boolean {
-    const stats = store.getStats(player);
-    return stats.eventPoints >= eventThreshold(stats.rep, data.balance);
+    const saved = store.getDay(player);
+    return saved.state.sun > 0 && saved.visitorDay < saved.state.number && store.listEvents(player).every((event) => event.state === "resolved");
   }
 
-  // The points that brought an event are spent when it reaches the player. Anything over carries on.
-  function spendPoints(player: string): void {
-    const stats = store.getStats(player);
-    store.changeStats(player, { eventPoints: -Math.min(stats.eventPoints, eventThreshold(stats.rep, data.balance)) });
+  // Whether an event may be in front of the player now. The day's visitor is only seen from dusk.
+  function inSight(player: string, event: StoredEvent): boolean {
+    return (event.payload as Payload).free === true || isEvening(day.today(player), data.balance.day);
   }
 
   // Runs a job out of sight, after any already going for this player. A failure is only logged.
@@ -197,7 +217,8 @@ export function createEvents(deps: {
   }
 
   // Beat 1. Code picks the seed, the person, and the stakes; the writer has them arrive.
-  // `forcedSeed` is for testing: that seed is used whatever the player's state, and no points are spent.
+  // `forcedSeed` is for testing: that seed is used whatever the player's state, and the event is
+  // not the day's visitor.
   // An event stored as "writing" stays out of sight until the rest of it has been written.
   // Returns the new event's id, or undefined if no seed suits the player.
   async function writeArrival(player: string, forcedSeed?: string, state: "writing" | "pending" = "pending"): Promise<number | undefined> {
@@ -206,16 +227,16 @@ export function createEvents(deps: {
     const stats = store.getStats(player);
     const snapshot = snapshotPlayer(data, discovered, level, job?.id ?? null);
     const history = store.listEvents(player);
-    const day = history.length + 1;
-    const people = store.listPeople(player);
+    const today = day.today(player).number;
+    const people = castOf(player);
     const recent: RecentEvent[] = history.map((event) => ({ seedId: event.seedId, kind: event.kind, mood: event.mood, personId: event.personId }));
     const lastPersonId = recent.at(-1)?.personId;
 
     // First, whether someone the player knows comes back. If so the event inherits from their story.
     let returning: Person | undefined;
     let seed: EventSeed | undefined;
-    const wantRepeat = forcedSeed ? forcedSeed === "repeat" : random() < repeatChance(people, day, data.balance);
-    if (wantRepeat) returning = weightedPick(returningWeights(people, day, lastPersonId), random());
+    const wantRepeat = forcedSeed ? forcedSeed === "repeat" : random() < repeatChance(people, today, data.balance);
+    if (wantRepeat) returning = weightedPick(returningWeights(people, today, lastPersonId), random());
     if (returning) {
       const firstEvent = history.find((event) => event.personId === returning!.id);
       const origin = data.eventSeeds.find((item) => item.id === firstEvent?.seedId);
@@ -241,7 +262,7 @@ export function createEvents(deps: {
       // With a full cast, a seed that allows it brings back a familiar face instead of adding one.
       const active = people.filter((person) => person.status === "active");
       if (seed.who === "any" && active.length >= rules.maxActivePeople) {
-        returning = weightedPick(returningWeights(active, day, lastPersonId), random());
+        returning = weightedPick(returningWeights(active, today, lastPersonId), random());
       }
     }
 
@@ -252,18 +273,17 @@ export function createEvents(deps: {
       seed: { premise: seed.premise, kind: seed.kind, mood: seed.mood },
       stakes,
       player: { job: snapshot.job?.name ?? null, topTags: snapshot.topTags, repBand: repBandFor(stats.rep, data.balance).name },
-      person: returning ? personRecord(player, returning, day, true) : { returning: false },
+      person: returning ? personRecord(player, returning, today, true) : { returning: false },
       recent: history.slice(-3).map((event) => event.sceneSummary),
       responseTypes: rules.openingTypes,
-      takenNames: people.map((person) => person.name),
+      takenNames: store.listPeople(player).map((person) => person.name),
     };
     const arrival = await writer.write(brief);
-    const person = returning ?? store.addPerson(player, arrival.person!, day);
-    if (returning) store.updatePerson(returning.id, { lastDay: day, flag: null });
+    const person = returning ?? store.addPerson(player, arrival.person!, today);
+    if (returning) store.updatePerson(returning.id, { lastDay: today, flag: null });
     const payload: Payload = { beat: 1, seed, arrival, openingTypes: rules.openingTypes, opening: null, heart: null, responseTypes: [], payoff: null, spell: null, parting: null };
-    const eventId = store.addEvent(player, { day, seedId: seed.id, kind: seed.kind, mood: seed.mood, personId: person.id, stakes, payload, sceneSummary: arrival.sceneSummary }, state);
-    if (forcedSeed === undefined && state === "pending") spendPoints(player);
-    return eventId;
+    if (forcedSeed !== undefined) payload.free = true;
+    return store.addEvent(player, { day: today, seedId: seed.id, kind: seed.kind, mood: seed.mood, personId: person.id, stakes, payload, sceneSummary: arrival.sceneSummary }, state);
   }
 
   // Beat 2. The person says what they are after, in answer to how the player first reacted.
@@ -360,7 +380,6 @@ export function createEvents(deps: {
     const drafts = (event.payload as Payload).drafts ?? {};
     if (carryOn.some((type) => !drafts[type] && !gaveUp.has(`${eventId}:${type}`))) return false;
     store.showEvent(eventId);
-    spendPoints(player);
     return true;
   }
 
@@ -391,7 +410,7 @@ export function createEvents(deps: {
       earlier: payload.beat === 2 && payload.opening ? [{ scene: payload.arrival.scene, chosen: payload.opening.text, outcome: payload.opening.outcome }] : [],
       kind: event.kind as EventView["kind"],
       mood: event.mood as EventView["mood"],
-      person: { name: person?.name ?? "Someone", role: person?.role ?? "visitor", returning: (person?.firstDay ?? event.day) < event.day },
+      person: { name: person?.name ?? "Someone", role: person?.role ?? "visitor", returning: metBefore(player, event) },
       scene: beat.written.scene,
       responses: beat.types.map((type) => ({
         type,
@@ -401,9 +420,10 @@ export function createEvents(deps: {
     };
   }
 
-  // The event waiting on the player. When events are written ahead this never waits: one that is
-  // due is started out of sight and turns up when it is ready. Otherwise a due event is written first.
-  async function current(player: string): Promise<{ event: EventView | null; eventIn: number }> {
+  // The event in front of the player, if there is one. The day's visitor is only seen from dusk.
+  // When events are written ahead this never waits: one that is due is started out of sight and
+  // turns up when it is ready. Otherwise a due event is written first.
+  async function current(player: string): Promise<{ event: EventView | null }> {
     progress.settle(player);
     if (writeAhead) prepare(player);
     else {
@@ -412,11 +432,13 @@ export function createEvents(deps: {
       });
     }
     const pending = pendingEvent(player);
-    return { event: pending ? toView(player, pending) : null, eventIn: progress.getProgress(player).eventIn };
+    return { event: pending && inSight(player, pending) ? toView(player, pending) : null };
   }
 
-  // Ends the event: applies what the chosen response type does, and whatever the person leaves behind.
-  function finish(player: string, event: StoredEvent, payload: Payload, choice: Choice): EventOutcome & { rewards: Rewards } {
+  // Ends the event: applies what the chosen response type does, and whatever the person leaves
+  // behind. Sitting with the day's visitor has then taken a candle, which can bring night.
+  function finish(player: string, event: StoredEvent, payload: Payload, choice: Choice): Answer {
+    const today = day.today(player).number;
     const profile = rules.effects[choice.type]!;
     const stake = rules.stakes[event.stakes as Stakes]!;
     // A generous act never costs more than the player has.
@@ -431,11 +453,12 @@ export function createEvents(deps: {
       // Kindness may be thanked later, and a problem walked away from may come back.
       const flag = choice.type === "generous" ? "thanks" : choice.type === "avoid" ? "unfinished" : null;
       const flagged = flag !== null && random() < rules.followUpChance[payload.seed.followUp];
+      // A visitor may have waited some days to be seen. What happened, happened today.
       store.updatePerson(person.id, {
         fondness,
-        lastDay: event.day,
+        lastDay: today,
         status: Math.abs(fondness) >= rules.settledAt ? "settled" : person.status,
-        ...(flagged ? { flag, flagDay: event.day + 2 } : {}),
+        ...(flagged ? { flag, flagDay: today + 2 } : {}),
       });
     }
 
@@ -466,7 +489,10 @@ export function createEvents(deps: {
     const outcome = parting && (request || hint || gift) ? `${choice.outcome} ${parting}` : choice.outcome;
     store.resolveEvent(event.id, choice.type, effects, choice.outcome);
     retireExtraPeople(player);
-    return { outcome, effects, next: null, request, hint, gift, rewards: progress.settle(player) };
+    const rewards = progress.settle(player);
+    if (payload.free) return { outcome, effects, next: null, request, hint, gift, rewards, ...NO_TURN };
+    store.setVisitorDay(player, today);
+    return { outcome, effects, next: null, request, hint, gift, rewards, ...day.spend(player, cost) };
   }
 
   // The player's answer to the beat in front of them. The story is never read to decide what it
@@ -474,7 +500,7 @@ export function createEvents(deps: {
   // beat is written in reply to it.
   // `expectedBeat` is the beat the player thinks they are answering. Passing it stops a double click from
   // answering the next beat by accident.
-  async function respond(player: string, type: ResponseType, expectedBeat?: number): Promise<EventOutcome & { rewards: Rewards }> {
+  async function respond(player: string, type: ResponseType, expectedBeat?: number): Promise<Answer> {
     // If the answer needs nothing written, it is given at once, even while a beat is being written
     // ahead in the background. Only a beat that must be written now waits its turn.
     const waiting = pendingEvent(player);
@@ -484,6 +510,9 @@ export function createEvents(deps: {
       const event = pendingEvent(player);
       if (!event) throw new RuleError("Nothing is waiting on you right now.");
       const payload = event.payload as Payload;
+      // Sitting with the day's visitor is an evening action. The candle is taken when the
+      // conversation ends, so night never falls in the middle of one.
+      if (!payload.free) day.check(player, cost);
       if (expectedBeat !== undefined && expectedBeat !== payload.beat) throw new RuleError("That moment has passed.");
       const beat = payload.beat === 2 && payload.heart ? { written: payload.heart, types: payload.responseTypes } : { written: payload.arrival, types: payload.openingTypes };
       if (!beat.types.includes(type)) throw new RuleError("That is not one of the choices.");
@@ -502,7 +531,7 @@ export function createEvents(deps: {
       store.updatePerson(person.id, { fondness: warmed.fondness });
       const next: Payload = { ...payload, ...draft, beat: 2, opening: { ...choice, effects }, drafts: undefined };
       store.updateEvent(event.id, next, next.heart!.sceneSummary);
-      return { outcome: choice.outcome, effects, next: toView(player, { ...event, payload: next }), request: null, hint: null, gift: null, rewards: progress.settle(player) };
+      return { outcome: choice.outcome, effects, next: toView(player, { ...event, payload: next }), request: null, hint: null, gift: null, rewards: progress.settle(player), ...NO_TURN };
     };
     if (!needsWriting) return answer();
     answering.add(player);
@@ -515,15 +544,16 @@ export function createEvents(deps: {
 
   // Keeps the active cast small: beyond the cap, whoever matters least to the player steps back.
   function retireExtraPeople(player: string): void {
-    const active = store.listPeople(player).filter((person) => person.status === "active");
+    const active = castOf(player).filter((person) => person.status === "active");
     const extra = active.length - rules.maxActivePeople;
     if (extra <= 0) return;
     const quietest = [...active].sort((a, b) => Math.abs(a.fondness) - Math.abs(b.fondness) || a.lastDay - b.lastDay);
     for (const person of quietest.slice(0, extra)) store.updatePerson(person.id, { status: "dormant" });
   }
 
-  // Starts writing the next event, if one is due, without making anyone wait for it. Call it
-  // after anything that can earn points. An event left half-written is carried on from there.
+  // Starts writing today's visitor, if they are still to be written, without making anyone wait
+  // for it. Call it after anything the player does: the first thing they make in a day sets it
+  // going. An event left half-written is carried on from there.
   function prepare(player: string): void {
     if (pendingEvent(player)) return;
     if (writeAhead) {
@@ -538,18 +568,18 @@ export function createEvents(deps: {
     while (jobs.has(player)) await jobs.get(player);
   }
 
-  // For testing: writes a fresh event right now, without waiting for points and without spending
-  // any. An event already waiting is thrown away first, along with a person it introduced.
-  // The result is a real event: answering it changes gold, standing, and fondness as usual.
-  async function test(player: string, seedId?: string): Promise<{ event: EventView | null; eventIn: number; seed: string }> {
+  // For testing: writes a fresh event right now, at any time of day. It is not the day's visitor
+  // and costs no candle. An event already waiting is thrown away first, along with a person it
+  // introduced. The result is a real event: answering it changes gold, standing, and fondness as usual.
+  async function test(player: string, seedId?: string): Promise<{ event: EventView | null; seed: string }> {
     const known = ["repeat", ...data.eventSeeds.map((seed) => seed.id)];
     if (seedId !== undefined && !known.includes(seedId)) throw new RuleError(`There is no event seed "${seedId}". Seeds: ${known.join(", ")}.`);
-    if (seedId === "repeat" && store.listPeople(player).length === 0) throw new RuleError("Nobody can come back yet: this player has not met anyone.");
+    if (seedId === "repeat" && castOf(player).length === 0) throw new RuleError("Nobody can come back yet: this player has not met anyone.");
     return exclusively(player, async () => {
       const waiting = pendingEvent(player);
       if (waiting) {
         store.deleteEvent(waiting.id);
-        const introduced = store.listPeople(player).find((person) => person.id === waiting.personId && person.firstDay === waiting.day);
+        const introduced = metBefore(player, waiting) ? undefined : store.listPeople(player).find((person) => person.id === waiting.personId);
         if (introduced) store.deletePerson(introduced.id);
       }
       // With no seed named, one is picked the usual way from those the player qualifies for.
@@ -560,7 +590,7 @@ export function createEvents(deps: {
       // The test event is shown as soon as it has arrived. Its second beats follow behind it.
       if (writeAhead && eventId !== undefined) inBackground(player, () => writeDrafts(player, eventId));
       const written = pendingEvent(player);
-      return { event: written ? toView(player, written) : null, eventIn: progress.getProgress(player).eventIn, seed: written?.seedId ?? seed };
+      return { event: written ? toView(player, written) : null, seed: written?.seedId ?? seed };
     });
   }
 

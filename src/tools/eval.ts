@@ -11,6 +11,7 @@ import { loadBlocklist } from "../server/blocklist";
 import { createCombiner } from "../server/combiner";
 import { createMadeFrom } from "../server/comboContext";
 import { createComboGenerator } from "../server/comboGenerator";
+import { createDay } from "../server/day";
 import { findInventedNames, renderEvalReport, type EvalCase, type EvalRun } from "../server/evalReport";
 import { createEvents } from "../server/events/service";
 import { checkParting, createModelEventWriter, type PartingQuestion } from "../server/events/writer";
@@ -68,7 +69,7 @@ async function runModel(spec: string): Promise<EvalRun> {
   const progress = createProgress({ data, store, listDiscovered: combiner.listDiscovered });
   const writer = createModelEventWriter({ client, log: store.logModelCall, voice, blocklist });
   // A fixed "random" keeps both models on the same stakes and the spell look always on.
-  const events = createEvents({ data, store, progress, listDiscovered: combiner.listDiscovered, writer, random: () => 0.1 });
+  const events = createEvents({ data, store, progress, day: createDay({ data, store, progress }), listDiscovered: combiner.listDiscovered, writer, random: () => 0.1 });
   for (const id of OWNED) store.addDiscovery(PLAYER, id);
   for (const id of ["spell-mending", "spell-prestidigitation"]) store.addLearned(PLAYER, id);
   store.saveGenerated("eval+clay", "mud", "fire", CLAY);

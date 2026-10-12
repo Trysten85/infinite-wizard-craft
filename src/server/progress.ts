@@ -1,9 +1,10 @@
 import type { Balance, GameEntry, PlayerProgress, Quest, QuestProgress, RequestView, Rewards } from "../shared/schema";
-import { shiftIn } from "../shared/shifts";
+import { dayView, shiftOpen } from "../shared/day";
+import { extraDiscoveryGold } from "../shared/town";
 import { RuleError } from "./combiner";
-import { craftedCount } from "./crafted";
 import { learnCostForTier, levelForSpellTier, type GameData } from "./gameData";
 import type { Store } from "./store";
+import { perksGiven, standingBuildings } from "./town";
 
 export type ProgressService = ReturnType<typeof createProgress>;
 
@@ -31,11 +32,6 @@ export function repBandFor(rep: number, balance: Balance) {
   return bands.findLast((band) => rep >= band.from) ?? bands[0]!;
 }
 
-// How many points the next event takes for this player. Well-liked players see events sooner.
-export function eventThreshold(rep: number, balance: Balance): number {
-  return Math.max(1, balance.events.every + repBandFor(rep, balance).eventEvery);
-}
-
 export function discoveryGold(entry: GameEntry, balance: Balance): number {
   const table = balance.discoveryGoldByTier;
   return table[Math.min(entry.tier, table.length - 1)]!;
@@ -49,8 +45,9 @@ export function createProgress(deps: {
   data: GameData;
   store: Store;
   listDiscovered: (player: string) => GameEntry[];
-  // When events are written whole before the player hears of them, one is "ready" only once it
-  // is waiting. Otherwise it is ready as soon as it is due, and written when the page asks for it.
+  // When events are written whole before the player hears of them, a visitor is "ready" only once
+  // they are waiting. Otherwise today's visitor is ready once the day is under way, and written
+  // when the page asks.
   eventsWrittenAhead?: boolean;
 }) {
   const { data, store, listDiscovered, eventsWrittenAhead = false } = deps;
@@ -126,24 +123,23 @@ export function createProgress(deps: {
   }
 
   // Pays out anything the player has earned and not yet been paid for: gold for discoveries made
-  // by combining, quests newly completed, and requests newly filled. It also counts the points
-  // those earn toward the next event. Safe to call any number of times.
+  // by combining, quests newly completed, and requests newly filled. Safe to call any number of times.
   function settle(player: string): Rewards {
     const rewards: Rewards = { gold: 0, quests: [] };
-    const { points } = data.balance.events;
-    let earned = 0;
     const discovered = listDiscovered(player);
-    // Things bought or given were not made by the player, so they pay no discovery gold or points.
+    // Things bought or given were not made by the player, so they pay no discovery gold.
     const bought = new Set([...store.getLedgerRefs(player, "shop"), ...store.getLedgerRefs(player, "gift")]);
     // What has been paid already is read once. Asking the ledger about each thing in turn is slow.
     const paid = new Set(store.getLedgerRefs(player, "discovery"));
+    // Buildings that pay extra for discoveries of their kind, as they stand at this moment.
+    const paying = perksGiven(standingBuildings(data, store, player), "discovery-gold");
     for (const entry of discovered) {
       if (starting.has(entry.id) || bought.has(entry.id) || paid.has(entry.id)) continue;
       const gold = discoveryGold(entry, data.balance);
-      if (store.addLedger(player, gold, "discovery", entry.id)) {
-        rewards.gold += gold;
-        earned += points.discovery;
-      }
+      if (!store.addLedger(player, gold, "discovery", entry.id)) continue;
+      rewards.gold += gold;
+      const extra = extraDiscoveryGold(gold, entry.tags, paying);
+      if (extra > 0 && store.addLedger(player, extra, "perk", entry.id)) rewards.gold += extra;
     }
     const lastLevel = store.getStats(player).lastLevel;
     // A quest pays once its condition is met and the player has reached its level. Its XP can
@@ -156,7 +152,6 @@ export function createProgress(deps: {
         if (!store.addLedger(player, quest.gold, "quest", quest.id)) continue;
         rewards.gold += quest.gold;
         rewards.quests.push({ id: quest.id, title: quest.title, gold: quest.gold, xp: quest.xp });
-        earned += points.quest;
         paidAny = true;
       }
       if (paidAny) state = measure(player);
@@ -176,11 +171,8 @@ export function createProgress(deps: {
       if (person) store.updatePerson(person.id, { fondness: person.fondness + data.balance.events.request.fondness });
       rewards.gold += request.gold;
       rewards.quests.push({ id: `request-${request.id}`, title: `A favor for ${person?.name ?? "a friend"}`, gold: request.gold, xp: 0 });
-      earned += points.quest;
     }
-    const levelsGained = Math.max(0, state.level - lastLevel);
-    earned += levelsGained * points.level;
-    if (earned > 0 || levelsGained > 0) store.changeStats(player, { eventPoints: earned, lastLevel: Math.max(lastLevel, state.level) });
+    if (state.level > lastLevel) store.changeStats(player, { lastLevel: state.level });
     return rewards;
   }
 
@@ -243,15 +235,18 @@ export function createProgress(deps: {
 
   function standing(player: string) {
     const stats = store.getStats(player);
-    const waiting = store.listEvents(player).some((event) => event.state === "pending");
-    const eventIn = waiting ? 0 : Math.max(0, eventThreshold(stats.rep, data.balance) - stats.eventPoints);
+    const day = store.getDay(player);
+    const events = store.listEvents(player);
+    const waiting = events.some((event) => event.state === "pending");
+    // There is one visitor a day, from the first thing the player makes that day, and one who has
+    // not been seen yet is still the one.
+    const due = day.state.sun > 0 && events.every((event) => event.state === "resolved") && day.visitorDay < day.state.number;
     const job = jobOf(player, stats.job);
-    // A shift opens every so many things made by combining, and only once a job is taken up.
-    const untilShift = shiftIn(craftedCount(store, player), stats.shiftAt, data.balance.shifts);
     return {
       job,
-      shiftReady: job !== null && untilShift === 0,
-      shiftIn: untilShift,
+      // One shift a day, from noon until night, and only once a job is taken up.
+      shiftReady: shiftOpen(day.state, data.balance.day, job !== null),
+      day: dayView(day.state, data.balance.day, { lastLedger: day.lastLedger }),
       rep: stats.rep,
       repBand: repBandFor(stats.rep, data.balance).name,
       requests: listRequestViews(player),
@@ -260,8 +255,11 @@ export function createProgress(deps: {
         recipe: hint.recipe,
         from: hint.fromName,
       })),
-      eventReady: eventsWrittenAhead ? waiting : eventIn === 0,
-      eventIn,
+      // A visitor is waiting. They are only seen from dusk, which the day says.
+      eventReady: waiting || (!eventsWrittenAhead && due),
+      // Days until the next visitor may come: 0 while today's is on the way or waiting, and 1
+      // once the player has sat with them.
+      eventIn: day.visitorDay < day.state.number ? 0 : 1,
     };
   }
 
@@ -281,7 +279,6 @@ export function createProgress(deps: {
     if (cost > gold) throw new RuleError(`Learning ${spell.name} costs ${cost} gold. You have ${gold}.`, "not-enough-gold");
     store.addLedger(player, -cost, "learn", spell.id);
     store.addLearned(player, spell.id);
-    store.changeStats(player, { eventPoints: data.balance.events.points.spell });
     return { spell, cost, rewards: settle(player) };
   }
 

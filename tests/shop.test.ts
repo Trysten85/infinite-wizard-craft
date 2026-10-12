@@ -3,7 +3,15 @@ import { createApp } from "../src/server/app";
 import { buildPath } from "../src/server/paths";
 import { xpToReach } from "../src/server/progress";
 import type { ShopSlot } from "../src/shared/schema";
-import { data, newGame, TO_FIRE_BOLT } from "./helpers";
+import { data, newGame as emptyTown, TO_FIRE_BOLT } from "./helpers";
+
+// These are tests of the shop itself, so Ann's street has a Market Stall with every shelf.
+// The stall and what it earns the shop are tested with the town.
+function newGame(...args: Parameters<typeof emptyTown>) {
+  const game = emptyTown(...args);
+  game.stall("ann");
+  return game;
+}
 
 const { shop: rules } = data.balance;
 
@@ -47,7 +55,7 @@ describe("the shelf", () => {
     for (const id of ["steam", "salt"]) close.store.addDiscovery("ann", id);
     const sulfur = data.entries.get("sulfur")!;
     const priceOf = (game: ReturnType<typeof newGame>) => {
-      game.store.setShop("ann", 0, [{ slot: 0, entryId: sulfur.id, type: "random", reason: "" }]);
+      game.store.setShop("ann", 1, [{ slot: 0, entryId: sulfur.id, type: "random", reason: "" }]);
       return game.shop.view("ann").slots[0]!.price;
     };
     expect(priceOf(fresh)).toBe(5 + 3 * 3 + 4 * 3);
@@ -56,7 +64,7 @@ describe("the shelf", () => {
 
   it("keeps the price it first showed, however close the player gets later", async () => {
     const { shop, play, store } = newGame();
-    store.setShop("ann", 0, [{ slot: 0, entryId: "sulfur", type: "random", reason: "" }]);
+    store.setShop("ann", 1, [{ slot: 0, entryId: "sulfur", type: "random", reason: "" }]);
     const first = shop.view("ann").slots[0]!.price;
     await play("ann", [["fire", "water"], ["steam", "earth"]]);
     expect(shop.view("ann").slots[0]!.price).toBe(first);
@@ -65,34 +73,36 @@ describe("the shelf", () => {
 });
 
 describe("restocking", () => {
-  it("keeps the same shelf until five new things have been made by combining", async () => {
-    const { shop, play } = newGame();
-    const ids = () => shop.view("ann").slots.map((slot) => slot.entry.id);
+  it("keeps the same shelf all day, however much is made, and has a new one each morning", async () => {
+    const game = newGame();
+    const ids = () => game.shop.view("ann").slots.map((slot) => slot.entry.id);
     const first = ids();
-    expect(shop.view("ann").restockIn).toBe(5);
-    await play("ann", TO_FIRE_BOLT.slice(0, 4));
+    await game.craft("ann", TO_FIRE_BOLT);
+    game.dusk("ann");
+    // Sold or made since, the shelf is still the one put out this morning.
     expect(ids()).toEqual(first);
-    expect(shop.view("ann").restockIn).toBe(1);
-    await play("ann", [TO_FIRE_BOLT[4]!]);
-    expect(ids()).not.toEqual(first);
-    expect(shop.view("ann").restockIn).toBe(5);
+    expect(game.store.getShop("ann")!.stockedDay).toBe(1);
+    game.day.end("ann");
+    const second = ids();
+    expect(second).not.toEqual(first);
+    expect(game.store.getShop("ann")!.stockedDay).toBe(2);
+    expect(ids()).toEqual(second);
   });
 
-  it("does not count purchases, and leaves a bought slot empty until then", async () => {
+  it("leaves a bought slot empty until the morning", async () => {
     const { shop, store } = newGame();
     store.addLedger("ann", 1000, "quest", "test-grant");
     const before = shop.view("ann");
     shop.buy("ann", 0);
     shop.buy("ann", 1);
     const after = shop.view("ann");
-    expect(after.restockIn).toBe(before.restockIn);
     expect(after.slots.map((slot) => slot.entry.id)).toEqual(before.slots.map((slot) => slot.entry.id));
     expect(after.slots.map((slot) => slot.sold)).toEqual([true, true, false, false, false, false]);
   });
 
   it("marks a slot sold once the player makes that thing themselves", async () => {
     const { shop, play, store } = newGame();
-    store.setShop("ann", 0, [{ slot: 0, entryId: "mud", type: "random", reason: "" }]);
+    store.setShop("ann", 1, [{ slot: 0, entryId: "mud", type: "random", reason: "" }]);
     expect(shop.view("ann").slots[0]!.sold).toBe(false);
     await play("ann", [["water", "earth"]]);
     expect(shop.view("ann").slots[0]!.sold).toBe(true);
@@ -202,8 +212,8 @@ describe("the routes", () => {
   const post = (body: unknown) => ({ method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
 
   it("add progress to the player and combine responses without changing the old fields", async () => {
-    const { combiner, progress, shop } = newGame();
-    const app = createApp(combiner, { progress, shop });
+    const { combiner, progress, shop, day } = newGame();
+    const app = createApp(combiner, { progress, shop, day });
     const player = (await (await app.request("/api/players/ann")).json()) as Record<string, any>;
     expect(player.entries.map((entry: { id: string }) => entry.id)).toEqual(data.balance.startingEntries);
     expect(player.progress).toMatchObject({ gold: 0, level: 1 });
@@ -222,11 +232,10 @@ describe("the routes", () => {
   });
 
   it("serve the shelf, sell from it, and refuse what the rules refuse", async () => {
-    const { combiner, progress, shop, store } = newGame();
-    const app = createApp(combiner, { progress, shop });
+    const { combiner, progress, shop, day, store } = newGame();
+    const app = createApp(combiner, { progress, shop, day });
     const shelf = (await (await app.request("/api/players/ann/shop")).json()) as Record<string, any>;
     expect(shelf.slots).toHaveLength(6);
-    expect(shelf.restockIn).toBe(5);
 
     const refused = await app.request("/api/players/ann/shop/buy", post({ slot: 0 }));
     expect(refused.status).toBe(400);
@@ -240,8 +249,8 @@ describe("the routes", () => {
   });
 
   it("learn a spell through the learn route", async () => {
-    const { combiner, progress, shop, play } = newGame();
-    const app = createApp(combiner, { progress, shop });
+    const { combiner, progress, shop, day, play } = newGame();
+    const app = createApp(combiner, { progress, shop, day });
     await play("ann", TO_FIRE_BOLT);
     const learned = (await (await app.request("/api/players/ann/learn", post({ spell: "spell-fire-bolt" }))).json()) as Record<string, any>;
     expect(learned.progress.learned).toEqual(["spell-fire-bolt"]);

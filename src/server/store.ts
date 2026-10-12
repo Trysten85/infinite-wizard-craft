@@ -1,5 +1,6 @@
 import { DatabaseSync } from "node:sqlite";
-import type { GameEntry } from "../shared/schema";
+import { firstDay, type DayState } from "../shared/day";
+import type { GameEntry, Ledger } from "../shared/schema";
 
 export type CachedCombo = { key: string; a: string; b: string; resultId: string; createdAt: string };
 
@@ -13,12 +14,25 @@ export type ModelCall = {
   error?: string;
 };
 
-export type LedgerReason = "quest" | "discovery" | "learn" | "shop" | "event" | "request" | "gift" | "shift";
+// "perk" is the extra a building pays for a discovery of its kind. "plot" and "building" are
+// gold spent on the town, and "takings" what the town pays back at night.
+export type LedgerReason = "quest" | "discovery" | "learn" | "shop" | "event" | "request" | "gift" | "shift" | "perk" | "plot" | "building" | "takings";
 
 // `bonusXp` makes up the difference when a change to the game's numbers would otherwise have
 // taken away a level the player had already reached.
 // `job` is the job the player has taken up, or null if they have not chosen one.
-export type PlayerStats = { rep: number; eventPoints: number; lastLevel: number; bonusXp: number; job: string | null; shiftAt: number | null };
+export type PlayerStats = { rep: number; lastLevel: number; bonusXp: number; job: string | null };
+
+// Where a player is in their day, and what is kept beside it.
+export type SavedDay = {
+  state: DayState;
+  // The player's level when this day began. A level gained since then earns a deed at night.
+  dawnLevel: number;
+  // The last day on which the player finished with a visitor, or 0. There is one visitor a day.
+  visitorDay: number;
+  // Last night's ledger, kept until the next night.
+  lastLedger: Ledger | null;
+};
 
 // An order on a player's board, for one job. It stays until it is filled.
 export type StoredShiftOrder = { id: number; job: string; tags: string[]; tier: number; text: string; state: "open" | "done" };
@@ -38,10 +52,13 @@ export type StoredShift = {
 
 export type Pronoun = "she" | "he" | "they";
 
-// Someone the player has met in an event. Name, pronoun, role, traits, and facts are fixed once written.
+// Someone the player knows: met in an event, or a townsperson who arrived with their job.
+// Name, pronoun, role, traits, and facts are fixed once written.
 export type Person = {
   id: number;
   name: string;
+  // The job a townsperson came with. Null for someone met in an event.
+  job: string | null;
   // Null for someone met before pronouns were recorded.
   pronoun: Pronoun | null;
   role: string;
@@ -73,6 +90,10 @@ export type StoredEvent = {
   sceneSummary: string;
   outcomeSummary: string | null;
 };
+
+// A plot the player owns on the street, counted from 0, and what stands on it. `tier` is 0
+// while the plot is empty.
+export type StoredPlot = { plot: number; building: string | null; tier: number };
 
 export type StoredRequest = { id: number; personId: number; eventId: number; entryId: string; ask: string; gold: number; state: "open" | "done" };
 export type StockedSlot = { slot: number; entryId: string; type: "random" | "tailored"; reason: string; sold: boolean };
@@ -218,6 +239,13 @@ export function openStore(path: string) {
       rep INTEGER NOT NULL,
       at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
+    CREATE TABLE IF NOT EXISTS town_plots (
+      player TEXT NOT NULL,
+      plot INTEGER NOT NULL,
+      building TEXT,
+      tier INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY (player, plot)
+    );
     CREATE TABLE IF NOT EXISTS model_calls (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -234,10 +262,41 @@ export function openStore(path: string) {
   // Columns added since the first saved games were made.
   const personColumns = db.prepare("PRAGMA table_info(people)").all().map((row) => row.name as string);
   if (!personColumns.includes("pronoun")) db.exec("ALTER TABLE people ADD COLUMN pronoun TEXT");
+  if (!personColumns.includes("job")) db.exec("ALTER TABLE people ADD COLUMN job TEXT");
   const statColumns = db.prepare("PRAGMA table_info(player_stats)").all().map((row) => row.name as string);
   if (!statColumns.includes("bonus_xp")) db.exec("ALTER TABLE player_stats ADD COLUMN bonus_xp INTEGER NOT NULL DEFAULT 0");
   if (!statColumns.includes("job")) db.exec("ALTER TABLE player_stats ADD COLUMN job TEXT");
   if (!statColumns.includes("shift_at")) db.exec("ALTER TABLE player_stats ADD COLUMN shift_at INTEGER");
+
+  // The day. A save from before there were days opens at dawn on day 1, with the shelf it last
+  // saw. What it remembers of earlier days (when each event happened, when each person was last
+  // seen, when a follow-up falls due) was counted in events. Those numbers are moved back to end
+  // at day 0: their order and the gaps between them are kept, and all of them lie before day 1.
+  if (!statColumns.includes("day")) {
+    transaction(() => {
+      db.exec(`
+        ALTER TABLE player_stats ADD COLUMN day INTEGER NOT NULL DEFAULT 1;
+        ALTER TABLE player_stats ADD COLUMN sun INTEGER NOT NULL DEFAULT 0;
+        ALTER TABLE player_stats ADD COLUMN shift_done INTEGER NOT NULL DEFAULT 0;
+        ALTER TABLE player_stats ADD COLUMN early INTEGER NOT NULL DEFAULT 0;
+        ALTER TABLE player_stats ADD COLUMN candles_spent INTEGER NOT NULL DEFAULT 0;
+        ALTER TABLE player_stats ADD COLUMN oil INTEGER NOT NULL DEFAULT 0;
+        ALTER TABLE player_stats ADD COLUMN dawn_level INTEGER NOT NULL DEFAULT 1;
+        ALTER TABLE player_stats ADD COLUMN visitor_day INTEGER NOT NULL DEFAULT 0;
+        ALTER TABLE player_stats ADD COLUMN last_ledger TEXT;
+        UPDATE player_stats SET dawn_level = last_level;
+        UPDATE shop_state SET stocked_at = 1;
+      `);
+      const latest = db
+        .prepare("SELECT player, MAX(day) AS day FROM (SELECT player, day FROM events UNION ALL SELECT player, last_day AS day FROM people) GROUP BY player")
+        .all();
+      for (const row of latest) {
+        const [player, back] = [row.player as string, row.day as number];
+        db.prepare("UPDATE events SET day = day - ? WHERE player = ?").run(back, player);
+        db.prepare("UPDATE people SET first_day = first_day - ?, last_day = last_day - ?, flag_day = flag_day - ? WHERE player = ?").run(back, back, back, player);
+      }
+    });
+  }
 
   function transaction<T>(fn: () => T): T {
     db.exec("BEGIN");
@@ -402,8 +461,8 @@ export function openStore(path: string) {
       return result.changes === 1;
     },
 
-    // The player's shelf, and how many combined discoveries they had when it was stocked.
-    getShop(player: string): { stockedAt: number; slots: StockedSlot[] } | undefined {
+    // The player's shelf, and the day it was stocked on.
+    getShop(player: string): { stockedDay: number; slots: StockedSlot[] } | undefined {
       const state = db.prepare("SELECT stocked_at FROM shop_state WHERE player = ?").get(player);
       if (!state) return undefined;
       const slots = db
@@ -416,13 +475,13 @@ export function openStore(path: string) {
           reason: row.reason as string,
           sold: row.sold === 1,
         }));
-      return { stockedAt: state.stocked_at as number, slots };
+      return { stockedDay: state.stocked_at as number, slots };
     },
 
-    setShop(player: string, stockedAt: number, slots: Omit<StockedSlot, "sold">[]): void {
+    setShop(player: string, stockedDay: number, slots: Omit<StockedSlot, "sold">[]): void {
       transaction(() => {
         db.prepare("DELETE FROM shop_stock WHERE player = ?").run(player);
-        db.prepare("INSERT OR REPLACE INTO shop_state (player, stocked_at) VALUES (?, ?)").run(player, stockedAt);
+        db.prepare("INSERT OR REPLACE INTO shop_state (player, stocked_at) VALUES (?, ?)").run(player, stockedDay);
         const insert = db.prepare("INSERT INTO shop_stock (player, slot, entry_id, type, reason) VALUES (?, ?, ?, ?, ?)");
         for (const slot of slots) insert.run(player, slot.slot, slot.entryId, slot.type, slot.reason);
       });
@@ -443,30 +502,76 @@ export function openStore(path: string) {
     },
 
     getStats(player: string): PlayerStats {
-      const row = db.prepare("SELECT rep, event_points, last_level, bonus_xp, job, shift_at FROM player_stats WHERE player = ?").get(player);
+      const row = db.prepare("SELECT rep, last_level, bonus_xp, job FROM player_stats WHERE player = ?").get(player);
       return row
-        ? { rep: row.rep as number, eventPoints: row.event_points as number, lastLevel: row.last_level as number, bonusXp: row.bonus_xp as number, job: (row.job as string | null) ?? null, shiftAt: (row.shift_at as number | null) ?? null }
-        : { rep: 0, eventPoints: 0, lastLevel: 1, bonusXp: 0, job: null, shiftAt: null };
+        ? { rep: row.rep as number, lastLevel: row.last_level as number, bonusXp: row.bonus_xp as number, job: (row.job as string | null) ?? null }
+        : { rep: 0, lastLevel: 1, bonusXp: 0, job: null };
     },
 
-    // Adds to a player's running totals. `lastLevel` is set outright when given.
     // Records the job a player has taken up. It stays theirs until they take up another.
     setJob(player: string, jobId: string): void {
       db.prepare("INSERT OR IGNORE INTO player_stats (player) VALUES (?)").run(player);
       db.prepare("UPDATE player_stats SET job = ? WHERE player = ?").run(jobId, player);
     },
 
-    changeStats(player: string, change: { rep?: number; eventPoints?: number; lastLevel?: number; bonusXp?: number }): void {
+    // Adds to a player's running totals. `lastLevel` is set outright when given.
+    changeStats(player: string, change: { rep?: number; lastLevel?: number; bonusXp?: number }): void {
       db.prepare("INSERT OR IGNORE INTO player_stats (player) VALUES (?)").run(player);
-      db.prepare(
-        "UPDATE player_stats SET rep = rep + ?, event_points = event_points + ?, bonus_xp = bonus_xp + ?, last_level = COALESCE(?, last_level) WHERE player = ?",
-      ).run(change.rep ?? 0, change.eventPoints ?? 0, change.bonusXp ?? 0, change.lastLevel ?? null, player);
+      db.prepare("UPDATE player_stats SET rep = rep + ?, bonus_xp = bonus_xp + ?, last_level = COALESCE(?, last_level) WHERE player = ?").run(
+        change.rep ?? 0,
+        change.bonusXp ?? 0,
+        change.lastLevel ?? null,
+        player,
+      );
     },
 
-    // Notes how many things the player had made by combining when they last worked a shift.
-    setShiftAt(player: string, crafted: number): void {
+    // Where the player is in their day. Someone never seen before is at dawn on day 1.
+    getDay(player: string): SavedDay {
+      const row = db
+        .prepare("SELECT day, sun, shift_done, early, candles_spent, oil, dawn_level, visitor_day, last_ledger FROM player_stats WHERE player = ?")
+        .get(player);
+      if (!row) return { state: firstDay(), dawnLevel: 1, visitorDay: 0, lastLedger: null };
+      return {
+        state: {
+          number: row.day as number,
+          sun: row.sun as number,
+          shiftDone: row.shift_done === 1,
+          early: row.early === 1,
+          spent: row.candles_spent as number,
+          oil: row.oil as number,
+        },
+        dawnLevel: row.dawn_level as number,
+        visitorDay: row.visitor_day as number,
+        lastLedger: row.last_ledger ? (JSON.parse(row.last_ledger as string) as Ledger) : null,
+      };
+    },
+
+    setDay(player: string, state: DayState): void {
       db.prepare("INSERT OR IGNORE INTO player_stats (player) VALUES (?)").run(player);
-      db.prepare("UPDATE player_stats SET shift_at = ? WHERE player = ?").run(crafted, player);
+      db.prepare("UPDATE player_stats SET day = ?, sun = ?, shift_done = ?, early = ?, candles_spent = ?, oil = ? WHERE player = ?").run(
+        state.number,
+        state.sun,
+        state.shiftDone ? 1 : 0,
+        state.early ? 1 : 0,
+        state.spent,
+        state.oil,
+        player,
+      );
+    },
+
+    // Night: keeps the ledger and starts the next day in one step, so that a save is never
+    // caught between the two.
+    startDay(player: string, state: DayState, dawnLevel: number, ledger: Ledger): void {
+      db.prepare("INSERT OR IGNORE INTO player_stats (player) VALUES (?)").run(player);
+      db.prepare(
+        "UPDATE player_stats SET day = ?, sun = ?, shift_done = ?, early = ?, candles_spent = ?, oil = ?, dawn_level = ?, last_ledger = ? WHERE player = ?",
+      ).run(state.number, state.sun, state.shiftDone ? 1 : 0, state.early ? 1 : 0, state.spent, state.oil, dawnLevel, JSON.stringify(ledger), player);
+    },
+
+    // Notes the day on which the player finished with a visitor.
+    setVisitorDay(player: string, day: number): void {
+      db.prepare("INSERT OR IGNORE INTO player_stats (player) VALUES (?)").run(player);
+      db.prepare("UPDATE player_stats SET visitor_day = ? WHERE player = ?").run(day, player);
     },
 
     addShiftOrder(player: string, order: Pick<StoredShiftOrder, "job" | "tags" | "tier" | "text">): number {
@@ -532,12 +637,13 @@ export function openStore(path: string) {
       return row!.xp as number;
     },
 
-    addPerson(player: string, person: Pick<Person, "name" | "role" | "traits" | "facts"> & { pronoun?: Pronoun | null }, day: number): Person {
+    addPerson(player: string, person: Pick<Person, "name" | "role" | "traits" | "facts"> & { pronoun?: Pronoun | null; job?: string | null }, day: number): Person {
       const pronoun = person.pronoun ?? null;
+      const job = person.job ?? null;
       const result = db
-        .prepare("INSERT INTO people (player, name, pronoun, role, traits, facts, first_day, last_day) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
-        .run(player, person.name, pronoun, person.role, JSON.stringify(person.traits), JSON.stringify(person.facts), day, day);
-      return { ...person, pronoun, id: Number(result.lastInsertRowid), fondness: 0, status: "active", firstDay: day, lastDay: day, flag: null, flagDay: null };
+        .prepare("INSERT INTO people (player, name, pronoun, job, role, traits, facts, first_day, last_day) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
+        .run(player, person.name, pronoun, job, person.role, JSON.stringify(person.traits), JSON.stringify(person.facts), day, day);
+      return { ...person, pronoun, job, id: Number(result.lastInsertRowid), fondness: 0, status: "active", firstDay: day, lastDay: day, flag: null, flagDay: null };
     },
 
     listPeople(player: string): Person[] {
@@ -547,6 +653,7 @@ export function openStore(path: string) {
         .map((row) => ({
           id: row.id as number,
           name: row.name as string,
+          job: (row.job as string | null) ?? null,
           pronoun: (row.pronoun as Pronoun | null) ?? null,
           role: row.role as string,
           traits: JSON.parse(row.traits as string) as string[],
@@ -652,6 +759,24 @@ export function openStore(path: string) {
 
     deleteEvent(id: number): void {
       db.prepare("DELETE FROM events WHERE id = ?").run(id);
+    },
+
+    // The plots a player owns, in order along the street.
+    listPlots(player: string): StoredPlot[] {
+      return db
+        .prepare("SELECT plot, building, tier FROM town_plots WHERE player = ? ORDER BY plot")
+        .all(player)
+        .map((row) => ({ plot: row.plot as number, building: (row.building as string | null) ?? null, tier: row.tier as number }));
+    },
+
+    // Gives the player a plot. Returns false if they already had it.
+    addPlot(player: string, plot: number): boolean {
+      return db.prepare("INSERT OR IGNORE INTO town_plots (player, plot) VALUES (?, ?)").run(player, plot).changes === 1;
+    },
+
+    // Raises a building on a plot the player owns, or raises the one there to a new tier.
+    setBuilding(player: string, plot: number, building: string, tier: number): void {
+      db.prepare("UPDATE town_plots SET building = ?, tier = ? WHERE player = ? AND plot = ?").run(building, tier, player, plot);
     },
 
     addRequest(player: string, request: Omit<StoredRequest, "id" | "state">): number {
