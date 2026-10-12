@@ -369,7 +369,7 @@ quality, Cheer, and takings move.
     night, with no state saved; the choice of thing is random among what the player lacks and
     could reach. A hand on bare shelves is refused rather than wasted.
 
-### Q3 · Page · open
+### Q3 · Page · claimed by infinite-spell-craft-e6
 - **What:** the inside of a building.
 - **Depends on:** Q1 for the maths. Q2 to see it live.
 - **Guide:** "Stock and quality", "Cheer".
@@ -378,6 +378,8 @@ quality, Cheer, and takings move.
 - **Done when:** stocking feels like the order board's pick-and-match; Cheer and its band show
   on the street; the night ledger lists each building's quality beside its takings.
 - **Notes:**
+  Claimed 2026-10-12 on Trysten's word, with Q1 and Q2 in. Stocking is by dragging from the book
+  onto a shelf, with the quality preview from `previewQuality` in `src/shared/town.ts`.
 
 ---
 
@@ -562,6 +564,12 @@ Add a line: ticket id, your session name, the question. Answers are written bene
   8. **Refusal order for a raise:** the guide's level, needs, gold, then the hour, then the
      candles. And a player who turned in early cannot raise a new building that evening (one
      candle, and it takes two).
+- **Q3 · infinite-spell-craft-e6 (Page):** `previewQuality` needs `extra: { rankBonus, lifts: {
+  perks, hand, shift } }`, which `TownView` does not carry, and the page cannot work them out
+  (the rank bonus is at the player's own building only, and the hand and shift lifts are saved
+  server-side). Could `BuildingView` carry `lifts: number` (the steps already applied tonight)
+  and `rankBonus: number`, the way `turnInCandles` was added to the day? Until then the page
+  previews the change at no lift and says only whether the stock would make it better or worse.
 
 ## Log
 
