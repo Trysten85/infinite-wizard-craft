@@ -300,7 +300,7 @@ on the model's luck:
 
 - A building can always be raised: tier 1 needs are hand-written things.
 - A building can always reach Good: at least half of each building's wants are carried by things
-  with fixed recipes. Counted on 2026-10-11, every building has two or three such wants.
+  with fixed recipes. Counted on 2026-10-11, every building has at least three such wants.
 - **The last want or two must be found.** `brewing` and `enchanting` are carried by nothing with
   a fixed recipe today, and `knowledge` by one spell. A player gets them by combining: the model
   gives those tags to what it makes (26 and 77 of the 727 baked drafts carry them). Hunting for
