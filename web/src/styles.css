@@ -5,9 +5,34 @@
   --ink: #e6dfcc;
   --dim: #9c9480;
   --accent: #d19a3a;
-  --element: #b5533c;
+  --raised: #2b271d;
   --focus: #7f9bb8;
+  --school: #b48ac9;
+  --job: #7fae8f;
+  --gold: #e8bd4a;
+  --bronze: #5e5030;
+  --warn: #e0806a;
+  --page: #cdbb92;
+  --page-edge: #a8956b;
+  --page-ink: #2a2114;
+  --page-dim: #655434;
+  --page-line: rgb(60 40 15 / 0.38);
+  --oxblood: #6a2318;
+  /* Ink colours for naming a kind on the page. */
+  --kind-material: #6b4a1f;
+  --kind-spell: #5b2f8f;
+  /* The strip down the board's left side that the quest and spell boxes take up. */
+  --hud-width: 324px;
+  --el-fire: #d9623b;
+  --el-water: #4f93c4;
+  --el-earth: #9a7b4f;
+  --el-air: #bcd3dd;
+  --el-light: #ecd27a;
+  --el-life: #6fae5c;
+  --el-shadow: #7a6aa3;
+  --el-death: #9aa38b;
   color-scheme: dark;
+  scrollbar-color: var(--line) transparent;
 }
 
 * {
@@ -43,13 +68,9 @@ h2 {
   font-size: 1.1rem;
 }
 
-.topbar p {
-  margin: 4px 0 24px;
-  color: var(--dim);
-}
-
 button,
-input {
+input,
+select {
   font: inherit;
   color: inherit;
 }
@@ -85,87 +106,2094 @@ button.link {
   margin-top: 24px;
 }
 
-.name-form input {
+input,
+select {
   padding: 8px 10px;
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: 4px;
 }
 
-.bench {
+/* Workbench: the board on the left, the side panel on the right. */
+
+.workbench {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 360px;
+  height: 100dvh;
+  overflow: hidden;
+}
+
+.board-column {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.topbar {
   display: flex;
   flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 16px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--line);
+}
+
+.topbar p {
+  margin: 0;
+  color: var(--dim);
+}
+
+/* Gold */
+
+.gold {
+  display: inline-flex;
   align-items: center;
-  gap: 12px;
-  padding: 16px;
-  background: var(--panel);
-  border: 1px solid var(--line);
+  gap: 5px;
+  color: var(--gold);
+  white-space: nowrap;
+}
+
+.coin {
+  flex: none;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #fff3c4, var(--gold) 45%, #96701c);
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 0.45);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* Board */
+
+.board {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  background:
+    radial-gradient(circle, var(--line) 1px, transparent 1.5px) 0 0 / 28px 28px,
+    radial-gradient(ellipse at 60% 45%, #221d12, var(--ground) 70%);
+}
+
+.board-hint {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  margin: 0;
+  padding-left: var(--hud-width);
+  color: var(--dim);
+  pointer-events: none;
+}
+
+/* Boxes that sit on the board. They are opaque, and bubbles are drawn over them. */
+
+.hud-box {
+  z-index: 1;
+  margin: 0;
+  background: linear-gradient(180deg, #2c2719, #1f1c13);
+  border: 1px solid var(--bronze);
   border-radius: 6px;
+  box-shadow:
+    0 8px 22px rgb(0 0 0 / 0.55),
+    inset 0 0 0 1px rgb(255 240 200 / 0.04);
 }
 
-.slot {
-  min-width: 120px;
-  padding: 8px 12px;
-  border: 1px dashed var(--line);
-  border-radius: 4px;
-  color: var(--dim);
-  text-align: center;
+.hud-left {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  bottom: 12px;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: calc(var(--hud-width) - 24px);
+  pointer-events: none;
 }
 
-.slot.filled {
-  border-style: solid;
-  border-color: var(--accent);
-  color: var(--ink);
+/* The quest box: its lists scroll, and its heading and toggle stay fixed above and below them.
+   It gives up height to whatever else is in the column, down to a few lines. */
+.hud-left > .hud-box.quests {
+  display: flex;
+  flex-direction: column;
+  min-height: 7.5rem;
+  overflow: hidden;
 }
 
-.plus {
-  color: var(--dim);
+/* Minimized, the box is its heading and the active quest. */
+.hud-left > .hud-box.quests.minimized {
+  flex: none;
+  min-height: 0;
 }
 
-.error {
-  color: #e0806a;
+/* A heading that folds its box away when clicked. */
+.hud-fold {
+  cursor: pointer;
 }
 
-.result {
-  margin-top: 16px;
-  padding: 16px;
-  border-left: 3px solid var(--accent);
-  background: var(--panel);
+.hud-fold .hud-count {
+  margin-left: auto;
 }
 
-.result p {
-  margin: 0 0 6px;
-}
-
-.result-label {
+.hud-fold-button {
+  padding: 0 2px;
+  background: none;
+  border: none;
   color: var(--accent);
   font-size: 0.8rem;
-  letter-spacing: 0.1em;
+  line-height: 1;
+}
+
+.quest-lists {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.quests > .hud-head,
+.quests > .hud-more {
+  flex: none;
+}
+
+/* Each box takes what it needs, and scrolls inside itself when the two don't fit. */
+.hud-left > .hud-box {
+  flex: 0 1 auto;
+  min-height: 2.4rem;
+  overflow-y: auto;
+  pointer-events: auto;
+}
+
+.hud-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 12px;
+  background: linear-gradient(90deg, rgb(209 154 58 / 0.16), transparent 80%);
+  border-bottom: 1px solid var(--line);
+}
+
+.hud-head h2 {
+  margin: 0;
+  color: var(--accent);
+  font-size: 0.78rem;
+  letter-spacing: 0.16em;
   text-transform: uppercase;
 }
 
-.meta {
+.hud-head h2::before {
+  content: "◆";
+  margin-right: 8px;
+  font-size: 0.6rem;
+  vertical-align: 0.15em;
+}
+
+.hud-count {
+  color: var(--dim);
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.hud-empty {
+  margin: 0;
+  padding: 10px 12px;
+  color: var(--dim);
+  font-size: 0.9rem;
+}
+
+.hud-more {
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+  padding: 6px 12px;
+  background: rgb(0 0 0 / 0.2);
+  border: none;
+  border-top: 1px solid var(--line);
+  border-radius: 0;
+  color: var(--accent);
+  font-size: 0.85rem;
+}
+
+.hud-more::after {
+  content: "▾";
+}
+
+.hud-more[aria-expanded="true"]::after {
+  content: "▴";
+}
+
+/* Quests */
+
+.quest-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.quest-list li {
+  display: grid;
+  grid-template-columns: 12px 1fr auto;
+  gap: 10px;
+  align-items: start;
+  padding: 8px 12px;
+}
+
+.quest-list li.active {
+  background: rgb(209 154 58 / 0.09);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+/* A quest is a button laid out like the plain rows. Clicking an open one makes it the active quest. */
+.quest-list li.quest {
+  display: block;
+  padding: 0;
+}
+
+.quest-row {
+  display: grid;
+  grid-template-columns: 12px 1fr auto;
+  gap: 10px;
+  align-items: start;
+  width: 100%;
+  padding: 8px 12px;
+  background: none;
+  border: none;
+  border-radius: 0;
+  text-align: left;
+}
+
+.quest-row:disabled {
+  opacity: 1;
+}
+
+.quest-row:hover:not(:disabled) {
+  background: rgb(255 255 255 / 0.05);
+}
+
+.quest-text {
+  display: block;
+}
+
+.quest-mark {
+  width: 9px;
+  height: 9px;
+  margin: 6px 0 0 1px;
+  border: 1px solid var(--dim);
+  rotate: 45deg;
+}
+
+.active .quest-mark {
+  background: var(--accent);
+  border-color: var(--accent);
+  box-shadow: 0 0 8px var(--accent);
+}
+
+.locked .quest-mark {
+  border-style: dashed;
+}
+
+.done .quest-mark {
+  width: auto;
+  height: auto;
+  margin: 0;
+  border: none;
+  rotate: none;
+}
+
+.done .quest-mark::before {
+  content: "✓";
+  color: var(--el-life);
+}
+
+.quest-text {
+  margin: 0;
+  line-height: 1.3;
+}
+
+.quest-text strong,
+.quest-detail {
+  display: block;
+}
+
+.quest-detail {
+  margin-top: 2px;
   color: var(--dim);
   font-size: 0.85rem;
 }
 
-section[aria-label="Discovered"] {
-  margin-top: 32px;
+.quest-list .gold {
+  font-size: 0.9rem;
 }
 
-.tiles {
+/* What a quest pays: gold, with the XP under it. */
+.quest-pay {
+  display: grid;
+  justify-items: end;
+  gap: 2px;
+}
+
+.quest-xp,
+.quest-progress {
+  color: var(--dim);
+  font-size: 0.72rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.quest-progress {
+  display: block;
+  margin-top: 2px;
+  color: var(--accent);
+}
+
+.done .quest-text strong {
+  color: var(--dim);
+  font-weight: normal;
+  text-decoration: line-through;
+}
+
+.locked .quest-text,
+.locked .quest-pay,
+.done .quest-pay {
+  opacity: 0.55;
+}
+
+.quest-more {
+  border-top: 1px solid var(--line);
+}
+
+.quest-group {
+  margin: 0;
+  padding: 8px 12px 0;
+  color: var(--dim);
+  font-size: 0.68rem;
+  font-weight: normal;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+/* The spellbook: a fixture in the board's bottom-left corner. Spells dropped on it are learned,
+   and opening it lists the ones inside. It lifts and glows while a spell is being carried. */
+
+/* It is the last thing in the board's left column, held at the bottom. Its open pages take
+   their height from the quest log above, which shrinks to make room. */
+.spellbook {
+  flex: none;
+  display: grid;
+  justify-items: start;
+  gap: 6px;
+  margin-top: auto;
+  pointer-events: none;
+}
+
+.spellbook > * {
+  pointer-events: auto;
+}
+
+.spellbook-book {
+  display: grid;
+  justify-items: center;
+  padding: 0 4px 4px;
+  background: none;
+  border: none;
+  line-height: 1.2;
+}
+
+.spellbook-book svg {
+  display: block;
+  /* Five screen pixels to each art pixel. */
+  width: 170px;
+  filter: drop-shadow(0 5px 6px rgb(0 0 0 / 0.65));
+  transition: filter 0.2s;
+}
+
+.spellbook-book:hover svg,
+.spellbook-book[aria-expanded="true"] svg {
+  filter: drop-shadow(0 0 8px color-mix(in srgb, var(--school) 80%, transparent));
+}
+
+.spellbook-name {
+  color: var(--accent);
+  font-size: 0.78rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.spellbook-count {
+  color: var(--dim);
+  font-size: 0.75rem;
+}
+
+.spellbook.dragging svg {
+  filter: drop-shadow(0 0 10px var(--school));
+  animation: book-lift 0.8s steps(2) infinite;
+}
+
+.spellbook.over svg {
+  filter: drop-shadow(0 0 14px var(--gold));
+  translate: 0 -4px;
+}
+
+/* Working on something that was tried with it. */
+.spellbook.busy svg {
+  filter: drop-shadow(0 0 12px var(--school));
+  animation: book-lift 0.5s steps(2) infinite;
+}
+
+.book-motes rect {
+  opacity: 0;
+}
+
+.spellbook.dragging .book-motes rect,
+.spellbook.over .book-motes rect,
+.spellbook.busy .book-motes rect {
+  animation: glint 1.2s step-end infinite;
+}
+
+.book-motes rect:nth-child(2) {
+  animation-delay: -0.3s;
+}
+
+.book-motes rect:nth-child(3) {
+  animation-delay: -0.6s;
+}
+
+.book-motes rect:nth-child(4) {
+  animation-delay: -0.9s;
+}
+
+.book-motes rect:nth-child(5) {
+  animation-delay: -0.45s;
+}
+
+.spellbook-note {
+  margin: 0 0 0 4px;
+  padding: 3px 10px;
+  background: var(--panel);
+  border: 1px solid var(--school);
+  border-radius: 4px;
+  color: var(--ink);
+  font-size: 0.72rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.spellbook.over .spellbook-note {
+  border-color: var(--gold);
+  color: var(--gold);
+}
+
+.spellbook.arriving .spellbook-book {
+  /* Grows from its corner, so the flourish never spills past the edge of the board. */
+  transform-origin: left bottom;
+  animation: book-arrive 1.1s steps(8);
+}
+
+.spellbook-pages {
+  width: 100%;
+  max-height: 38vh;
+  overflow-y: auto;
+}
+
+@keyframes book-lift {
+  50% {
+    translate: 0 -3px;
+  }
+}
+
+@keyframes book-arrive {
+  from {
+    opacity: 0;
+    scale: 0.2;
+    translate: 0 40px;
+  }
+  60% {
+    opacity: 1;
+    scale: 1.2;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spellbook svg,
+  .spellbook .book-motes rect,
+  .spellbook.arriving .spellbook-book {
+    animation: none;
+  }
+}
+
+.spell-list {
+  margin: 0;
+  padding: 4px 0;
+  list-style: none;
+}
+
+.spell-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0 10px;
+  align-items: baseline;
+  width: 100%;
+  padding: 6px 12px;
+  background: none;
+  border: none;
+  border-radius: 0;
+  text-align: left;
+}
+
+.spell-row:hover {
+  background: rgb(255 255 255 / 0.04);
+}
+
+.spell-row.selected {
+  box-shadow: inset 3px 0 0 var(--school);
+}
+
+.spell-name {
+  font-style: italic;
+}
+
+.spell-meta {
+  color: var(--dim);
+  font-size: 0.8rem;
+}
+
+.spell-school {
+  text-transform: capitalize;
+}
+
+.spell-row.gated .spell-name {
+  opacity: 0.5;
+}
+
+.spell-gate {
+  grid-column: 1 / -1;
+  color: var(--warn);
+  font-size: 0.75rem;
+}
+
+/* Status: gold, reputation, and level in the board's bottom-right corner */
+
+.status {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
   display: flex;
   flex-wrap: wrap;
+  justify-content: flex-end;
+  max-width: calc(100% - 24px);
+}
+
+/* The job cell is where a job bubble is dropped. It lights up while one is being carried. */
+.stat.job {
+  min-width: 9.5rem;
+  border-radius: 5px 0 0 5px;
+}
+
+.stat.job .stat-value {
+  font-size: 1.05rem;
+}
+
+/* The job name is the way in to the order board. Under it, a line says when orders are waiting. */
+.job-open {
+  display: grid;
+  gap: 2px;
+  padding: 0;
+  background: none;
+  border: none;
+  text-align: left;
+}
+
+.job-name {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.job-open:hover .job-name {
+  color: var(--accent);
+}
+
+.job-cue {
+  color: var(--dim);
+  font-size: 0.72rem;
+}
+
+.job-cue.ready {
+  color: var(--gold);
+  letter-spacing: 0.04em;
+}
+
+.job-cue.ready::before {
+  content: "◆ ";
+}
+
+.stat.job.orders-ready {
+  box-shadow: inset 0 -2px 0 var(--gold);
+}
+
+.job-empty,
+.job-invite {
+  color: var(--dim);
+  font-size: 0.85rem;
+  font-style: italic;
+}
+
+.stat.job.dragging,
+.stat.job.over {
+  outline: 2px dashed var(--job);
+  outline-offset: -4px;
+}
+
+.stat.job.over {
+  background: color-mix(in srgb, var(--job) 22%, transparent);
+  outline-style: solid;
+}
+
+.stat.job.over .job-invite {
+  color: var(--ink);
+}
+
+.stat {
+  padding: 8px 16px 10px;
+}
+
+.stat + .stat {
+  border-left: 1px solid var(--line);
+}
+
+.stat dt {
+  color: var(--dim);
+  font-size: 0.66rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.stat-value {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  margin: 2px 0 0;
+  font-size: 1.3rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.stat .coin,
+.stat-icon {
+  width: 16px;
+  height: 16px;
+}
+
+.stat-icon {
+  fill: var(--focus);
+}
+
+.level-badge {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  background: rgb(209 154 58 / 0.14);
+  border: 2px solid var(--accent);
+  border-radius: 50%;
+  color: var(--accent);
+  font-size: 1.05rem;
+}
+
+.xp {
+  display: grid;
+  gap: 4px;
+  min-width: 130px;
+}
+
+.xp-bar {
+  height: 6px;
+  overflow: hidden;
+  background: var(--ground);
+  border-radius: 3px;
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+
+.xp-bar span {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, #8a6420, var(--accent));
+  transition: width 0.4s;
+}
+
+.xp-count {
+  color: var(--dim);
+  font-size: 0.72rem;
+}
+
+.rep-band {
+  color: var(--dim);
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+}
+
+/* Remounted whenever its number changes, which replays the bump. */
+.bump {
+  animation: stat-bump 0.4s ease-out;
+}
+
+/* Messages along the top of the board's open area */
+
+.toasts {
+  position: absolute;
+  top: 12px;
+  left: var(--hud-width);
+  right: 140px;
+  z-index: 3;
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.toasts [role="status"] {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+}
+
+.toast,
+.notice {
+  margin: 0;
+  padding: 8px 16px;
+  background: var(--panel);
+  border: 1px solid var(--gold);
+  border-radius: 4px;
+  box-shadow: 0 6px 18px rgb(0 0 0 / 0.5);
+}
+
+.toast {
+  animation: toast-fade 4s ease-in forwards;
+}
+
+.toast-xp {
+  color: var(--dim);
+  font-size: 0.85em;
+}
+
+.notice {
+  border-color: var(--warn);
+  color: var(--warn);
+  pointer-events: auto;
+}
+
+/* Events: a note pinned over the board when someone turns up at the stall */
+
+.event-waiting {
+  padding: 8px 16px;
+  background: var(--panel);
+  border-color: var(--gold);
+  box-shadow: 0 6px 18px rgb(0 0 0 / 0.5);
+  color: var(--gold);
+  pointer-events: auto;
+}
+
+.event-coming {
+  margin: 0;
+  padding: 6px 14px;
+  background: var(--panel);
+  border: 1px dashed var(--line);
+  border-radius: 4px;
+  color: var(--dim);
+  font-style: italic;
+}
+
+.event-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  padding: 16px;
+  overflow-y: auto;
+  background: rgb(10 7 4 / 0.62);
+}
+
+.event-card {
+  /* Auto margins centre the card when it fits, and let a tall one scroll from its top. */
+  margin: auto;
+  width: min(100%, 40rem);
+  padding: 18px 22px 20px;
+  background: radial-gradient(ellipse at 40% 20%, #dccca4, var(--page) 70%, var(--page-edge) 140%);
+  border: 1px solid var(--page-edge);
+  border-radius: 4px;
+  box-shadow:
+    0 14px 40px rgb(0 0 0 / 0.7),
+    inset 0 0 0 4px rgb(255 250 235 / 0.18);
+  color: var(--page-ink);
+}
+
+.event-card:focus {
+  outline: none;
+}
+
+.event-card p {
+  margin: 0;
+}
+
+.event-head {
+  padding-bottom: 10px;
+  border-bottom: 3px double var(--page-line);
+  color: var(--page-dim);
+}
+
+.event-head h2 {
+  margin: 0;
+  color: var(--page-ink);
+  font-size: 1.3rem;
+}
+
+.event-card .event-kind {
+  margin-top: 4px;
+  font-size: 0.68rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+/* The conversation, as turns: theirs on the left, the player's on the right. */
+.event-talk {
+  display: grid;
+  gap: 8px;
+  padding: 12px 0;
+}
+
+.turn {
+  max-width: 90%;
+  padding: 8px 12px;
+  border-radius: 10px;
+  scroll-margin-top: 12px;
+}
+
+.turn.them {
+  justify-self: start;
+  background: rgb(255 250 235 / 0.34);
+  border: 1px solid var(--page-line);
+  border-bottom-left-radius: 2px;
+}
+
+.turn.you {
+  justify-self: end;
+  background: var(--page-ink);
+  border-bottom-right-radius: 2px;
+  color: var(--page);
+}
+
+.turn-who,
+.turn-effects {
+  display: block;
+  font-size: 0.66rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.turn-who {
+  opacity: 0.7;
+}
+
+.turn-effects {
+  margin-top: 4px;
+  color: var(--page-dim);
+}
+
+.event-responses {
+  display: grid;
   gap: 8px;
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
-.tile.element {
-  border-left: 3px solid var(--element);
+.event-response {
+  display: block;
+  width: 100%;
+  padding: 8px 12px;
+  background: rgb(255 250 235 / 0.3);
+  border-color: var(--page-line);
+  border-left: 4px solid var(--page-dim);
+  text-align: left;
 }
 
-.tile.focus {
-  border-left: 3px solid var(--focus);
+.event-response:hover:not(:disabled) {
+  background: rgb(255 250 235 / 0.55);
+  border-color: var(--page-ink);
+}
+
+.response-type {
+  display: block;
+  color: var(--page-dim);
+  font-size: 0.68rem;
+  font-weight: bold;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.event-response.generous {
+  border-left-color: #a8782a;
+}
+
+.event-response.skilled {
+  border-left-color: var(--kind-spell);
+}
+
+.event-response.fair {
+  border-left-color: #4f6b45;
+}
+
+.event-response.sharp {
+  border-left-color: var(--oxblood);
+}
+
+.event-card .event-foot {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 12px;
+  color: var(--page-dim);
+  font-style: italic;
+}
+
+.event-foot .link {
+  margin-left: auto;
+  color: var(--page-dim);
+  font-style: normal;
+}
+
+.event-effects {
+  display: flex;
+  gap: 8px;
+  margin: 0;
+}
+
+.event-effects div {
+  flex: 1;
+  padding: 6px 8px;
+  border: 1px solid var(--page-line);
+  border-radius: 4px;
+  text-align: center;
+}
+
+.event-effects dt {
+  color: var(--page-dim);
+  font-size: 0.66rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.event-effects dd {
+  margin: 0;
+  font-size: 1.2rem;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Gold is drawn pale for the dark board. On paper it takes the colour of the text round it. */
+.event-effects .gold {
+  color: inherit;
+}
+
+.event-effects .up dd {
+  color: #3d6b34;
+}
+
+.event-effects .down dd {
+  color: var(--oxblood);
+}
+
+.event-card .event-parting {
+  margin-top: 12px;
+  padding: 8px 12px;
+  border: 1px dashed var(--page-line);
+  border-radius: 4px;
+}
+
+.event-done {
+  display: block;
+  margin: 14px 0 0 auto;
+  background: var(--page-ink);
+  border-color: var(--page-ink);
+  color: var(--page);
+}
+
+/* The order board: a wider note than an event, laid out as orders, three slots, and a preview. */
+
+.event-card.order-board {
+  width: min(100%, 52rem);
+}
+
+.rank-progress {
+  display: block;
+  font-size: 0.8rem;
+}
+
+.order-step {
+  margin: 14px 0 6px;
+  color: var(--page-dim);
+  font-size: 0.72rem;
+  font-weight: normal;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.order-list,
+.order-slot ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.order-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  gap: 8px;
+}
+
+.order-ticket,
+.slot-option {
+  display: grid;
+  gap: 6px;
+  width: 100%;
+  height: 100%;
+  padding: 8px 10px;
+  background: rgb(255 250 235 / 0.3);
+  border-color: var(--page-line);
+  text-align: left;
+}
+
+.order-ticket:hover,
+.slot-option:hover {
+  background: rgb(255 250 235 / 0.55);
+  border-color: var(--page-ink);
+}
+
+/* A chosen order or option is inked in. */
+.order-ticket[aria-pressed="true"],
+.slot-option[aria-pressed="true"] {
+  background: var(--page-ink);
+  border-color: var(--page-ink);
+  color: var(--page);
+}
+
+.order-asks,
+.option-tags {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+
+.order-tier,
+.option-tier {
+  margin-left: auto;
+  font-size: 0.68rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  opacity: 0.75;
+}
+
+/* A tag is a small label. One the chosen order asks for is filled, so matches can be spotted. */
+.tag {
+  padding: 0 6px;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  line-height: 1.5;
+  opacity: 0.6;
+}
+
+.tag.wanted {
+  background: var(--oxblood);
+  border-color: var(--oxblood);
+  color: #f6ead0;
+  opacity: 1;
+}
+
+.tag.none {
+  border-style: dashed;
+}
+
+.order-slots {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.order-slot h4 {
+  margin: 0 0 4px;
+  font-size: 1rem;
+}
+
+.slot-optional,
+.slot-group h5 {
+  color: var(--page-dim);
+  font-size: 0.66rem;
+  font-weight: normal;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.slot-group h5 {
+  margin: 6px 0 4px;
+}
+
+/* A long list of the player's own things scrolls inside its slot. */
+.slot-group ul {
+  display: grid;
+  gap: 4px;
+  max-height: 13rem;
+  overflow-y: auto;
+  scrollbar-color: var(--page-edge) transparent;
+}
+
+.slot-option {
+  gap: 3px;
+  padding: 5px 8px;
+}
+
+.option-name {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.event-card .slot-empty,
+.event-card .order-closed {
+  color: var(--page-dim);
+  font-style: italic;
+}
+
+.event-card .order-closed {
+  padding: 16px 0 4px;
+}
+
+/* The foot of the board stays in view while a long board scrolls: the preview and the buttons.
+   It reaches to the card's edges and is solid, so the options pass underneath it. */
+.order-foot {
+  position: sticky;
+  bottom: 0;
+  margin: 12px -22px -20px;
+  padding: 10px 22px 16px;
+  background: var(--page);
+  border-top: 1px solid var(--page-line);
+  border-radius: 0 0 4px 4px;
+  box-shadow: 0 -8px 12px -8px rgb(60 40 15 / 0.35);
+}
+
+.order-foot .event-foot {
+  margin-top: 0;
+}
+
+/* What the choice would make: the order's asks ticked off, and the likely result. */
+.order-preview {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  margin-bottom: 10px;
+  padding: 8px 12px;
+  border: 1px dashed var(--page-line);
+  border-radius: 4px;
+}
+
+.order-checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--page-dim);
+  font-size: 0.85rem;
+}
+
+.order-checks li::before {
+  content: "○ ";
+}
+
+.order-checks li.met {
+  color: #3d6b34;
+}
+
+.order-checks li.met::before {
+  content: "✓ ";
+}
+
+.event-card .order-likely {
+  font-weight: bold;
+}
+
+.event-foot .event-done {
+  margin: 0;
+  font-style: normal;
+}
+
+.event-card .order-done-for {
+  padding-top: 12px;
+  color: var(--page-dim);
+  font-style: italic;
+}
+
+.event-card .order-quality {
+  padding: 4px 0;
+  font-size: 2rem;
+  font-variant: small-caps;
+  letter-spacing: 0.08em;
+  text-align: center;
+}
+
+.order-quality.great,
+.order-quality.perfect {
+  color: #3d6b34;
+}
+
+.event-card .order-line {
+  padding-bottom: 12px;
+  text-align: center;
+}
+
+.event-card .order-rank-up {
+  margin-top: 12px;
+  padding: 8px 12px;
+  background: rgb(255 250 235 / 0.4);
+  border: 1px solid var(--gold);
+  border-radius: 4px;
+  text-align: center;
+}
+
+.clear {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 1;
+  padding: 5px 12px;
+  font-size: 0.9rem;
+}
+
+/* Bubbles */
+
+.bubble {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  background: var(--raised);
+  border-radius: 999px;
+  white-space: nowrap;
+  user-select: none;
+  cursor: grab;
+  transition:
+    border-color 0.12s,
+    box-shadow 0.3s;
+}
+
+.bubble.element {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
+}
+
+.bubble.school {
+  border-color: var(--school);
+  border-style: double;
+  border-width: 3px;
+}
+
+.bubble.spell {
+  border-color: var(--school);
+  font-style: italic;
+}
+
+.bubble.job {
+  border-color: var(--job);
+  border-radius: 6px;
+}
+
+.bubble.selected {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.dots {
+  display: inline-flex;
+  gap: 3px;
+}
+
+.dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 0.45);
+}
+
+.board .bubble {
+  position: absolute;
+  z-index: 2;
+  touch-action: none;
+  box-shadow: 0 2px 6px rgb(0 0 0 / 0.4);
+}
+
+.board .bubble.lifted {
+  visibility: hidden;
+}
+
+.board .bubble.target {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 35%, transparent);
+  transform: scale(1.06);
+}
+
+.board .bubble.merging {
+  border-style: dashed;
+  border-color: var(--accent);
+  pointer-events: none;
+  animation: bubble-pulse 0.9s ease-in-out infinite;
+}
+
+.board .bubble.pop,
+.board .bubble.new {
+  animation: bubble-pop 0.28s ease-out;
+}
+
+.board .bubble.new {
+  border-color: var(--accent);
+  box-shadow: 0 0 18px 2px color-mix(in srgb, var(--accent) 60%, transparent);
+}
+
+.board .bubble.shake {
+  animation: bubble-shake 0.35s ease-in-out;
+}
+
+.bubble-label {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 6px);
+  translate: -50% 0;
+  color: var(--accent);
+  font-size: 0.7rem;
+  font-style: normal;
+  letter-spacing: 0.1em;
+  text-shadow: 0 1px 3px #000;
+  text-transform: uppercase;
+  pointer-events: none;
+}
+
+.fresh-label {
+  animation: label-fade 2.6s ease-in forwards;
+}
+
+.ghost {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 10;
+  pointer-events: none;
+}
+
+.ghost .bubble {
+  box-shadow: 0 8px 20px rgb(0 0 0 / 0.55);
+}
+
+body.dragging,
+body.dragging * {
+  cursor: grabbing !important;
+}
+
+@keyframes bubble-pulse {
+  50% {
+    opacity: 0.5;
+  }
+}
+
+@keyframes bubble-pop {
+  from {
+    transform: scale(0.6);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.12);
+    opacity: 1;
+  }
+}
+
+@keyframes bubble-shake {
+  20% {
+    transform: translateX(-6px);
+  }
+  40% {
+    transform: translateX(6px);
+  }
+  60% {
+    transform: translateX(-4px);
+  }
+  80% {
+    transform: translateX(4px);
+  }
+}
+
+@keyframes stat-bump {
+  30% {
+    transform: scale(1.25);
+  }
+}
+
+@keyframes toast-fade {
+  0%,
+  80% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes label-fade {
+  0%,
+  70% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+/* Effects still have to end so their state clears, so motion is shortened rather than removed. */
+@media (prefers-reduced-motion: reduce) {
+  .board .bubble.pop,
+  .board .bubble.new,
+  .board .bubble.shake {
+    animation-duration: 0.01ms;
+  }
+
+  .board .bubble.merging {
+    animation: none;
+    opacity: 0.6;
+  }
+
+  .board .bubble.target {
+    transform: none;
+  }
+
+  .bump {
+    animation: none;
+  }
+}
+
+/* The book: the left-hand page of an open book, bound in leather. The spine is on the right,
+   at the edge of the screen, and bookmarks stick out past the page edges on the left. */
+
+.book {
+  position: relative;
+  z-index: 4;
+  min-height: 0;
+  padding: 10px 0 10px 10px;
+  background: linear-gradient(270deg, #0d0805, #2b1a11 12px, #3d2619 calc(100% - 12px), #1c110a);
+  box-shadow: -8px 0 22px rgb(0 0 0 / 0.55);
+}
+
+/* The page block. Its left and bottom show as a thick stack of page edges, lit from above. */
+.book-pages {
+  --stack-side: 18px;
+  --stack-foot: 8px;
+  position: relative;
+  height: 100%;
+  padding: 0 0 var(--stack-foot) var(--stack-side);
+  overflow: hidden;
+  background:
+    linear-gradient(90deg, rgb(20 12 4 / 0.55), rgb(20 12 4 / 0.1) 55%, transparent) left / var(--stack-side) 100% no-repeat,
+    linear-gradient(0deg, rgb(20 12 4 / 0.6), transparent) bottom / 100% var(--stack-foot) no-repeat,
+    repeating-linear-gradient(90deg, var(--page-edge) 0 1px, #e2d3ad 1px 2px, var(--page) 2px 3px) left / var(--stack-side) 100% no-repeat,
+    repeating-linear-gradient(0deg, var(--page-edge) 0 1px, var(--page) 1px 2px);
+  border-radius: 6px 0 0 6px;
+}
+
+.book-page {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  /* Darkens toward the spine, where the paper curves into the binding. */
+  background:
+    linear-gradient(270deg, rgb(35 22 8 / 0.62), rgb(35 22 8 / 0.16) 20px, transparent 60px),
+    radial-gradient(ellipse at 35% 35%, #dccca4, var(--page) 60%, var(--page-edge) 130%);
+  border-radius: 3px 0 0 3px;
+  box-shadow: -1px 1px 0 var(--page-edge);
+  color: var(--page-ink);
+  --page-gutter: 28px;
+}
+
+/* Stand-ins for the page during a turn. They are placed by hand, so they leave the layout. */
+.book-page.copy {
+  position: absolute;
+  top: 0;
+  height: 100%;
+}
+
+/* The old page, lying flat while the next one comes down on it. */
+.book-page.copy.under {
+  left: var(--stack-side);
+  right: 0;
+  bottom: var(--stack-foot);
+  z-index: 2;
+  height: auto;
+}
+
+/* The turning page: a row of strips, each angled a little more than the last. They are plain
+   siblings, drawn spine-first, so nothing here needs sorting by depth. */
+.page-leaf,
+.page-shadow {
+  position: absolute;
+  inset: 0 0 var(--stack-foot) var(--stack-side);
+  pointer-events: none;
+}
+
+.page-leaf {
+  z-index: 3;
+  perspective: 1500px;
+  perspective-origin: 30% 50%;
+}
+
+/* The shadow the turning page throws on the page beneath it. */
+.page-shadow {
+  z-index: 2;
+  background: #1a0f05;
+}
+
+.leaf-strip,
+.leaf-shade {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  /* The hinge sits inside the edge, where this strip overlaps the one before it. */
+  transform-origin: calc(100% - var(--overlap)) 50%;
+  will-change: transform;
+}
+
+.leaf-strip {
+  overflow: hidden;
+}
+
+.leaf-shade {
+  background: #1a0f05;
+  opacity: 0;
+}
+
+/* Clear at the strip's hinge, on the right, and full at its free edge, on the left. */
+.leaf-shade.graded {
+  background: linear-gradient(to left, transparent var(--overlap), #1a0f05);
+}
+
+.page-title {
+  margin: 0 var(--page-gutter) 0 16px;
+  padding: 12px 0 8px;
+  border-bottom: 3px double var(--page-line);
+  font-size: 1.15rem;
+  font-variant: small-caps;
+  letter-spacing: 0.1em;
+  text-align: center;
+}
+
+.book-page input,
+.book-page select {
+  background: rgb(255 250 235 / 0.28);
+  border-color: var(--page-line);
+}
+
+.book-page input::placeholder {
+  color: var(--page-dim);
+}
+
+.book-page .bubble {
+  color: var(--ink);
+}
+
+.book-page .bubble.selected {
+  outline-color: var(--oxblood);
+}
+
+/* Bookmarks: ribbons tucked in between the pages. The open one is pulled out furthest. */
+
+.bookmarks {
+  position: absolute;
+  top: 124px;
+  right: 100%;
+  z-index: -1;
+  display: grid;
+  gap: 10px;
+  justify-items: end;
+}
+
+.bookmark {
+  /* The right-hand padding is the part that stays tucked under the book. */
+  padding: 6px 42px 6px 24px;
+  border: none;
+  border-radius: 0;
+  color: #f0dfb4;
+  font-size: 0.9rem;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  /* A swallow-tail cut into the free end. */
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%, 11px 50%);
+  translate: 34px 0;
+  transition: translate 0.2s;
+}
+
+.bookmark:hover,
+.bookmark:focus-visible,
+.bookmark[aria-current] {
+  translate: 14px 0;
+}
+
+.mark-discovered {
+  background: linear-gradient(180deg, #91372a, #6a2318);
+}
+
+.mark-shop {
+  background: linear-gradient(180deg, #3b6152, #27433a);
+}
+
+.bookmark:not([aria-current]) {
+  filter: brightness(0.75);
+}
+
+/* Shop page */
+
+.shop {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.shop p {
+  margin: 0;
+}
+
+.purse {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px var(--page-gutter) 0 16px;
+  color: var(--page-dim);
+}
+
+.purse .gold {
+  color: var(--page-ink);
+}
+
+/* The shelf: what is for sale, two to a row. An empty space is just its dashed outline. */
+.shelf {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  margin: 8px var(--page-gutter) 8px 16px;
+  padding: 0;
+  list-style: none;
+}
+
+.shelf-slot {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  min-height: 74px;
+  padding: 5px 6px;
+  border: 1px dashed var(--page-line);
+  border-radius: 6px;
+}
+
+/* What sort of thing is for sale, with a mark and a colour for each kind. */
+.shelf-kind {
+  color: var(--kind-material);
+  font-size: 0.64rem;
+  font-weight: bold;
+  letter-spacing: 0.1em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.shelf-kind::before {
+  content: "◆ ";
+}
+
+.shelf-kind.spell {
+  color: var(--kind-spell);
+}
+
+.shelf-kind.spell::before {
+  content: "✦ ";
+}
+
+/* On the shelf a bubble is only a label. Long names wrap, since the space is narrow. */
+.shelf-slot .bubble {
+  max-width: 100%;
+  padding: 3px 10px;
+  border-radius: 14px;
+  font-size: 0.9rem;
+  line-height: 1.25;
+  text-align: left;
+  white-space: normal;
+  pointer-events: none;
+}
+
+.shelf-reason {
+  color: var(--page-dim);
+  font-size: 0.72rem;
+  line-height: 1.2;
+}
+
+.buy {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  align-self: stretch;
+  margin-top: auto;
+  padding: 2px 10px;
+  background: var(--page-ink);
+  border-color: var(--page-ink);
+  color: var(--page);
+  font-size: 0.85rem;
+}
+
+.buy:disabled {
+  background: none;
+  color: var(--page-dim);
+  opacity: 1;
+}
+
+.buy:disabled .gold {
+  color: var(--page-dim);
+}
+
+.shelf-slot.sold .bubble {
+  opacity: 0.45;
+}
+
+.shelf-sold {
+  align-self: stretch;
+  margin-top: auto;
+  color: var(--page-dim);
+  font-size: 0.75rem;
+  letter-spacing: 0.14em;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+/* The shopkeeper: a pixel-art scene in a frame. Everything that moves does so in whole pixels,
+   a few times a second, the way a sprite would. */
+
+.shopkeeper {
+  display: block;
+  width: calc(100% - 16px - var(--page-gutter));
+  margin: 2px var(--page-gutter) 10px 16px;
+  /* An outline, not a border: a border would shrink the art so its pixels no longer land on whole screen pixels. */
+  outline: 2px solid var(--page-ink);
+}
+
+/* Smoke: each puff climbs to where the next one starts, so the three read as one rising stream. */
+.puff {
+  animation: puff-rise 2.4s steps(6) infinite;
+}
+
+.puff:nth-child(1) {
+  animation-name: puff-appear;
+}
+
+.puff:nth-child(3) {
+  animation-name: puff-thin;
+}
+
+@keyframes puff-rise {
+  to {
+    transform: translate(1px, -6px);
+  }
+}
+
+@keyframes puff-appear {
+  from {
+    opacity: 0;
+  }
+  to {
+    transform: translate(0, -6px);
+  }
+}
+
+@keyframes puff-thin {
+  to {
+    opacity: 0;
+    transform: translate(1px, -6px);
+  }
+}
+
+/* His eyelids, shut for a moment every few seconds. */
+.blink {
+  opacity: 0;
+  animation: blink 4.6s step-end infinite;
+}
+
+@keyframes blink {
+  95% {
+    opacity: 1;
+  }
+}
+
+/* The cat: its back rises and falls, and a pair of z's drift up as it breathes out. */
+.breath {
+  animation: breathe 3.2s step-end infinite;
+}
+
+.snore {
+  animation: snore 3.2s step-end infinite;
+}
+
+.snore + .snore {
+  animation-name: snore-late;
+}
+
+@keyframes breathe {
+  50% {
+    opacity: 0;
+  }
+}
+
+@keyframes snore {
+  0% {
+    opacity: 0;
+  }
+  35% {
+    opacity: 1;
+  }
+}
+
+@keyframes snore-late {
+  0% {
+    opacity: 0;
+  }
+  65% {
+    opacity: 1;
+  }
+}
+
+.glints rect {
+  animation: glint 2.8s step-end infinite;
+}
+
+.glints rect:nth-child(2) {
+  animation-delay: -0.7s;
+}
+
+.glints rect:nth-child(3) {
+  animation-delay: -1.4s;
+}
+
+.glints rect:nth-child(4) {
+  animation-delay: -2.1s;
+}
+
+@keyframes glint {
+  0% {
+    opacity: 0;
+  }
+  75% {
+    opacity: 1;
+  }
+}
+
+/* Everything holds still for anyone who asked for less motion, and on the copies made during
+   a page-turn, where a moving picture would have to be redrawn on every strip. */
+@media (prefers-reduced-motion: reduce) {
+  .shopkeeper * {
+    animation: none;
+  }
+}
+
+.book-page.copy .shopkeeper * {
+  animation: none;
+}
+
+.shop-note {
+  padding: 0 var(--page-gutter) 8px 16px;
+  color: var(--page-dim);
+  font-size: 0.85rem;
+  text-align: center;
+}
+
+/* Discoveries page */
+
+.organizer-controls {
+  display: grid;
+  gap: 8px;
+  padding: 12px var(--page-gutter) 12px 16px;
+  border-bottom: 1px solid var(--page-line);
+}
+
+.sort {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--page-dim);
+}
+
+.sort select {
+  flex: 1;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chips:empty {
+  display: none;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 10px;
+  background: none;
+  border-color: var(--page-line);
+  border-radius: 999px;
+  color: var(--page-dim);
+  font-size: 0.85rem;
+}
+
+.chip:hover:not(:disabled) {
+  border-color: var(--page-ink);
+}
+
+/* A picked chip is inked in. */
+.chip[aria-pressed="true"] {
+  background: var(--page-ink);
+  border-color: var(--page-ink);
+  color: var(--page);
+}
+
+.element-name {
+  text-transform: capitalize;
+}
+
+.count {
+  margin: 0;
+  color: var(--page-dim);
+  font-size: 0.85rem;
+}
+
+.bubble-list {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  gap: 8px;
+  margin: 0;
+  padding: 12px var(--page-gutter) 12px 16px;
+  overflow-y: auto;
+  list-style: none;
+  scrollbar-color: var(--page-edge) transparent;
+}
+
+.bubble-list .empty {
+  color: var(--page-dim);
+}
+
+.details {
+  max-height: 35%;
+  padding: 12px var(--page-gutter) 12px 16px;
+  overflow-y: auto;
+  border-top: 1px solid var(--page-line);
+}
+
+.details h3 {
+  margin: 0 0 6px;
+  font-size: 1.1rem;
+}
+
+.details p {
+  margin: 0 0 6px;
+}
+
+.meta {
+  color: var(--page-dim);
+  font-size: 0.85rem;
+}
+
+@media (max-width: 720px) {
+  :root {
+    --hud-width: 254px;
+  }
+
+  .xp {
+    min-width: 70px;
+  }
+
+  .stat {
+    padding: 6px 10px 8px;
+  }
+
+  .workbench {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: 60% 40%;
+  }
+
+  .book {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .book-pages {
+    --stack-foot: 0px;
+  }
+
+  /* The book lies under the board here, so the bookmarks hang inside its top edge instead. */
+  .bookmarks {
+    position: static;
+    display: flex;
+    gap: 8px;
+    padding: 0 16px;
+    margin-top: -10px;
+  }
+
+  .bookmark,
+  .bookmark:hover,
+  .bookmark:focus-visible,
+  .bookmark[aria-current] {
+    padding: 4px 14px 8px;
+    clip-path: polygon(0 0, 100% 0, 100% 100%, 50% calc(100% - 6px), 0 100%);
+    translate: none;
+  }
+
+  /* Too short for a pinned list here, so the whole page scrolls as one. */
+  .book-pages {
+    flex: 1;
+    min-height: 0;
+    height: auto;
+    overflow-y: auto;
+  }
+
+  .book-page {
+    height: auto;
+    min-height: 100%;
+  }
+
+  .bubble-list {
+    overflow-y: visible;
+  }
+
+  .details {
+    max-height: none;
+  }
 }
