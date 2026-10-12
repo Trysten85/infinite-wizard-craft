@@ -253,6 +253,22 @@ pay takings at night, and the shop is earned.
     street. Built against `TownView` as it stands in the working tree and the routes in the
     guide's sketch, before S1 is done and before S3 exists, so it shows a quiet street when
     `GET /town` is not there.
+  - 2026-10-12, in and committed: the bookmark and the swap; the street (`web/src/Street.tsx`,
+    with a drawing for each of the six buildings and a plain house for any other); the picked
+    plot, plans with each need marked, and townsfolk (`web/src/Town.tsx`); buying a plot,
+    raising a plan, and raising a tier; the Shop bookmark hidden while `GET /shop` refuses with
+    `no-shop`. Wording is in `web/src/town.ts`, tested in `tests/webTown.test.ts`. Checked in a
+    browser against a stand-in town run with `src/shared/town.ts`, never the real save.
+    **What the page expects from S3:** `GET /town` answers a `TownView`; `POST /town/plots`
+    (empty body), `/town/build` (`{ plot, building }`) and `/town/upgrade` (`{ plot }`) answer
+    `{ rewards, progress, night }` like every other action, and the page then reads `GET /town`
+    and `GET /shop` again. Nothing can be dropped on the street yet: stocking comes with
+    slice 3.
+  - Done 2026-10-12. With S3 in, the live pass ran against the real town service on an empty
+    in-memory database: the free plot claimed, a Market Stall raised at dusk for two candles,
+    the Shop bookmark appearing with its three shelves, a second plot bought, the stall's
+    takings in the night's ledger, and a Farm raised the next evening. The page sends the plot
+    it shows on the Raise button, so Backend never has to pick one.
 
 ### S5 · Bake · blocked: the bake is parked on Trysten's word
 - **What:** approve the town's staples first.
@@ -277,33 +293,6 @@ pay takings at night, and the shop is earned.
 ## Slice 3: stock and quality
 
 Goal: discoveries matter after the moment they are made. The player stocks buildings and sees
-  - 2026-10-12, in and committed: the bookmark and the swap; the street (`web/src/Street.tsx`,
-    with a drawing for each of the six buildings and a plain house for any other); the picked
-    plot, plans with each need marked, and townsfolk (`web/src/Town.tsx`); buying a plot,
-    raising a plan, and raising a tier; the Shop bookmark hidden while `GET /shop` refuses with
-  - 2026-10-12, in and committed: the bookmark and the swap; the street (`web/src/Street.tsx`,
-    with a drawing for each of the six buildings and a plain house for any other); the picked
-    plot, plans with each need marked, and townsfolk (`web/src/Town.tsx`); buying a plot,
-    raising a plan, and raising a tier; the Shop bookmark hidden while `GET /shop` refuses with
-    `no-shop`. Wording is in `web/src/town.ts`, tested in `tests/webTown.test.ts`. Checked in a
-    browser against a stand-in town run with `src/shared/town.ts`, never the real save.
-    **What the page expects from S3:** `GET /town` answers a `TownView`; `POST /town/plots`
-    (empty body), `/town/build` (`{ plot, building }`) and `/town/upgrade` (`{ plot }`) answer
-    `{ rewards, progress, night }` like every other action, and the page then reads `GET /town`
-    and `GET /shop` again. Nothing can be dropped on the street yet: stocking comes with
-    slice 3.
-  - Done 2026-10-12. With S3 in, the live pass ran against the real town service on an empty
-    in-memory database: the free plot claimed, a Market Stall raised at dusk for two candles,
-    the Shop bookmark appearing with its three shelves, a second plot bought, the stall's
-    takings in the night's ledger, and a Farm raised the next evening. The page sends the plot
-    it shows on the Raise button, so Backend never has to pick one.
-    `no-shop`. Wording is in `web/src/town.ts`, tested in `tests/webTown.test.ts`. Checked in a
-    browser against a stand-in town run with `src/shared/town.ts`, never the real save.
-    **What the page expects from S3:** `GET /town` answers a `TownView`; `POST /town/plots`
-    (empty body), `/town/build` (`{ plot, building }`) and `/town/upgrade` (`{ plot }`) answer
-    `{ rewards, progress, night }` like every other action, and the page then reads `GET /town`
-    and `GET /shop` again. Left open until S3 is in and one live pass is done. Nothing can be
-    dropped on the street yet: stocking comes with slice 3.
 quality, Cheer, and takings move.
 
 ### Q1 · Rules · open
