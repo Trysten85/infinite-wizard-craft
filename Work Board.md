@@ -1,0 +1,338 @@
+# Work Board
+
+The one list of what each session is building. The design behind the tickets is in
+`Town Guide.md`. Read the guide section a ticket names before starting it.
+
+## How to use this board
+
+1. **Find your lane** in the table below. Take tickets from your lane only.
+2. **Claim before you start.** Change the ticket's status from `open` to `claimed by <your
+   session name>` (run `ListAgents` to see your name). One small exact edit, so nobody else's
+   line is overwritten.
+3. **Check "Depends on".** A ticket whose dependencies are not `done` can still be started from
+   the shapes sketched in the guide, but say so in its Notes.
+4. **When finished,** set the status to `done`, and add one Notes line saying what landed and
+   anything the next lane needs to know. If Trysten had you commit, add the commit.
+5. **A question about the design** goes under "Questions for design" at the bottom, with the
+   ticket id. The design session answers there and updates the guide.
+6. **Do not change the design in code.** If a rule in the guide is wrong or cannot be built,
+   say so under "Questions for design" and carry on with the rest.
+
+Statuses: `open`, `claimed by <name>`, `blocked: <why>`, `done`.
+
+## Lanes
+
+| Lane | Owns | Does not touch |
+|---|---|---|
+| **Design** | `Town Guide.md`, this board, draft numbers, pacing checks | Code |
+| **Rules** | `src/shared/` (types and pure rule maths), `data/`, `config/balance.json`, the tests for those | Store, routes, page |
+| **Backend** | `src/server/store.ts`, the services, `src/server/app.ts`, `src/tools/`, the README's API notes, their tests | Rule maths, data content, page |
+| **Page** | `web/`, `tests/web*` | Anything under `src/server` |
+| **Bake** | Reviewed rows in `data/baked-combos.json`, the bake tools | Everything else |
+
+Rules goes first in each slice, because Backend and Page build on its types. Page can start from
+the types alone.
+
+Who holds which lane, as reported on 2026-10-11 (a session name changes when a session is
+restarted, so check `ListAgents`):
+
+| Lane | Session |
+|---|---|
+| Design | infinite-spell-craft-0a |
+| Rules | infinite-spell-craft-23 |
+| Backend | not yet reported |
+| Page | infinite-spell-craft-e6 |
+| Bake | infinite-spell-craft-e8 |
+
+Standing rules are in `CLAUDE.md`.
+
+---
+
+## Slice 1: the day
+
+Goal: one visible clock. A player crafts through the morning, works a shift after noon, has an
+evening, and sees a ledger at night. Nothing about the town yet.
+
+### D1 · Rules · open
+- **What:** the day's rules as pure functions, and its numbers.
+- **Depends on:** nothing.
+- **Guide:** "The day", "Draft numbers".
+- **Touches:** `src/shared/schema.ts` (`balanceSchema.day`; `Standing` gains `day`; the `Ledger`
+  type; `RuleCode` moved here from `src/server/combiner.ts`, which re-exports it; refusal codes
+  `not-evening`, `no-candles`), a new `src/shared/day.ts`,
+  `config/balance.json`, a new `tests/day.test.ts`.
+- **Done when:** `day.ts` answers, from plain inputs, the phase for a sun value, whether the
+  shift is open, how many candles are left, and whether night has fallen and why. Every boundary
+  in the guide's "Tests to write: the day" has a test. `shifts.every`, `shop.restockEvery`,
+  `events.every`, and `events.points` are left in place until D2 stops reading them.
+- **Notes:**
+
+### D2 · Backend · open
+- **What:** save the day, run it, and move the three old counters onto it.
+- **Depends on:** D1.
+- **Guide:** "The day", "What the day replaces", "Saved games".
+- **Touches:** `src/server/store.ts` (day number, sun, candles, midnight-oil count, and the last
+  ledger, on `player_stats` or a table beside it), a new `src/server/day.ts` service,
+  `src/server/shop.ts` (restock each morning), `src/server/shifts/service.ts` and `shiftIn` in
+  `src/shared/shifts.ts` (one shift a day from noon), `src/server/events/service.ts` (`isDue`,
+  `prepare`, and the `day` number: one visitor a day, written from dawn, waiting if not seen),
+  `src/server/progress.ts` (`standing`: `shiftReady` stays, `shiftIn` goes, `day.shiftDone` and
+  `day.lastLedger` are added), `src/server/app.ts` (`POST /day/end`; `night` on every route that
+  returns `progress`), `tests/helpers.ts`, the README.
+- **Done when:** a test game can be played through three days with the model never called;
+  night falls each of the three ways; sitting with the visitor is an evening action from this
+  ticket on (one candle, refused with `not-evening` or `no-candles`), while the test-event route
+  stays open at any time; last night's ledger is still readable after a reload; a saved game from before this opens on day 1 with nothing
+  lost; the old counters' config keys are gone once nothing reads them (ask Rules to remove them).
+- **Notes:**
+
+### D3 · Backend · open
+- **What:** teach `npm run pace` about days.
+- **Depends on:** D2.
+- **Guide:** "Draft numbers", "Tests to write: pace".
+- **Touches:** `src/tools/pace.ts`.
+- **Done when:** it prints days per level beside discoveries and hours, and the days saved
+  players have taken.
+- **Notes:**
+
+### D4 · Page · open
+- **What:** show the day.
+- **Depends on:** D1 for the types. D2 to see it live.
+- **Guide:** "The day", "The night ledger", "Shapes for the page".
+- **Touches:** `web/src/StatusBar.tsx` (a sun meter with noon and dusk marked, the candles, the
+  midnight-oil count once it starts), `web/src/Workbench.tsx`, a new night ledger card, a "go to
+  bed" and "turn in early" control, how the visitor is offered (`web/src/EventCard.tsx` and its
+  cue: only from dusk, with its candle cost; the "test event" button stays), `web/src/api.ts`,
+  `web/src/styles.css`.
+- **Done when:** the board changes look at dusk; the order board's cue reads from the day and no
+  longer from `shiftIn`; the Shop's restock note reads "New stock each morning"; the ledger shows
+  once when `night` comes back and can be reopened, after a reload too, from
+  `progress.day.lastLedger`.
+- **Notes:**
+
+---
+
+## Slice 2: the street
+
+Goal: the first playable town. Townsfolk arrive, the player buys plots and raises buildings, they
+pay takings at night, and the shop is earned.
+
+### S1 · Rules · open
+- **What:** buildings as data, and the town's rule maths.
+- **Depends on:** D1.
+- **Guide:** "The town" through "Buildings", "Perk types", "The shop is earned".
+- **Touches:** `src/shared/schema.ts` (`buildingSchema`, `balanceSchema.town`, `TownView`,
+  `BuildingView`, codes `no-deed`, `needs-missing`, `no-shop`), a new `src/shared/town.ts` (is a
+  need met, plot price, deeds for a level, takings), a new `data/buildings.json` with the six
+  buildings, `src/server/gameData.ts` (load and check it), `config/balance.json`, tests.
+- **Done when:** the six buildings load and are checked against the tag list and the jobs; the
+  reachable-needs test in the guide passes or names exactly what the bake must approve; stock
+  slots and quality are in the schema but may be unused until slice 3.
+- **Notes:**
+
+### S2 · Rules · open
+- **What:** the Innkeeper.
+- **Depends on:** nothing. Needs Trysten's answer to open question 1 in the guide.
+- **Guide:** "Buildings", "Open questions".
+- **Touches:** `data/jobs.json`, `data/job-skins.json`, `Recipe Key.md` (generated: `npm run key`).
+- **Done when:** the job is reachable, has a skin, and the job tests pass.
+- **Notes:**
+
+### S3 · Backend · open
+- **What:** save and serve the town.
+- **Depends on:** S1, D2.
+- **Guide:** "The street", "Townsfolk bring the buildings", "Buildings", "The shop is earned",
+  "Saved games", the routes under "Shapes for the page".
+- **Touches:** `src/server/store.ts` (plots and buildings), a new `src/server/town.ts` service,
+  `src/server/app.ts` (`GET /town`, `POST /town/plots`, `/town/build`, `/town/upgrade`),
+  `src/server/progress.ts` (`discovery-gold` perks in `settle`; a deed on level-up),
+  `src/server/shop.ts` (the `no-shop` gate, shelves by tier, the saved-game rule), the day
+  service (takings in the ledger), the README.
+- **Done when:** discovering a job adds a townsperson and their plan; a building can be raised
+  only in the evening, with the gold, the needs, an empty plot, and two candles; takings are paid
+  at night through the ledger with reason `takings`; the shop is refused before the stall stands;
+  a saved player who has bought from the shop has a tier 2 stall.
+- **Notes:**
+
+### S4 · Page · open
+- **What:** the street.
+- **Depends on:** S1 for the types. S3 to see it live.
+- **Guide:** "The street", "Buildings", "Shapes for the page".
+- **Touches:** a new Town view (side-on pixel street, in the manner of `web/src/Shopkeeper.tsx`
+  and `web/src/pixels.tsx`), a way to it from the workbench, plot and building dialogs showing
+  each need as met or not, the Shop bookmark hidden until the stall stands.
+- **Done when:** a player can buy a plot, see what a plan needs, raise it, and watch it appear;
+  empty plots show their price; a plot past the player's deeds says which level opens it.
+- **Notes:**
+
+### S5 · Bake · open
+- **What:** approve the town's staples first.
+- **Depends on:** nothing.
+- **Guide:** "Tests to write: reachable needs".
+- **Touches:** `data/baked-combos.json`.
+- **Done when:** the drafts for these pairs have been reviewed first, under whatever name
+  Trysten's verdict gives them: steam + spirits, tree + spirits, fire + mud, mud + sand, earth +
+  forge, steam + animal, water + food, life + spirits, light + iron, fire + tea, iron + herb,
+  steam + tree, metal + glass. No building needs any of them by name. At least three approved
+  things carry each of `brewing`, `forging`, `enchanting`, `knowledge`, and `industrial`, since
+  buildings want those tags. Spirits + Person ("Bartender") is left for S2 to settle.
+- **Notes:**
+
+---
+
+## Slice 3: stock and quality
+
+Goal: discoveries matter after the moment they are made. The player stocks buildings and sees
+quality, Cheer, and takings move.
+
+### Q1 · Rules · open
+- **What:** quality and Cheer as pure functions.
+- **Depends on:** S1.
+- **Guide:** "Stock and quality", "Your own building", "Cheer".
+- **Touches:** `src/shared/shifts.ts` or `src/shared/town.ts` (reuse `matchScore` and
+  `qualityFor`; a building's quality from stock, tier, enchantment, rank, and lifts),
+  `config/balance.json` (Cheer bands), tests.
+- **Done when:** the page can import the same function to preview quality before a discovery is
+  placed; every lift is capped at Perfect; an empty building is Meh.
+- **Notes:**
+
+### Q2 · Backend · open
+- **What:** stocking, lending a hand, raising a tier, and the perks that wait on tiers.
+- **Depends on:** Q1, S3.
+- **Guide:** "Stock and quality", "Buildings" (the tier table and what each gives back).
+- **Touches:** `src/server/store.ts`, `src/server/town.ts`, `src/server/app.ts` (`/town/stock`,
+  `/town/hand`), every perk type in the guide's list.
+- **Done when:** a discovery sits in one building at a time; moving it is free at any time of
+  day; takings follow quality and Cheer; a Great or Perfect shift lifts the player's own
+  building that night.
+- **Notes:**
+
+### Q3 · Page · open
+- **What:** the inside of a building.
+- **Depends on:** Q1 for the maths. Q2 to see it live.
+- **Guide:** "Stock and quality", "Cheer".
+- **Touches:** the Town view; dragging a discovery from the organizer onto a stock slot, with a
+  quality preview as the shift's order board does it (`web/src/shiftPreview.ts`).
+- **Done when:** stocking feels like the order board's pick-and-match; Cheer and its band show
+  on the street; the night ledger lists each building's quality beside its takings.
+- **Notes:**
+
+---
+
+## Slice 4: evenings
+
+Goal: the evening is a set of real choices, and spells and people have a use.
+
+### E1 · Rules · open
+- **What:** the rest of the evening's rules and content.
+- **Depends on:** Q1.
+- **Guide:** "Enchantments", "Townsfolk and regulars", "The Tavern's meal", "Tonight only",
+  "Quests".
+- **Touches:** `src/shared/` (which spells fit a building; an enchantment's length and bonus;
+  when someone becomes a regular), new data files for the one-night happenings, townsfolk names,
+  and calling-on lines, `data/quests.json` and `questSchema` (the new conditions and the town
+  thread), tests.
+- **Done when:** the quest test still holds quests to two fifths of each level's XP.
+- **Notes:**
+
+### E2 · Backend · open
+- **What:** the Tavern, calling on people, enchanting, and one-night happenings.
+- **Depends on:** E1, Q2.
+- **Guide:** the same sections as E1, and "What the day replaces".
+- **Touches:** `src/server/town.ts`, `src/server/events/service.ts` (the visitor sits at the
+  Tavern once it stands; townsfolk rows in `people`), `src/server/app.ts` (`/town/enchant`,
+  `/town/meal`, `/town/call`), the day service (announcing at noon, missing at night).
+- **Done when:** each evening action spends its candle and is refused without one; a missed
+  happening is named in the ledger and an ordinary visitor is still there the next evening.
+- **Notes:**
+
+### E3 · Page · open
+- **What:** the evening on the page.
+- **Depends on:** E1 for the types. E2 to see it live.
+- **Guide:** "The evening", "Tonight only".
+- **Touches:** the Town view (the Tavern's inside, townsfolk to call on, casting a spell onto a
+  building by dragging it there), the noon announcement, the existing `web/src/EventCard.tsx`
+  shown at the Tavern.
+- **Done when:** a player can see at dusk everything tonight offers and what each costs.
+- **Notes:**
+
+---
+
+## Parked
+
+Not ticketed yet. See "Later, not in the first build" in the guide.
+
+- Buildings for the other sixteen jobs
+- Civic buildings by level and reputation
+- Model-written building names, townsfolk names, and lines
+- The pixel-art town map, and neighbours
+- Seasons, festivals, and Tend quests
+- A second job at half value
+- A level cap past 5
+
+## Questions for design
+
+Add a line: ticket id, your session name, the question. Answers are written beneath it.
+
+- **D1, S1 · infinite-spell-craft-23 (Rules):** the tickets put the new refusal codes in
+  `src/shared/schema.ts`, but the list of codes (`RuleCode`) lives in `src/server/combiner.ts`,
+  a Backend file. Should D1 move `RuleCode` into `src/shared/schema.ts`, so Rules owns it and
+  the page can import it, with `combiner.ts` re-exporting it so no server import changes? That
+  is what I will do unless told otherwise.
+  - **Design:** yes, do that. D1's Touches and the guide's "Shapes for the page" now say so.
+- **D1 · infinite-spell-craft-23 (Rules):** the guide says level 5 lands near day 25. That
+  counts 10 discoveries a day. A day with its shift worked is 8 discoveries (`shiftNotches` is
+  2), so about 245 discoveries comes to nearer day 30. Fine by me either way; noting it so D3's
+  pace check is read against the right number.
+  - **Design:** you are right. The guide now says between day 25 and day 30, and D3 should be
+    read against that range. No number changes.
+- **D4 · infinite-spell-craft-e6 (Page):** "the ledger ... can be reopened". `night` only comes
+  back on the action that brought night on, so after a page reload the page has no ledger to
+  reopen. D2 already saves the last ledger. Could `progress.day` carry it (say `lastLedger`)?
+  Unless told otherwise I will keep it in memory and offer to reopen it only until a reload.
+  - **Design:** yes. `progress.day.lastLedger` carries last night's ledger until the next
+    night. Added to the guide's sketch, to D2, and to D4's Done when.
+- **D4 · infinite-spell-craft-e6 (Page):** once D2 lands, is sitting with the visitor already an
+  evening action that costs a candle (refused with `not-evening` or `no-candles`), or does that
+  wait for E2? The page today offers "Someone is at your stall" whenever `eventReady` is true,
+  at any time of day, and has a "test event" button. If D2 gates it, D4 has to show the visitor
+  only from dusk with its candle cost, which is not in D4's "Touches" yet.
+  - **Design:** it is gated from D2. Slice 1's evening needs something to spend a candle on, and
+    the visitor is it. From dusk only, one candle, refused with `not-evening` or `no-candles`.
+    The test-event route and its button stay open at any time, since they are tools. An ordinary
+    visitor not seen tonight is still there tomorrow. D2 and D4 are updated.
+- **D4 · infinite-spell-craft-e6 (Page):** for the order board's cue I need to tell "not yet
+  noon" from "today's shift is already worked". I plan to read `progress.shiftReady` (open now)
+  with `day.phase` (morning means not yet, otherwise done for today). Please keep `shiftReady`
+  when `shiftIn` goes.
+  - **Design:** `shiftReady` stays: a job is taken up, it is noon or later, and today's shift
+    is not worked. `progress.day.shiftDone` is added so the page need not infer it from the
+    phase. Both are in the guide's sketch and in D2.
+- **S5 · infinite-spell-craft-e8 (Bake):** two of the thirteen named drafts are ones my review
+  suggestions change. Steam + Spirits = Beer I suggested fixing to Brandy (steam and spirits is
+  distilling, and beer is not distilled). Iron + Herb = Pot I suggested fixing to Cauldron.
+  Trysten's verdict in `data/combo-triage.csv` decides both. The Tavern does not hang on Beer
+  either way: Life + Spirits = Wine also carries `brewing`, as do Gin, Cider, and Firewater.
+  - **Design:** agreed, and the names are Trysten's to settle. No building needs a baked thing
+    by name: tier 1 needs are hand-written things, and later tiers ask by tag and depth. S5 now
+    lists pairs to review first, without fixing what they make.
+- **S5 · infinite-spell-craft-e8 (Bake):** "at least one approved thing carries each of
+  `brewing`, `forging`, `rare`, `court`, `toxic`, `knowledge`, `enchanting`" cannot be met by
+  baked rows for three of those. `rare` is an author-only tag, so the model can never give it,
+  and no draft I would keep carries `court` or `toxic`. The hand-written Gold (`rare`), Crown
+  (`court`), and Rotted leaves (`toxic`) do carry them and have fixed recipes, so the guide's
+  reachable-needs test is met already. Is that enough for S5, or should some baked rows be
+  hand-tagged?
+  - **Design:** do not hand-tag. You found a fault in the design: a tag carried by one thing
+    makes a poor want, since that one thing would be the answer every time. No building wants
+    `rare`, `court`, or `toxic` any more (Market Stall, Herb Garden, and Wizard's Tower are
+    changed in the guide), and the pedlar no longer sells by `rare`. S5 now asks for at least
+    three approved things for each of `brewing`, `forging`, `enchanting`, `knowledge`, and
+    `industrial`.
+
+## Log
+
+- 2026-10-11: board opened by the design session, with slices 1 to 4.
+- 2026-10-11: design answered the first seven questions. Changed: D1, D2, D4, and S5; in the
+  guide, three buildings' wants, the pedlar, the day count to level 5, and the page shapes
+  (`lastLedger`, `shiftDone`, `shiftReady` kept, `RuleCode` moved to shared).
