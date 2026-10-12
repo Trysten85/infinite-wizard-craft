@@ -30,7 +30,18 @@ export type TownService = ReturnType<typeof createTown>;
 
 // A building standing on one of the player's plots, with the quality it has tonight and what is
 // on its shelves.
-export type Standing = { plot: number; building: Building; tier: number; quality: QualityId; stock: { slot: number; entry: GameEntry }[] };
+export type Standing = {
+  plot: number;
+  building: Building;
+  tier: number;
+  quality: QualityId;
+  stock: { slot: number; entry: GameEntry }[];
+  // What went into the quality, so the page can preview a change with the same maths: the steps
+  // already applied tonight, the owner's rank bonus here, and a live enchantment's bonus.
+  lifts: number;
+  rankBonus: number;
+  enchantBonus: number;
+};
 
 // The job that runs a building at this tier: the one that brought its plan, unless a later tier
 // hands it to another.
@@ -76,21 +87,16 @@ export function standingBuildings(data: GameData, store: Store, player: string):
     // good shift worked today.
     const own = job !== null && runBy(at.building, at.tier) === job;
     const rank = own ? rankFor(store.countShifts(player, job), shifts) : null;
-    const quality = buildingQuality(
-      at.building,
-      at.tier,
-      stock.map((item) => item.entry),
-      {
-        rankBonus: rank?.bonus ?? 0,
-        lifts: {
-          perks: liftsFor(at.building.id, built),
-          hand: store.hasHand(player, at.plot, today) ? 1 : 0,
-          shift: own && saved.shiftLiftDay === today ? 1 : 0,
-        },
-      },
-      shifts,
-    );
-    return { ...at, quality, stock };
+    const rankBonus = rank?.bonus ?? 0;
+    const lifts = {
+      perks: liftsFor(at.building.id, built),
+      hand: store.hasHand(player, at.plot, today) ? 1 : 0,
+      shift: own && saved.shiftLiftDay === today ? 1 : 0,
+    };
+    // Enchantments come with the evening's actions, so none is live yet.
+    const enchantBonus = 0;
+    const quality = buildingQuality(at.building, at.tier, stock.map((item) => item.entry), { rankBonus, enchantBonus, lifts }, shifts);
+    return { ...at, quality, stock, lifts: lifts.perks + lifts.hand + lifts.shift, rankBonus, enchantBonus };
   });
 }
 
@@ -218,6 +224,9 @@ export function createTown(deps: {
       tier,
       quality,
       takings: takingsFor(tier, quality, rules, data.balance.shifts, share),
+      lifts: at.lifts,
+      rankBonus: at.rankBonus,
+      enchantBonus: at.enchantBonus,
       wants: building.wants,
       stock: Array.from({ length: slotsAt(tier, rules) }, (_, slot) => {
         const held = at.stock.find((item) => item.slot === slot);

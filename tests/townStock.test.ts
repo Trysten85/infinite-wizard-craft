@@ -275,3 +275,19 @@ describe("the town routes for stock and a hand", () => {
     expect((await send("/town/stock", { plot: 0, slot: 0 })).status).toBe(400);
   });
 });
+
+describe("what the building view carries for a preview", () => {
+  it("has the lifts applied tonight, the owner's rank bonus, and no enchantment yet", () => {
+    const game = street("smithy", "farm");
+    for (const id of ["person", "forge", "blacksmith"]) game.store.addDiscovery("ann", id);
+    game.progress.chooseJob("ann", "blacksmith");
+    thing(game, "a", ["metal", "forging"]);
+    game.town.stock("ann", 0, 0, "a");
+    expect(game.town.view("ann").plots[0]!.building).toMatchObject({ lifts: 0, rankBonus: 0, enchantBonus: 0 });
+    game.town.hand("ann", 0);
+    game.store.setShiftLiftDay("ann", 1);
+    expect(game.town.view("ann").plots[0]!.building).toMatchObject({ lifts: 2, quality: "perfect" });
+    // The Farm lifts the Tavern, not the Smithy, so an unrelated building carries none.
+    expect(game.town.view("ann").plots[1]!.building).toMatchObject({ lifts: 0 });
+  });
+});
