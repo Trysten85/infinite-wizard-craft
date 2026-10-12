@@ -32,7 +32,13 @@ export type SavedDay = {
   visitorDay: number;
   // Last night's ledger, kept until the next night.
   lastLedger: Ledger | null;
+  // The day a Great or Perfect shift was last worked, or 0. It lifts the player's own building
+  // that night.
+  shiftLiftDay: number;
 };
+
+// One thing on one shelf of a building. A discovery is on one shelf at a time.
+export type StoredStock = { plot: number; slot: number; entryId: string };
 
 // An order on a player's board, for one job. It stays until it is filled.
 export type StoredShiftOrder = { id: number; job: string; tags: string[]; tier: number; text: string; state: "open" | "done" };
@@ -246,6 +252,20 @@ export function openStore(path: string) {
       tier INTEGER NOT NULL DEFAULT 0,
       PRIMARY KEY (player, plot)
     );
+    CREATE TABLE IF NOT EXISTS town_stock (
+      player TEXT NOT NULL,
+      plot INTEGER NOT NULL,
+      slot INTEGER NOT NULL,
+      entry_id TEXT NOT NULL,
+      PRIMARY KEY (player, plot, slot),
+      UNIQUE (player, entry_id)
+    );
+    CREATE TABLE IF NOT EXISTS town_hands (
+      player TEXT NOT NULL,
+      plot INTEGER NOT NULL,
+      day INTEGER NOT NULL,
+      PRIMARY KEY (player, plot, day)
+    );
     CREATE TABLE IF NOT EXISTS model_calls (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -297,6 +317,8 @@ export function openStore(path: string) {
       }
     });
   }
+
+  if (!statColumns.includes("shift_lift_day")) db.exec("ALTER TABLE player_stats ADD COLUMN shift_lift_day INTEGER NOT NULL DEFAULT 0");
 
   function transaction<T>(fn: () => T): T {
     db.exec("BEGIN");
@@ -528,9 +550,9 @@ export function openStore(path: string) {
     // Where the player is in their day. Someone never seen before is at dawn on day 1.
     getDay(player: string): SavedDay {
       const row = db
-        .prepare("SELECT day, sun, shift_done, early, candles_spent, oil, dawn_level, visitor_day, last_ledger FROM player_stats WHERE player = ?")
+        .prepare("SELECT day, sun, shift_done, early, candles_spent, oil, dawn_level, visitor_day, last_ledger, shift_lift_day FROM player_stats WHERE player = ?")
         .get(player);
-      if (!row) return { state: firstDay(), dawnLevel: 1, visitorDay: 0, lastLedger: null };
+      if (!row) return { state: firstDay(), dawnLevel: 1, visitorDay: 0, lastLedger: null, shiftLiftDay: 0 };
       return {
         state: {
           number: row.day as number,
@@ -543,6 +565,7 @@ export function openStore(path: string) {
         dawnLevel: row.dawn_level as number,
         visitorDay: row.visitor_day as number,
         lastLedger: row.last_ledger ? (JSON.parse(row.last_ledger as string) as Ledger) : null,
+        shiftLiftDay: row.shift_lift_day as number,
       };
     },
 
@@ -566,6 +589,12 @@ export function openStore(path: string) {
       db.prepare(
         "UPDATE player_stats SET day = ?, sun = ?, shift_done = ?, early = ?, candles_spent = ?, oil = ?, dawn_level = ?, last_ledger = ? WHERE player = ?",
       ).run(state.number, state.sun, state.shiftDone ? 1 : 0, state.early ? 1 : 0, state.spent, state.oil, dawnLevel, JSON.stringify(ledger), player);
+    },
+
+    // Notes the day a Great or Perfect shift was worked.
+    setShiftLiftDay(player: string, day: number): void {
+      db.prepare("INSERT OR IGNORE INTO player_stats (player) VALUES (?)").run(player);
+      db.prepare("UPDATE player_stats SET shift_lift_day = ? WHERE player = ?").run(day, player);
     },
 
     // Notes the day on which the player finished with a visitor.
@@ -772,6 +801,34 @@ export function openStore(path: string) {
     // Gives the player a plot. Returns false if they already had it.
     addPlot(player: string, plot: number): boolean {
       return db.prepare("INSERT OR IGNORE INTO town_plots (player, plot) VALUES (?, ?)").run(player, plot).changes === 1;
+    },
+
+    // What is on each shelf of the player's buildings.
+    listStock(player: string): StoredStock[] {
+      return db
+        .prepare("SELECT plot, slot, entry_id FROM town_stock WHERE player = ? ORDER BY plot, slot")
+        .all(player)
+        .map((row) => ({ plot: row.plot as number, slot: row.slot as number, entryId: row.entry_id as string }));
+    },
+
+    // Puts a discovery on a shelf, or clears the shelf when `entryId` is null. A discovery already
+    // on another shelf is moved: it can be in one place at a time. What was on the shelf goes.
+    setStock(player: string, plot: number, slot: number, entryId: string | null): void {
+      transaction(() => {
+        db.prepare("DELETE FROM town_stock WHERE player = ? AND plot = ? AND slot = ?").run(player, plot, slot);
+        if (entryId === null) return;
+        db.prepare("DELETE FROM town_stock WHERE player = ? AND entry_id = ?").run(player, entryId);
+        db.prepare("INSERT INTO town_stock (player, plot, slot, entry_id) VALUES (?, ?, ?, ?)").run(player, plot, slot, entryId);
+      });
+    },
+
+    // A hand lent at a building on a day. One a building a day.
+    addHand(player: string, plot: number, day: number): boolean {
+      return db.prepare("INSERT OR IGNORE INTO town_hands (player, plot, day) VALUES (?, ?, ?)").run(player, plot, day).changes === 1;
+    },
+
+    hasHand(player: string, plot: number, day: number): boolean {
+      return db.prepare("SELECT 1 FROM town_hands WHERE player = ? AND plot = ? AND day = ?").get(player, plot, day) !== undefined;
     },
 
     // Raises a building on a plot the player owns, or raises the one there to a new tier.

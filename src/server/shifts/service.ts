@@ -87,6 +87,8 @@ export function createShifts(deps: {
     if (pay.gold !== 0) store.addLedger(player, pay.gold, "shift", String(shiftId));
     if (pay.rep !== 0) store.changeStats(player, { rep: pay.rep });
     store.finishShiftOrder(order.id);
+    // A Great or Perfect shift lifts the player's own building tonight, if they have one.
+    if (quality.id === "great" || quality.id === "perfect") store.setShiftLiftDay(player, day.today(player).number);
 
     const shiftsDone = store.countShifts(player, at.job.id);
     const rankUp = rankFor(shiftsDone, rules).id !== at.rank.id ? rankView(shiftsDone, rules) : null;

@@ -4,7 +4,7 @@ import { extraDiscoveryGold } from "../shared/town";
 import { RuleError } from "./combiner";
 import { learnCostForTier, levelForSpellTier, type GameData } from "./gameData";
 import type { Store } from "./store";
-import { perksGiven, standingBuildings } from "./town";
+import { extraCandles, perksGiven, standingBuildings } from "./town";
 
 export type ProgressService = ReturnType<typeof createProgress>;
 
@@ -246,7 +246,7 @@ export function createProgress(deps: {
       job,
       // One shift a day, from noon until night, and only once a job is taken up.
       shiftReady: shiftOpen(day.state, data.balance.day, job !== null),
-      day: dayView(day.state, data.balance.day, { lastLedger: day.lastLedger }),
+      day: dayView(day.state, data.balance.day, { lastLedger: day.lastLedger, extraCandles: extraCandles(standingBuildings(data, store, player)) }),
       rep: stats.rep,
       repBand: repBandFor(stats.rep, data.balance).name,
       requests: listRequestViews(player),

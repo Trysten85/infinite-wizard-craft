@@ -23,6 +23,8 @@ const testEventBodySchema = z.object({ seed: z.string().optional() });
 const plotSchema = z.number().int().min(0);
 const buildBodySchema = z.object({ plot: plotSchema, building: idSchema });
 const upgradeBodySchema = z.object({ plot: plotSchema });
+const stockBodySchema = z.object({ plot: plotSchema, slot: z.number().int().min(0), entry: idSchema.nullable() });
+const handBodySchema = z.object({ plot: plotSchema });
 
 // What the rules refuse comes back as { error, code }. `error` is a sentence for the player.
 function refuse(c: Context, err: unknown) {
@@ -116,6 +118,30 @@ export function createApp(
         try {
           const raised = town.build(request.player, request.body.plot, request.body.building);
           return c.json({ ...raised, progress: progress.getProgress(request.player) });
+        } catch (err) {
+          return refuse(c, err);
+        }
+      });
+
+      // Puts a discovery on a shelf, or clears the shelf with `entry: null`. Free, at any hour.
+      app.post("/api/players/:player/town/stock", async (c) => {
+        const request = await read(c, stockBodySchema);
+        if (!request) return invalid(c);
+        try {
+          town.stock(request.player, request.body.plot, request.body.slot, request.body.entry);
+          return c.json({ rewards: { gold: 0, quests: [] }, ...SAME_DAY, progress: progress.getProgress(request.player) });
+        } catch (err) {
+          return refuse(c, err);
+        }
+      });
+
+      // Lends a hand at a building: one candle, once a building an evening.
+      app.post("/api/players/:player/town/hand", async (c) => {
+        const request = await read(c, handBodySchema);
+        if (!request) return invalid(c);
+        try {
+          const lent = town.hand(request.player, request.body.plot);
+          return c.json({ rewards: { gold: 0, quests: [] }, ...lent, progress: progress.getProgress(request.player) });
         } catch (err) {
           return refuse(c, err);
         }

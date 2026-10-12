@@ -1,16 +1,42 @@
-import type { Building, BuildingView, GameEntry, NeedView, Perk, QualityId, Rewards, TownView } from "../shared/schema";
-import { checkNeeds, deedsFor, levelForPlot, perksAt, plotPrice, refusePlot, refuseTier, slotsAt, takingsFor, tierCost, topTier, type Builder } from "../shared/town";
+import type { Building, BuildingView, GameEntry, Ledger, NeedView, Perk, QualityId, Rewards, TownView } from "../shared/schema";
+import { rankFor } from "../shared/shifts";
+import {
+  buildingQuality,
+  cheerBand,
+  cheerPoints,
+  checkNeeds,
+  deedsFor,
+  isStockable,
+  levelForPlot,
+  liftsFor,
+  perksAt,
+  plotPrice,
+  refusePlot,
+  refuseTier,
+  slotsAt,
+  takingsFor,
+  tierCost,
+  topTier,
+  type Builder,
+} from "../shared/town";
 import { RuleError } from "./combiner";
 import type { DayService, DayTurn } from "./day";
 import { townWords, type GameData } from "./gameData";
+import { buildPath } from "./paths";
 import type { ProgressService } from "./progress";
 import type { Person, Store } from "./store";
 
 export type TownService = ReturnType<typeof createTown>;
 
-// A building standing on one of the player's plots. Every building is Meh until stock gives it
-// a quality.
-export type Standing = { plot: number; building: Building; tier: number; quality: QualityId };
+// A building standing on one of the player's plots, with the quality it has tonight and what is
+// on its shelves.
+export type Standing = { plot: number; building: Building; tier: number; quality: QualityId; stock: { slot: number; entry: GameEntry }[] };
+
+// The job that runs a building at this tier: the one that brought its plan, unless a later tier
+// hands it to another.
+export function runBy(building: Building, tier: number): string | undefined {
+  return building.tiers[tier - 1]?.job ?? building.job;
+}
 
 // The buildings a player has standing, in order along the street. A building the game data no
 // longer has is passed over. Everything that asks about the town asks here, so this is also
@@ -28,10 +54,109 @@ export function standingBuildings(data: GameData, store: Store, player: string):
       plots = store.listPlots(player);
     }
   }
-  return plots.flatMap((plot) => {
+  const built = plots.flatMap((plot) => {
     const building = plot.building ? data.buildings.get(plot.building) : undefined;
-    return building ? [{ plot: plot.plot, building, tier: plot.tier, quality: "meh" as const }] : [];
+    return building ? [{ plot: plot.plot, building, tier: plot.tier }] : [];
   });
+  // Quality is worked out here, once, from what is on the shelves and what lifts it, so
+  // everything that asks about the town gets the same answer.
+  const saved = store.getDay(player);
+  const today = saved.state.number;
+  const job = store.getStats(player).job;
+  const shelves = store.listStock(player);
+  const shifts = data.balance.shifts;
+  return built.map((at) => {
+    const stock = shelves
+      .filter((item) => item.plot === at.plot && item.slot < slotsAt(at.tier, data.balance.town))
+      .flatMap((item) => {
+        const entry = data.entries.get(item.entryId) ?? store.getEntry(item.entryId);
+        return entry ? [{ slot: item.slot, entry }] : [];
+      });
+    // The owner's own building is the one their job runs. The rank counts there, and so does a
+    // good shift worked today.
+    const own = job !== null && runBy(at.building, at.tier) === job;
+    const rank = own ? rankFor(store.countShifts(player, job), shifts) : null;
+    const quality = buildingQuality(
+      at.building,
+      at.tier,
+      stock.map((item) => item.entry),
+      {
+        rankBonus: rank?.bonus ?? 0,
+        lifts: {
+          perks: liftsFor(at.building.id, built),
+          hand: store.hasHand(player, at.plot, today) ? 1 : 0,
+          shift: own && saved.shiftLiftDay === today ? 1 : 0,
+        },
+      },
+      shifts,
+    );
+    return { ...at, quality, stock };
+  });
+}
+
+// How good life in the town is tonight, and the share it raises takings by. Regulars and
+// enchantments are none until the evening's other actions exist.
+export function townCheer(data: GameData, built: Standing[]) {
+  const points = cheerPoints(built.map((at) => at.quality), 0, 0);
+  const band = cheerBand(points, data.balance.town);
+  return { points, band: band.name, share: band.takings };
+}
+
+// What each standing building pays for the night, with the Cheer share applied.
+export function takingsOf(data: GameData, built: Standing[]) {
+  const { share } = townCheer(data, built);
+  return built.map((at) => ({
+    plot: at.plot,
+    building: at.building.id,
+    name: at.building.name,
+    quality: at.quality,
+    gold: takingsFor(at.tier, at.quality, data.balance.town, data.balance.shifts, share),
+  }));
+}
+
+// What the town brings when night falls, on the days its perks come round: a rumour is a hint,
+// and a gift is a thing the player lacks and could reach. Anything given is kept as it is given.
+export function nightlyPerks(data: GameData, store: Store, player: string, built: Standing[], day: number, random: () => number): Ledger["brought"] {
+  const brought: Ledger["brought"] = [];
+  const events = data.balance.events;
+  const never = new Set([...data.balance.shop.neverSells, ...events.payoff.never]);
+  const have = new Set(store.getDiscoveries(player));
+  const reachable = (steps: number) =>
+    [...data.entries.values()]
+      .filter((entry) => entry.kind === "material" && !have.has(entry.id) && !never.has(entry.id))
+      .filter((entry) => buildPath(data, entry.id, have).length <= steps);
+  const pickOne = <T>(items: T[]): T | undefined => items[Math.floor(random() * items.length)];
+  for (const at of built) {
+    for (const perk of perksAt(at.building, at.tier)) {
+      if (perk.type === "rumour" && day % perk.every === 0) {
+        const hinted = new Set(store.listHints(player).map((hint) => hint.entryId));
+        const entry = pickOne(reachable(events.payoff.hintMaxMissingSteps).filter((item) => !hinted.has(item.id)));
+        const recipe = entry && [...data.combos.values()].filter((item) => item.result === entry.id).sort((a, b) => a.needs.length - b.needs.length)[0];
+        if (entry && recipe) {
+          const how = recipe.inputs.map((id) => data.entries.get(id)!.name).join(" and ");
+          store.addHint(player, entry.id, how, at.building.name);
+          brought.push({ kind: "rumour", line: `A rumour at the ${at.building.name}: ${entry.name} is made from ${how}.` });
+        }
+      }
+      if (perk.type === "gift" && day % perk.every === 0) {
+        const entry = pickOne(reachable(events.payoff.giftMaxMissingSteps).filter((item) => item.tags.some((tag) => perk.tags.includes(tag))));
+        if (entry) {
+          // A gift is the player's from now on, but it was not made, so it pays no discovery gold.
+          store.addLedger(player, 0, "gift", entry.id);
+          store.addDiscovery(player, entry.id);
+          have.add(entry.id);
+          brought.push({ kind: "gift", line: `The ${at.building.name} has grown you a gift: ${entry.name}.` });
+        }
+      }
+    }
+  }
+  return brought;
+}
+
+
+// How many candles the standing buildings add to every evening.
+export function extraCandles(standing: Standing[]): number {
+  return perksGiven(standing, "candles").reduce((total, { perk }) => total + perk.count, 0);
 }
 
 // Every perk of one type that the standing buildings give, each with the quality of the
@@ -61,9 +186,6 @@ export function createTown(deps: {
   const buildings = [...data.buildings.values()];
 
   const standing = (player: string) => standingBuildings(data, store, player);
-  // The job that runs a building at this tier: the one that brought its plan, unless a later
-  // tier hands it to another.
-  const runBy = (building: Building, tier: number) => building.tiers[tier - 1]?.job ?? building.job;
 
   // The townsfolk a player has. A job the player has discovered brings its townsperson, whether
   // or not the player takes the job up: anyone not here yet arrives now. Until they are given
@@ -87,7 +209,7 @@ export function createTown(deps: {
     return { held, jobs: arrive(player).map((person) => person.job!), level, gold };
   }
 
-  function buildingView(at: Standing, who: Builder): BuildingView {
+  function buildingView(at: Standing, who: Builder, share: number): BuildingView {
     const { building, tier, quality } = at;
     const next = tier < topTier(building, rules) ? tier + 1 : null;
     return {
@@ -95,9 +217,12 @@ export function createTown(deps: {
       name: building.name,
       tier,
       quality,
-      takings: takingsFor(tier, quality, rules, data.balance.shifts),
+      takings: takingsFor(tier, quality, rules, data.balance.shifts, share),
       wants: building.wants,
-      stock: Array.from({ length: slotsAt(tier, rules) }, (_, slot) => ({ slot, entry: null })),
+      stock: Array.from({ length: slotsAt(tier, rules) }, (_, slot) => {
+        const held = at.stock.find((item) => item.slot === slot);
+        return { slot, entry: held ? { id: held.entry.id, name: held.entry.name } : null };
+      }),
       enchantment: null,
       next: next === null ? null : { ...tierCost(building, next, rules), needs: checkNeeds(building, next, who, rules, words), ready: refuseTier(building, next, who, rules) === null },
     };
@@ -109,13 +234,14 @@ export function createTown(deps: {
     const owned = new Set(store.listPlots(player).map((plot) => plot.plot));
     const raised = new Set(built.map((at) => at.building.id));
     const housed = new Set(built.map((at) => runBy(at.building, at.tier)));
+    const cheer = townCheer(data, built);
     return {
       plots: rules.plotPrices.map((price, index) => {
         const at = built.find((item) => item.plot === index);
-        return { index, owned: owned.has(index), price, opensAt: levelForPlot(index, rules) ?? data.balance.levels.cap, building: at ? buildingView(at, who) : null };
+        return { index, owned: owned.has(index), price, opensAt: levelForPlot(index, rules) ?? data.balance.levels.cap, building: at ? buildingView(at, who, cheer.share) : null };
       }),
       deeds: { have: deedsFor(who.level, rules), max: deedsFor(data.balance.levels.cap, rules) },
-      cheer: null,
+      cheer: { points: cheer.points, band: cheer.band },
       townsfolk: store
         .listPeople(player)
         .filter((person) => person.job !== null)
@@ -200,5 +326,32 @@ export function createTown(deps: {
     return { rewards, ...day.spend(player, costs.upgrade) };
   }
 
-  return { view, arrive, buyPlot, build, upgrade, standing };
+  // Puts a discovery on a shelf, or clears it with `entry: null`. Free, and at any hour. A thing
+  // already on another shelf is moved.
+  function stock(player: string, plot: number, slot: number, entryId: string | null): void {
+    const at = standing(player).find((item) => item.plot === plot);
+    if (!at) throw new RuleError("Nothing stands on that plot.");
+    if (slot >= slotsAt(at.tier, rules)) throw new RuleError(`The ${at.building.name} has ${slotsAt(at.tier, rules)} shelves.`);
+    if (entryId !== null) {
+      const entry = listDiscovered(player).find((item) => item.id === entryId);
+      if (!entry) throw new RuleError("You can only stock something you have discovered.");
+      if (!isStockable(entry)) throw new RuleError(`${entry.name} is not a thing that can sit on a shelf.`);
+    }
+    store.setStock(player, plot, slot, entryId);
+  }
+
+  // Lends a hand at a building this evening: its quality is a step better tonight. One candle,
+  // once a building an evening, and not worth a candle on bare shelves.
+  function hand(player: string, plot: number): DayTurn {
+    const at = standing(player).find((item) => item.plot === plot);
+    if (!at) throw new RuleError("Nothing stands on that plot.");
+    if (at.stock.length === 0) throw new RuleError(`The ${at.building.name} has nothing on its shelves to lend a hand with.`);
+    const today = day.today(player).number;
+    if (store.hasHand(player, plot, today)) throw new RuleError(`You have already lent a hand at the ${at.building.name} today.`);
+    day.check(player, costs.hand);
+    store.addHand(player, plot, today);
+    return day.spend(player, costs.hand);
+  }
+
+  return { view, arrive, buyPlot, build, upgrade, stock, hand, standing };
 }

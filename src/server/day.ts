@@ -1,11 +1,10 @@
 import { afterAction, canTurnIn, isEvening, nextDay, nightFalls, refuseCandles, spendCandles, turnIn, type DayAction, type DayState } from "../shared/day";
 import type { CombineResult, Ledger, NightReason } from "../shared/schema";
-import { takingsFor } from "../shared/town";
 import { RuleError } from "./combiner";
 import type { GameData } from "./gameData";
 import type { ProgressService } from "./progress";
 import type { Store } from "./store";
-import { standingBuildings } from "./town";
+import { extraCandles, nightlyPerks, standingBuildings, takingsOf, townCheer } from "./town";
 
 export type DayService = ReturnType<typeof createDay>;
 
@@ -29,19 +28,19 @@ export function createDay(deps: {
   const pick = (lines: string[]) => lines[Math.floor(random() * lines.length)]!;
 
   const today = (player: string): DayState => store.getDay(player).state;
+  // The candles the town adds to an evening, from the buildings standing now.
+  const extra = (player: string) => extraCandles(standingBuildings(data, store, player));
 
   // Night. The town pays its takings, the ledger is written and kept, and the player wakes at
   // dawn on the next day.
   function fall(player: string, state: DayState, fell: NightReason): Ledger {
-    // Each building standing pays for the night, once, through the gold ledger.
-    const takings = standingBuildings(data, store, player).map(({ plot, building, tier, quality }) => ({
-      plot,
-      building: building.id,
-      name: building.name,
-      quality,
-      gold: takingsFor(tier, quality, data.balance.town, data.balance.shifts),
-    }));
+    // Each building standing pays for the night, once, through the gold ledger, at the quality it
+    // has tonight and raised by the town's Cheer. What the perks bring is added as well.
+    const built = standingBuildings(data, store, player);
+    const takings = takingsOf(data, built);
     for (const row of takings) if (row.gold > 0) store.addLedger(player, row.gold, "takings", `${state.number}:${row.plot}`);
+    const cheer = townCheer(data, built);
+    const brought = nightlyPerks(data, store, player, built, state.number, random);
     // Anything owed is paid as well, so that a level reached today is counted today.
     progress.settle(player);
     const level = store.getStats(player).lastLevel;
@@ -51,8 +50,8 @@ export function createDay(deps: {
       day: state.number,
       fell,
       takings,
-      cheer: null,
-      brought: [],
+      cheer: built.length === 0 ? null : { points: cheer.points, band: cheer.band },
+      brought,
       missed: null,
       deed: level > store.getDay(player).dawnLevel,
       lines,
@@ -63,7 +62,7 @@ export function createDay(deps: {
 
   // Saves the day as it now stands, unless that is night, in which case the day ends.
   function settle(player: string, was: DayState, now: DayState, duskLines = text.dusk): DayTurn {
-    const fell = nightFalls(now, rules);
+    const fell = nightFalls(now, rules, extra(player));
     if (fell) return { night: fall(player, now, fell), dusk: null };
     store.setDay(player, now);
     return { night: null, dusk: !isEvening(was, rules) && isEvening(now, rules) ? pick(duskLines) : null };
@@ -83,7 +82,7 @@ export function createDay(deps: {
 
   // Refuses an evening action the player cannot take: it is not yet dusk, or the candles are short.
   function check(player: string, cost: number): void {
-    const refusal = refuseCandles(today(player), cost, rules);
+    const refusal = refuseCandles(today(player), cost, rules, extra(player));
     if (refusal === "not-evening") throw new RuleError("That is for the evening. The street lights up at dusk.", refusal);
     if (refusal === "no-candles") throw new RuleError(`That takes ${cost} ${cost === 1 ? "candle" : "candles"}, and you have fewer left tonight.`, refusal);
   }
