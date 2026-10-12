@@ -9,10 +9,12 @@ import type {
   ShiftResult,
   ShopSlot,
   ShopView,
+  TownView,
 } from "../../src/shared/schema";
 import {
   ApiError,
   buy,
+  buyPlot,
   chooseJob,
   combine,
   endDay,
@@ -20,9 +22,12 @@ import {
   fetchPlayer,
   fetchShift,
   fetchShop,
+  fetchTown,
   learn,
+  raiseBuilding,
   respondToEvent,
   testEvent,
+  upgradeBuilding,
   workShift,
   type Earned,
 } from "./api";
@@ -41,6 +46,7 @@ import { Shop } from "./Shop";
 import { Spellbook } from "./Spellbook";
 import { learnNote } from "./spells";
 import { StatusBar } from "./StatusBar";
+import { Town } from "./Town";
 import { useBubbleDrag, type Drop } from "./useBubbleDrag";
 import { usePageTurn } from "./usePageTurn";
 
@@ -116,6 +122,14 @@ export function Workbench({ player, onLeave }: { player: string; onLeave: () => 
   // The night ledger on show: the one night just brought, or last night's, asked for again.
   const [ledger, setLedger] = useState<{ page: Ledger; fresh: boolean } | null>(null);
   const [dayBusy, setDayBusy] = useState(false);
+  // Which of the two the board's space is showing: the workbench, or the town's street.
+  const [place, setPlace] = useState<"bench" | "town">("bench");
+  // The street as the server last gave it, why it couldn't, and whether something is being raised.
+  const [town, setTown] = useState<TownView | null>(null);
+  const [townProblem, setTownProblem] = useState("");
+  const [townBusy, setTownBusy] = useState(false);
+  // The shop is shut until a Market Stall stands. A server from before the town never says so.
+  const [shopShut, setShopShut] = useState(false);
   const [bubbles, setBubbles] = useState<Bubble[]>([]);
   // False until the saved board has been read, so the empty first render never overwrites it.
   const [loaded, setLoaded] = useState(false);
@@ -199,8 +213,17 @@ export function Workbench({ player, onLeave }: { player: string; onLeave: () => 
   // anything they have since made for themselves is marked sold.
   function restock() {
     fetchShop(player)
-      .then(setShop)
-      .catch((err: Error) => setError(err.message));
+      .then((shelf) => {
+        setShop(shelf);
+        setShopShut(false);
+      })
+      .catch((err: Error) => {
+        // No stall, no shop. That is how things stand, not something gone wrong.
+        if (err instanceof ApiError && err.code === "no-shop") {
+          setShopShut(true);
+          setTab("discovered");
+        } else setError(err.message);
+      });
   }
 
   // Takes in the player's new standing after an action, and announces what the action earned.
@@ -223,7 +246,11 @@ export function Workbench({ player, onLeave }: { player: string; onLeave: () => 
     const was = shownDay.current;
     if (next.day && was && was.number === next.day.number && was.phase !== next.day.phase) {
       if (next.day.phase === "afternoon")
-        fresh.push({ id: `noon-${next.day.number}`, label: "Noon:", name: next.shiftReady ? "orders are on the board" : "half the day is gone" });
+        fresh.push({
+          id: `noon-${next.day.number}`,
+          label: "Noon:",
+          name: next.shiftReady ? "orders are on the board" : "half the day is gone",
+        });
       if (next.day.phase === "evening")
         fresh.push({
           id: `dusk-${next.day.number}`,
@@ -239,6 +266,7 @@ export function Workbench({ player, onLeave }: { player: string; onLeave: () => 
       setLedger({ page: night, fresh: true });
       restock();
       readShift();
+      if (place === "town") readTown();
     }
   }
 
@@ -302,6 +330,8 @@ export function Workbench({ player, onLeave }: { player: string; onLeave: () => 
   }
 
   function spawn(entry: GameEntry) {
+    // The board is out of sight in the town, so a click there only reads the entry.
+    if (place === "town") return setSelectedId(entry.id);
     addBubble(
       {
         id: newBubbleId(),
@@ -343,6 +373,8 @@ export function Workbench({ player, onLeave }: { player: string; onLeave: () => 
       if (drop.zone === "job" && held) void takeJob(held);
       return;
     }
+    // The street takes nothing yet, so a thing let go over it goes back where it came from.
+    if (place === "town") return;
     const target = bubbles.find((bubble) => bubble.id === drop.targetId);
     const board = boardRef.current!.getBoundingClientRect();
     const spot = target
@@ -603,8 +635,47 @@ export function Workbench({ player, onLeave }: { player: string; onLeave: () => 
       })
       .catch((err: Error) => {
         // A server from before shifts has no such route. That isn't worth a notice on the board.
-        setShiftProblem(err instanceof ApiError && err.status === 404 ? "The order board isn't open yet. The server has no shifts to give." : err.message);
+        setShiftProblem(
+          err instanceof ApiError && err.status === 404 ? "The order board isn't open yet. The server has no shifts to give." : err.message,
+        );
       });
+  }
+
+  // Reads the street again. It changes when a plot is bought or a building raised, when a job is
+  // discovered (its townsperson arrives), and overnight.
+  function readTown() {
+    fetchTown(player)
+      .then((street) => {
+        setTown(street);
+        setTownProblem("");
+      })
+      .catch((err: Error) => {
+        // A server from before the town has no such route.
+        setTownProblem(
+          err instanceof ApiError && err.status === 404 ? "The street is quiet. The server has no town to give yet." : err.message,
+        );
+      });
+  }
+
+  function visit(next: "bench" | "town") {
+    setPlace(next);
+    if (next === "town") readTown();
+  }
+
+  // Buys a plot or raises a building. The server decides whether it may be done, and the street
+  // and the shop are read again afterwards: a Market Stall opens the shop.
+  async function build(action: () => Promise<Earned>) {
+    setTownBusy(true);
+    setError("");
+    try {
+      earn(await action());
+      readTown();
+      restock();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setTownBusy(false);
+    }
   }
 
   function openOrders() {
@@ -657,7 +728,7 @@ export function Workbench({ player, onLeave }: { player: string; onLeave: () => 
     // The spellbook takes anything: a spell to learn, or something to try with the focus.
     zoneAt: (clientX, clientY, held) => {
       if (byId.get(held.entryId)?.kind === "job" && under(jobRef.current, clientX, clientY)) return "job";
-      if (under(spellbookRef.current, clientX, clientY)) return "spellbook";
+      if (place === "bench" && under(spellbookRef.current, clientX, clientY)) return "spellbook";
       return under(panelRef.current, clientX, clientY) ? "book" : null;
     },
     onDrop: handleDrop,
@@ -695,7 +766,7 @@ export function Workbench({ player, onLeave }: { player: string; onLeave: () => 
 
   return (
     <main className={`workbench ${day?.phase ?? ""}`}>
-      <div className="board-column">
+      <div className={`board-column ${place === "town" ? "in-town" : ""}`}>
         <header className="topbar">
           <h1>Infinite Wizard Craft</h1>
           <p>
@@ -771,6 +842,21 @@ export function Workbench({ player, onLeave }: { player: string; onLeave: () => 
             onEndDay={goToBed}
             onShowLedger={() => setLedger(day?.lastLedger ? { page: day.lastLedger, fresh: false } : null)}
           />
+          {/* The street takes the board's place. The status box, the notes and the cards stay over it. */}
+          {place === "town" && (
+            <Town
+              town={town}
+              problem={townProblem}
+              gold={progress.gold}
+              level={progress.level}
+              day={day}
+              busy={townBusy}
+              onBuyPlot={() => build(() => buyPlot(player))}
+              onRaise={(plot, building) => build(() => raiseBuilding(player, plot, building))}
+              onUpgrade={(plot) => build(() => upgradeBuilding(player, plot))}
+              onLeave={() => visit("bench")}
+            />
+          )}
           <div className="toasts">
             {error && (
               <p className="notice" role="alert">
@@ -850,8 +936,14 @@ export function Workbench({ player, onLeave }: { player: string; onLeave: () => 
           >
             Discovered
           </button>
-          <button className="bookmark mark-shop" aria-current={tab === "shop" ? "page" : undefined} onClick={() => openTab("shop")}>
-            Shop
+          {!shopShut && (
+            <button className="bookmark mark-shop" aria-current={tab === "shop" ? "page" : undefined} onClick={() => openTab("shop")}>
+              Shop
+            </button>
+          )}
+          {/* Not a page of the book: it swaps the board for the street, and back. */}
+          <button className="bookmark mark-town" aria-pressed={place === "town"} onClick={() => visit(place === "town" ? "bench" : "town")}>
+            Town
           </button>
         </nav>
         <div className="book-pages">

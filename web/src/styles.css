@@ -2058,7 +2058,8 @@ body.dragging * {
 
 .bookmark:hover,
 .bookmark:focus-visible,
-.bookmark[aria-current] {
+.bookmark[aria-current],
+.bookmark[aria-pressed="true"] {
   translate: 14px 0;
 }
 
@@ -2070,8 +2071,262 @@ body.dragging * {
   background: linear-gradient(180deg, #3b6152, #27433a);
 }
 
-.bookmark:not([aria-current]) {
+.mark-town {
+  background: linear-gradient(180deg, #4a5a86, #2f3a5c);
+}
+
+.bookmark:not([aria-current], [aria-pressed="true"]) {
   filter: brightness(0.75);
+}
+
+/* The town: one street, drawn side-on, over the whole of the board. The status box stays above it. */
+
+.town {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  background: var(--ground);
+}
+
+.in-town .status {
+  z-index: 4;
+}
+
+/* Notes drop below the street's heading, so they never cover the way back. */
+.in-town .toasts {
+  top: 56px;
+}
+
+.town-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 16px;
+  padding: 12px 16px;
+}
+
+.town-head h2 {
+  margin: 0;
+  font-size: 1.2rem;
+  letter-spacing: 0.04em;
+}
+
+.town-head p {
+  margin: 0;
+  color: var(--dim);
+}
+
+.town-head button {
+  margin-left: auto;
+  padding: 5px 12px;
+  font-size: 0.9rem;
+}
+
+/* The sky behind the street follows the day: pale by morning, warm after noon, dark from dusk. */
+.street {
+  flex: none;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  background: linear-gradient(180deg, #5f86a8, #a9c4cf 70%, #cdd9c4);
+  border-block: 2px solid #1c1812;
+  transition: background 1.8s;
+}
+
+.workbench.afternoon .street {
+  background: linear-gradient(180deg, #5b7ea4, #d9b98a 75%, #e6c79a);
+}
+
+.workbench.evening .street {
+  background:
+    radial-gradient(circle, rgb(223 230 255 / 0.7) 0.8px, transparent 1.3px) 11px 7px / 97px 61px,
+    radial-gradient(circle, rgb(223 230 255 / 0.45) 0.7px, transparent 1.2px) 53px 31px / 131px 73px,
+    linear-gradient(180deg, #141a36, #2a2f55 70%, #4a3a4a);
+}
+
+/* Each plot is 40 art pixels wide, drawn at three screen pixels to one. The road under them runs
+   on to both ends of the street. */
+.street-plots {
+  display: flex;
+  width: max-content;
+  min-width: 100%;
+  margin: 0;
+  padding: 28px 16px 0;
+  list-style: none;
+  background: linear-gradient(#7d776a, #7d776a) 0 calc(100% - 15px) / 100% 3px no-repeat, linear-gradient(#4d4a41, #4d4a41) 0 100% / 100% 15px no-repeat;
+}
+
+.plot {
+  position: relative;
+  display: block;
+  padding: 0;
+  background: none;
+  border: none;
+  border-radius: 0;
+  color: inherit;
+}
+
+.plot-art {
+  display: block;
+  width: 120px;
+  height: 144px;
+}
+
+/* The caption sits on the road, under the kerb. */
+.plot-caption {
+  position: absolute;
+  inset: auto 0 0;
+  overflow: hidden;
+  color: #f1e9d2;
+  font-size: 0.72rem;
+  line-height: 15px;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.plot-tier {
+  color: var(--gold);
+}
+
+/* A building goes up when it is raised, and each time the street is opened. */
+.plot.building .plot-art {
+  animation: building-rise 0.45s steps(6) backwards;
+}
+
+@keyframes building-rise {
+  from {
+    clip-path: inset(100% 0 0 0);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .plot.building .plot-art {
+    animation: none;
+  }
+
+  .street {
+    transition: none;
+  }
+}
+
+.plot.later .plot-art,
+.plot.locked .plot-art {
+  opacity: 0.7;
+}
+
+button.plot:hover:not(:disabled),
+button.plot:focus-visible {
+  background: rgb(255 255 255 / 0.1);
+}
+
+/* The picked plot is framed, the way a surveyor would mark it. */
+button.plot[aria-pressed="true"] {
+  background: rgb(255 255 255 / 0.06);
+  box-shadow: inset 0 0 0 2px var(--gold);
+}
+
+.town-quiet {
+  margin: 0;
+  padding: 24px 16px;
+  color: var(--dim);
+  font-style: italic;
+  text-align: center;
+}
+
+/* What is under the street: the picked plot, the plans, and who has arrived. The space at the
+   bottom keeps the last of it clear of the status box. */
+.town-boxes {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  align-items: start;
+  gap: 12px;
+  padding: 12px 16px 150px;
+}
+
+.town-box {
+  padding: 12px 14px;
+}
+
+.town-box h3 {
+  margin: 0 0 6px;
+  font-size: 1rem;
+}
+
+.town-box h4 {
+  margin: 10px 0 2px;
+  font-size: 0.92rem;
+}
+
+.town-box p {
+  margin: 0 0 6px;
+}
+
+.town-box button {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 6px;
+  padding: 5px 12px;
+  font-size: 0.9rem;
+}
+
+.town-none,
+.town-job {
+  color: var(--dim);
+  font-size: 0.85rem;
+}
+
+.town-job {
+  margin-left: 4px;
+  font-weight: normal;
+}
+
+.town-box .town-why {
+  margin: 6px 0 0;
+  color: var(--warn);
+  font-size: 0.85rem;
+}
+
+.town-list,
+.town-needs {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.town-list > li + li {
+  margin-top: 10px;
+  padding-top: 2px;
+  border-top: 1px solid var(--line);
+}
+
+.town-needs li {
+  padding-left: 1.3em;
+  color: var(--dim);
+  font-size: 0.88rem;
+}
+
+.town-needs li::before {
+  content: "✗";
+  display: inline-block;
+  width: 1.3em;
+  margin-left: -1.3em;
+  color: var(--warn);
+}
+
+.town-needs li.met {
+  color: var(--ink);
+}
+
+.town-needs li.met::before {
+  content: "✓";
+  color: var(--job);
 }
 
 /* Shop page */

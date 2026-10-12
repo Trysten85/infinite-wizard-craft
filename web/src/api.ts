@@ -7,9 +7,11 @@ import type {
   PlayerProgress,
   ResponseType,
   Rewards,
+  RuleCode,
   ShiftBoard,
   ShiftResult,
   ShopView,
+  TownView,
 } from "../../src/shared/schema";
 
 // What comes back from anything that can change the player's standing: what that action earned,
@@ -17,11 +19,13 @@ import type {
 // server from before the day sends none.
 export type Earned = { rewards: Rewards; progress: PlayerProgress; night?: Ledger | null };
 
-// A refusal from the server, with the HTTP status it came with.
+// A refusal from the server, with the HTTP status it came with, and the rule's code when a rule
+// was the reason.
 export class ApiError extends Error {
   constructor(
     message: string,
     readonly status: number,
+    readonly code?: RuleCode,
   ) {
     super(message);
   }
@@ -35,7 +39,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   // The dev proxy answers 502 to 504 with no JSON body when the game server is down.
   const unreachable = !response || (!body && response.status >= 502 && response.status <= 504);
   if (unreachable) throw new Error(UNREACHABLE);
-  if (!response.ok) throw new ApiError(body?.error ?? `Request failed (${response.status}).`, response.status);
+  if (!response.ok) throw new ApiError(body?.error ?? `Request failed (${response.status}).`, response.status, body?.code);
   return body as T;
 }
 
@@ -103,4 +107,24 @@ export function workShift(
   choice: { order: number; base: string; method: string; touch?: string },
 ): Promise<Earned & { result: ShiftResult; shift: ShiftBoard }> {
   return post(`/api/players/${player}/shift`, choice);
+}
+
+// The street: its plots, what stands on them, who has arrived, and the plans in hand.
+export function fetchTown(player: string): Promise<TownView> {
+  return request(`/api/players/${player}/town`);
+}
+
+// Buys the next plot along the street.
+export function buyPlot(player: string): Promise<Earned> {
+  return post(`/api/players/${player}/town/plots`, {});
+}
+
+// Raises a building the player holds the plan for, on an empty plot of theirs.
+export function raiseBuilding(player: string, plot: number, building: string): Promise<Earned> {
+  return post(`/api/players/${player}/town/build`, { plot, building });
+}
+
+// Raises the building on a plot by one tier.
+export function upgradeBuilding(player: string, plot: number): Promise<Earned> {
+  return post(`/api/players/${player}/town/upgrade`, { plot });
 }

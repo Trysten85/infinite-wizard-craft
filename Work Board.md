@@ -257,6 +257,17 @@ pay takings at night, and the shop is earned.
 ## Slice 3: stock and quality
 
 Goal: discoveries matter after the moment they are made. The player stocks buildings and sees
+  - 2026-10-12, in and committed: the bookmark and the swap; the street (`web/src/Street.tsx`,
+    with a drawing for each of the six buildings and a plain house for any other); the picked
+    plot, plans with each need marked, and townsfolk (`web/src/Town.tsx`); buying a plot,
+    raising a plan, and raising a tier; the Shop bookmark hidden while `GET /shop` refuses with
+    `no-shop`. Wording is in `web/src/town.ts`, tested in `tests/webTown.test.ts`. Checked in a
+    browser against a stand-in town run with `src/shared/town.ts`, never the real save.
+    **What the page expects from S3:** `GET /town` answers a `TownView`; `POST /town/plots`
+    (empty body), `/town/build` (`{ plot, building }`) and `/town/upgrade` (`{ plot }`) answer
+    `{ rewards, progress, night }` like every other action, and the page then reads `GET /town`
+    and `GET /shop` again. Left open until S3 is in and one live pass is done. Nothing can be
+    dropped on the street yet: stocking comes with slice 3.
 quality, Cheer, and takings move.
 
 ### Q1 · Rules · open

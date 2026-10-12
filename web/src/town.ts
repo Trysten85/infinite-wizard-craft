@@ -1,0 +1,94 @@
+import type { BuildingView, DayView, NeedView, TownView } from "../../src/shared/schema";
+
+// The street, as the page words it. What a plot costs, what a building needs, and whether any of
+// it is allowed are the server's. This only reads what the server sent and says it plainly.
+
+export type Plot = TownView["plots"][number];
+export type Plan = TownView["plans"][number];
+
+// How a plot is drawn and what can be done with it. A plot past the player's deeds is `locked`.
+// Plots are bought in order, so of the rest only the first is `for-sale`, and the others come `later`.
+export type PlotState = "building" | "empty" | "for-sale" | "locked" | "later";
+
+export function plotStates(town: TownView, level: number): PlotState[] {
+  const next = town.plots.find((plot) => !plot.owned)?.index;
+  return town.plots.map((plot) => {
+    if (plot.building) return "building";
+    if (plot.owned) return "empty";
+    if (plot.opensAt > level) return "locked";
+    return plot.index === next ? "for-sale" : "later";
+  });
+}
+
+// The few words under a plot on the street.
+export function plotCaption(plot: Plot, state: PlotState): string {
+  if (plot.building) return plot.building.name;
+  if (state === "empty") return "Your plot";
+  if (state === "locked") return `Level ${plot.opensAt}`;
+  if (state === "for-sale") return plot.price === 0 ? "Free" : `${plot.price} gold`;
+  return "";
+}
+
+// The first plot the player owns with nothing on it, or null.
+export function emptyPlot(town: TownView): Plot | null {
+  return town.plots.find((plot) => plot.owned && !plot.building) ?? null;
+}
+
+const count = (amount: number, one: string, many: string) => `${amount} ${amount === 1 ? one : many}`;
+
+function listed(words: string[]): string {
+  if (words.length < 3) return words.join(" and ");
+  return `${words.slice(0, -1).join(", ")}, and ${words[words.length - 1]}`;
+}
+
+export function needText(need: NeedView): string {
+  return need.progress ? `${need.label} (${need.progress.have} of ${need.progress.need})` : need.label;
+}
+
+// Why something that takes gold and candles can't be done right now, or "" when it can.
+// With no day served there are no candles to count, and only the gold is checked.
+function costBlock(cost: { gold: number; candles: number }, gold: number, day: DayView | undefined): string {
+  if (gold < cost.gold) return `You need ${cost.gold - gold} more gold.`;
+  if (!day || cost.candles === 0) return "";
+  if (day.phase !== "evening") return `Building is evening work, and takes ${count(cost.candles, "candle", "candles")}. Come back at dusk.`;
+  if (day.candles < cost.candles)
+    return `This takes ${count(cost.candles, "candle", "candles")}, and you have ${day.candles} left tonight.`;
+  return "";
+}
+
+function needsBlock(needs: NeedView[]): string {
+  const missing = needs.filter((need) => !need.met);
+  return missing.length > 0 ? `Still needs ${listed(missing.map(needText))}.` : "";
+}
+
+// Why a plan can't be raised right now, or "" when it can. `hasPlot` is whether there is an
+// empty plot of the player's to raise it on.
+export function planBlock(plan: Plan, gold: number, day: DayView | undefined, hasPlot: boolean): string {
+  const needs = needsBlock(plan.needs);
+  if (needs) return needs;
+  if (!hasPlot) return "You need an empty plot to raise it on.";
+  const cost = costBlock({ gold: plan.price, candles: plan.candles }, gold, day);
+  // The server knows of something this page does not, such as a level.
+  return cost || (plan.ready ? "" : "Not ready yet.");
+}
+
+// Why a building can't be raised a tier right now, or "" when it can.
+export function upgradeBlock(next: NonNullable<BuildingView["next"]>, gold: number, level: number, day: DayView | undefined): string {
+  if (level < next.level) return `Opens at level ${next.level}.`;
+  const needs = needsBlock(next.needs);
+  if (needs) return needs;
+  const cost = costBlock({ gold: next.gold, candles: day?.costs.upgrade ?? 0 }, gold, day);
+  return cost || (next.ready ? "" : "Not ready yet.");
+}
+
+// What a plot is, in a sentence, for a plot with no building on it.
+export function plotText(plot: Plot, state: PlotState, town: TownView, gold: number): string {
+  if (state === "empty") return "An empty plot of yours. Raise one of your plans on it.";
+  if (state === "locked")
+    return `Your deeds cover ${count(town.deeds.have, "plot", "plots")}. Level ${plot.opensAt} brings a deed for this one.`;
+  if (state === "later") return "Plots are bought in order along the street. This one comes later.";
+  if (plot.price === 0) return "The next plot along, and it is free.";
+  return gold < plot.price
+    ? `The next plot along, for ${plot.price} gold. You need ${plot.price - gold} more.`
+    : `The next plot along, for ${plot.price} gold.`;
+}
