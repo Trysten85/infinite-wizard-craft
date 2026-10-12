@@ -369,7 +369,7 @@ quality, Cheer, and takings move.
     night, with no state saved; the choice of thing is random among what the player lacks and
     could reach. A hand on bare shelves is refused rather than wasted.
 
-### Q3 · Page · claimed by infinite-spell-craft-e6
+### Q3 · Page · done
 - **What:** the inside of a building.
 - **Depends on:** Q1 for the maths. Q2 to see it live.
 - **Guide:** "Stock and quality", "Cheer".
@@ -380,6 +380,16 @@ quality, Cheer, and takings move.
 - **Notes:**
   Claimed 2026-10-12 on Trysten's word, with Q1 and Q2 in. Stocking is by dragging from the book
   onto a shelf, with the quality preview from `previewQuality` in `src/shared/town.ts`.
+  Done 2026-10-12 (b2989b6). A standing building's box shows its shelves. A discovery carried
+  from the book wakes them, and the one it is held over says whether it would make the stock
+  better, worse, or no different, and which wants it would newly cover. Dropping stocks it,
+  dragging a stocked thing to another shelf moves it, and right-click or letting it go over the
+  book clears it. Lend a hand shows its candle cost and why not. The street's head and captions
+  show Cheer and each building's quality. Checked in a browser against the real day, town and
+  shop services on an empty in-memory database: stock, move, clear, a hand on the last candle
+  bringing night, and the ledger showing the Farm at Good with Cheer 1. The preview reads the
+  stock at no lift, so it says only a direction, because `BuildingView` carries neither the
+  lifts nor the rank bonus (the question below).
 
 ---
 
