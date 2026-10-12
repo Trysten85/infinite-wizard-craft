@@ -15,7 +15,7 @@ type Props = {
   board: ShiftBoard | null;
   // Why there is no board to show, when the server couldn't give one.
   problem: string;
-  // Where the player is in their day. Absent on a server from before the day.
+  // Where the player is in their day. Absent until the player has loaded.
   day?: Day;
   // How the last order went, once one has been filled.
   result: ShiftResult | null;
@@ -70,13 +70,7 @@ export function OrderBoard({ board, problem, day, result, busy, onWork, onNext, 
         ) : !board.job ? (
           <Closed onClose={onClose}>You have no job yet. Drop a job on the Job cell to take one up, and its orders will come here.</Closed>
         ) : !board.ready || board.orders.length === 0 ? (
-          <Closed onClose={onClose}>
-            {day
-              ? ordersClosedText(day)
-              : board.shiftIn === undefined
-                ? "No orders are waiting."
-                : `No orders are waiting. The next shift opens after ${board.shiftIn} more ${board.shiftIn === 1 ? "discovery" : "discoveries"}.`}
-          </Closed>
+          <Closed onClose={onClose}>{day ? ordersClosedText(day) : "No orders are waiting."}</Closed>
         ) : (
           <Bench board={board} busy={busy} onWork={onWork} onClose={onClose} />
         )}

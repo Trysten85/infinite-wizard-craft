@@ -227,7 +227,7 @@ export function Workbench({ player, onLeave }: { player: string; onLeave: () => 
   }
 
   // Takes in the player's new standing after an action, and announces what the action earned.
-  function earn({ rewards, progress: next, night }: Earned) {
+  function earn({ rewards, progress: next, night, dusk }: Earned) {
     const fresh: Toast[] = rewards.quests.map((quest) => ({
       id: `quest-${quest.id}`,
       label: "Quest complete:",
@@ -254,7 +254,8 @@ export function Workbench({ player, onLeave }: { player: string; onLeave: () => 
       if (next.day.phase === "evening")
         fresh.push({
           id: `dusk-${next.day.number}`,
-          label: "Dusk:",
+          // The server's own line for the evening coming on, when it sends one.
+          label: dusk ?? "Dusk:",
           name: `${next.day.candles} ${next.day.candles === 1 ? "candle" : "candles"} to spend this evening`,
         });
     }
@@ -553,8 +554,8 @@ export function Workbench({ player, onLeave }: { player: string; onLeave: () => 
     setEventBusy("responding");
     setError("");
     try {
-      const { rewards, progress: standing, night, ...result } = await respondToEvent(player, type, event.beat);
-      earn({ rewards, progress: standing, night });
+      const { rewards, progress: standing, night, dusk, ...result } = await respondToEvent(player, type, event.beat);
+      earn({ rewards, progress: standing, night, dusk });
       if (result.next) {
         // The conversation goes on. Its next part carries everything said so far.
         setEvent(result.next);
@@ -875,7 +876,7 @@ export function Workbench({ player, onLeave }: { player: string; onLeave: () => 
                   disabled={eventBusy !== ""}
                   onClick={() => (event ? setEventOpen(true) : showEvent("waiting"))}
                 >
-                  {visitor ? visitor.text : "Someone is at your stall. See who it is."}
+                  {visitor ? visitor.text : "Someone is still at your door. Go back to them."}
                 </button>
               ))}
             {someoneComing && !someoneWaiting && <p className="event-coming">Someone is on their way…</p>}
@@ -960,7 +961,7 @@ export function Workbench({ player, onLeave }: { player: string; onLeave: () => 
                 onInspect={(entry) => setSelectedId(entry.id)}
               />
             ) : (
-              <Shop view={shop} gold={progress.gold} buying={buying} daily={!!day} onBuy={buyFromShop} />
+              <Shop view={shop} gold={progress.gold} buying={buying} onBuy={buyFromShop} />
             )}
           </div>
         </div>

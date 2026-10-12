@@ -108,24 +108,33 @@ describe("visitorCue", () => {
 
 describe("bedOffer", () => {
   it("offers nothing in the morning", () => {
-    expect(bedOffer(day())).toBeNull();
+    expect(bedOffer(day(), false)).toBeNull();
   });
 
   it("offers to call it a day from noon, and says what that costs", () => {
-    expect(bedOffer(afternoon)).toEqual({
+    expect(bedOffer(afternoon, false)).toEqual({
       label: "Call it a day",
-      warning:
-        "Calling it a day brings dusk on now, with an evening of 1 candle and not 3. Today's shift is lost if you have not worked it.",
+      warning: "Calling it a day brings dusk on now, with an evening of 1 candle and not 3.",
     });
-    expect(bedOffer(day({ ...afternoon, turnInCandles: 2 }))!.warning).toContain("an evening of 2 candles and not 3");
+    expect(bedOffer(day({ ...afternoon, turnInCandles: 2 }), false)!.warning).toContain("an evening of 2 candles and not 3");
+  });
+
+  it("does not say the shift is lost by calling it a day: orders stay open until night", () => {
+    expect(bedOffer(afternoon, true)!.warning).not.toMatch(/shift|orders/);
   });
 
   it("offers bed from dusk, and names the candles that would be given up", () => {
-    expect(bedOffer(day({ ...evening, candles: 2 }))).toEqual({
+    expect(bedOffer(day({ ...evening, candles: 2 }), false)).toEqual({
       label: "Go to bed",
       warning: "Going to bed ends the day. You have 2 candles left, and they will be gone.",
     });
-    expect(bedOffer(day({ ...evening, candles: 1 }))!.warning).toContain("1 candle left");
+    expect(bedOffer(day({ ...evening, candles: 1 }), false)!.warning).toContain("1 candle left");
+  });
+
+  it("warns that orders still waiting go with the day", () => {
+    expect(bedOffer(day({ ...evening, candles: 2 }), true)!.warning).toBe(
+      "Going to bed ends the day. You have 2 candles left, and they will be gone. Today's orders have not been worked, and will go with them.",
+    );
   });
 });
 

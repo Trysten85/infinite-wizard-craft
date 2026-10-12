@@ -57,16 +57,21 @@ export function visitorCue(day: Day): { kind: "later" | "sit" | "spent"; text: s
 }
 
 // The way to end the day that is on offer now, with what it gives up, said before it happens.
-// Before dusk the player can call it a day, which brings on a shorter evening. From dusk they
-// can go to bed, which gives up any candles left. In the morning there is neither.
-export function bedOffer(day: Day): { label: string; warning: string } | null {
+// Before dusk the player can call it a day, which brings on a shorter evening and leaves the
+// order board open. From dusk they can go to bed, which gives up any candles left, and the
+// day's orders if they are still waiting. In the morning there is neither.
+export function bedOffer(day: Day, ordersWaiting: boolean): { label: string; warning: string } | null {
   if (day.phase === "evening") {
-    return { label: "Go to bed", warning: `Going to bed ends the day. You have ${candles(day.candles)} left, and they will be gone.` };
+    const orders = ordersWaiting ? " Today's orders have not been worked, and will go with them." : "";
+    return {
+      label: "Go to bed",
+      warning: `Going to bed ends the day. You have ${candles(day.candles)} left, and they will be gone.${orders}`,
+    };
   }
   if (!day.canTurnIn) return null;
   return {
     label: "Call it a day",
-    warning: `Calling it a day brings dusk on now, with an evening of ${candles(day.turnInCandles)} and not ${day.candlesMax}. Today's shift is lost if you have not worked it.`,
+    warning: `Calling it a day brings dusk on now, with an evening of ${candles(day.turnInCandles)} and not ${day.candlesMax}.`,
   };
 }
 

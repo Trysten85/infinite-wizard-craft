@@ -131,8 +131,11 @@ evening, and sees a ledger at night. Nothing about the town yet.
   `tests/webDay.test.ts`. D2 is not in yet, so this was checked in a browser against a stand-in
   day run with `src/shared/day.ts` over an in-memory game, never the real save: morning to
   noon to dusk, calling it a day, sitting with the visitor for a candle, bed, the ledger, and
-  the ledger again after a reload. Still owed when D2 lands: one live pass, then removing the
-  cues kept for a server that sends no `day` (`shiftIn`, `restockIn`, the old visitor line).
+  the ledger again after a reload. With D2 in (2026-10-12) the live pass is done, against the real
+  services on an empty in-memory database: a whole day, the visitor taking the last candle,
+  the ledger, and the order board's cue. The page no longer reads `shiftIn` or `restockIn`,
+  so Rules can drop both from the types. It shows the server's `dusk` line. Its "call it a
+  day" warning no longer says the shift is lost, and going to bed warns of unworked orders.
   Three things the page does that the ticket did not spell out: it says noon and dusk in a
   toast as the sun reaches them; a visitor who takes the last candle is heard out before the
   ledger comes up; and `day.tonight`, when set, shows as a line on the day strip.

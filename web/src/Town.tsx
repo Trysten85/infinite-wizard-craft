@@ -14,7 +14,7 @@ type Props = {
   problem: string;
   gold: number;
   level: number;
-  // Absent on a server from before the day.
+  // Absent until the player has loaded.
   day?: DayView;
   // True while something is being bought or raised.
   busy: boolean;

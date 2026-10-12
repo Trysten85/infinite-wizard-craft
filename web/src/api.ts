@@ -15,9 +15,9 @@ import type {
 } from "../../src/shared/schema";
 
 // What comes back from anything that can change the player's standing: what that action earned,
-// and where the player stands now. `night` is the ledger, when the action brought night on. A
-// server from before the day sends none.
-export type Earned = { rewards: Rewards; progress: PlayerProgress; night?: Ledger | null };
+// and where the player stands now. `night` is the ledger, when the action brought night on, and
+// `dusk` a line to say when it brought the evening on. A server from before the day sends neither.
+export type Earned = { rewards: Rewards; progress: PlayerProgress; night?: Ledger | null; dusk?: string | null };
 
 // A refusal from the server, with the HTTP status it came with, and the rule's code when a rule
 // was the reason.

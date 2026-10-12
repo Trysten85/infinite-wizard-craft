@@ -25,13 +25,13 @@ type Props = {
 // takes that job up. It is also the way in to the job's order board, and says when orders are
 // waiting there.
 export function StatusBar({ progress, job, rank, jobDrag, jobRef, onOpenOrders, dayBusy, onEndDay, onShowLedger }: Props) {
-  const { gold, rep, repBand, level, levelInto, levelSpan, shiftReady, shiftIn, day } = progress;
-  // With the day served, the cue under the job reads from it. Before that it counts discoveries.
+  const { gold, rep, repBand, level, levelInto, levelSpan, shiftReady, day } = progress;
+  // The cue under the job reads from the day. There is none until the player has loaded.
   const cue = day ? orderCue(day, !!shiftReady) : null;
 
   return (
     <div className="hud-box status">
-      {day && <DayStrip day={day} busy={dayBusy} onEndDay={onEndDay} onShowLedger={onShowLedger} />}
+      {day && <DayStrip day={day} ordersWaiting={!!job && !!shiftReady} busy={dayBusy} onEndDay={onEndDay} onShowLedger={onShowLedger} />}
       <dl className="stats" aria-label="Status">
         <div className={`stat job ${jobDrag} ${job && shiftReady ? "orders-ready" : ""}`} ref={jobRef}>
           <dt>Job</dt>
@@ -44,18 +44,7 @@ export function StatusBar({ progress, job, rank, jobDrag, jobRef, onOpenOrders, 
                   {job.name}
                   {rank && <span className="rep-band">{rank.name}</span>}
                 </span>
-                {/* A server that isn't serving shifts yet sends neither of these, and the line stays off. */}
-                {cue ? (
-                  <span className={`job-cue ${cue.ready ? "ready" : ""}`}>{cue.text}</span>
-                ) : shiftReady ? (
-                  <span className="job-cue ready">Orders are waiting</span>
-                ) : (
-                  shiftIn !== undefined && (
-                    <span className="job-cue">
-                      Orders after {shiftIn} more {shiftIn === 1 ? "discovery" : "discoveries"}
-                    </span>
-                  )
-                )}
+                {cue && <span className={`job-cue ${cue.ready ? "ready" : ""}`}>{cue.text}</span>}
               </button>
             ) : (
               <button className="job-open" onClick={onOpenOrders} title="Open the order board">
@@ -113,14 +102,14 @@ export function StatusBar({ progress, job, rank, jobDrag, jobRef, onOpenOrders, 
   );
 }
 
-type DayProps = { day: Day; busy: boolean; onEndDay: () => void; onShowLedger: () => void };
+type DayProps = { day: Day; ordersWaiting: boolean; busy: boolean; onEndDay: () => void; onShowLedger: () => void };
 
 // The day, as a strip along the top of the status box: which day it is, a meter the sun crosses
 // from dawn to dusk with noon marked on it, and from dusk the candles left to spend. The way to
 // end the day is here too, and it says what would be given up before anything happens.
-function DayStrip({ day, busy, onEndDay, onShowLedger }: DayProps) {
+function DayStrip({ day, ordersWaiting, busy, onEndDay, onShowLedger }: DayProps) {
   const [asking, setAsking] = useState(false);
-  const offer = bedOffer(day);
+  const offer = bedOffer(day, ordersWaiting);
   const oil = oilText(day);
 
   // A question asked at one time of day isn't the question at another.
