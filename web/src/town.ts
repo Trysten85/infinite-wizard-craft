@@ -1,4 +1,6 @@
-import type { BuildingView, DayView, NeedView, TownView } from "../../src/shared/schema";
+import type { Building, BuildingView, DayView, GameEntry, NeedView, ShiftRules, TownView } from "../../src/shared/schema";
+import { QUALITIES } from "../../src/shared/schema";
+import { buildingQuality, isStockable, type Stocked } from "../../src/shared/town";
 
 // The street, as the page words it. What a plot costs, what a building needs, and whether any of
 // it is allowed are the server's. This only reads what the server sent and says it plainly.
@@ -91,4 +93,58 @@ export function plotText(plot: Plot, state: PlotState, town: TownView, gold: num
   return gold < plot.price
     ? `The next plot along, for ${plot.price} gold. You need ${plot.price - gold} more.`
     : `The next plot along, for ${plot.price} gold.`;
+}
+
+// What putting a discovery on a shelf would do to a building, said in the order board's manner.
+// The page does not know the lifts or the rank bonus a building has tonight (they are the
+// server's), so both stocks are read at no lift. That is enough to say which way it would go.
+export type StockChange = { direction: "better" | "worse" | "same"; covers: string[] };
+
+export function stockChange(
+  building: BuildingView,
+  entries: Map<string, GameEntry>,
+  carried: GameEntry,
+  slot: number,
+  shifts: ShiftRules,
+): StockChange {
+  const held = (id: string | undefined) => (id ? entries.get(id) : undefined);
+  const now = building.stock.map((shelf) => held(shelf.entry?.id)).filter((entry): entry is GameEntry => !!entry);
+  // The same discovery on another of this building's shelves is moved, not copied.
+  const after = building.stock
+    .map((shelf, index) => (index === slot ? carried : shelf.entry?.id === carried.id ? undefined : held(shelf.entry?.id)))
+    .filter((entry): entry is GameEntry => !!entry);
+  // A quality is only read from a building's wants, so that is all the stand-in needs.
+  const reads = { wants: building.wants } as Building;
+  const rate = (stock: Stocked[]): number => QUALITIES.indexOf(buildingQuality(reads, building.tier, stock, {}, shifts));
+  const before = rate(now);
+  const next = rate(after);
+  const others = new Set(after.filter((entry) => entry.id !== carried.id).flatMap((entry) => entry.tags));
+  return {
+    direction: next > before ? "better" : next < before ? "worse" : "same",
+    covers: building.wants.filter((want) => carried.tags.includes(want) && !others.has(want)),
+  };
+}
+
+// What a hovering discovery says about itself, over the shelf it is held above.
+export function stockChangeText(change: StockChange): string {
+  const covers = change.covers.length > 0 ? ` Covers ${listed(change.covers)}.` : "";
+  if (change.direction === "better") return `A better stock.${covers}`;
+  if (change.direction === "worse") return `A worse stock.${covers}`;
+  return change.covers.length > 0 ? `Covers ${listed(change.covers)}.` : "No difference to its stock.";
+}
+
+// Whether a discovery can be stocked at all: materials and spells, never elements or jobs.
+export function canStock(entry: GameEntry): boolean {
+  return isStockable(entry);
+}
+
+// Why a hand can't be lent at this building right now, or "" when it can. The once-a-night limit
+// is the server's to say, and it does so in its own sentence.
+export function handBlock(building: BuildingView, day: DayView | undefined): string {
+  if (building.stock.every((shelf) => shelf.entry === null)) return "Its shelves are bare, so a hand would change nothing.";
+  if (!day) return "";
+  const candles = count(day.costs.hand, "candle", "candles");
+  if (day.phase !== "evening") return `Lending a hand is evening work, and takes ${candles}. Come back at dusk.`;
+  if (day.candles < day.costs.hand) return `This takes ${candles}, and you have ${day.candles} left tonight.`;
+  return "";
 }

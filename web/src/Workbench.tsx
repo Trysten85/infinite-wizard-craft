@@ -24,7 +24,9 @@ import {
   fetchShop,
   fetchTown,
   learn,
+  lendHand,
   raiseBuilding,
+  stockShelf,
   respondToEvent,
   testEvent,
   upgradeBuilding,
@@ -76,7 +78,8 @@ const NO_PROGRESS: PlayerProgress = {
 type Tab = "discovered" | "shop";
 // Places a dragged bubble can be handed over, besides the board: the book of discoveries takes
 // anything back, the job cell takes a job, and the spellbook takes a spell to be learned.
-type Zone = "book" | "job" | "spellbook";
+// A shelf in the town is a zone too, named "slot:plot:shelf".
+type Zone = "book" | "job" | "spellbook" | `slot:${number}:${number}`;
 
 // A short message that fades on its own. `gold` is what was gained, or lost when negative.
 type Toast = {
@@ -147,6 +150,8 @@ export function Workbench({ player, onLeave }: { player: string; onLeave: () => 
   const panelRef = useRef<HTMLElement>(null);
   const jobRef = useRef<HTMLDivElement>(null);
   const spellbookRef = useRef<HTMLButtonElement>(null);
+  // The shelf a stocked thing is being carried from, so letting it go over the book clears it.
+  const fromShelf = useRef<{ plot: number; slot: number } | null>(null);
   // Whether the player had a focus at the last look. Null until the first load, so a focus they
   // already had isn't greeted as new.
   const hadFocus = useRef<boolean | null>(null);
@@ -360,12 +365,26 @@ export function Workbench({ player, onLeave }: { player: string; onLeave: () => 
   }
 
   function handleDrop(drop: Drop<Zone>) {
+    // Where a stocked thing was picked up from, if it was, which only this drop may use.
+    const shelf = fromShelf.current;
+    fromShelf.current = null;
     const held = byId.get(drop.entryId);
     // The spellbook learns a spell, and tries anything else as a combination with the focus.
     // Either way the bubble stays where it was unless the book takes it.
     if (drop.zone === "spellbook") {
       if (held?.kind === "spell") void learnAtBook(held, drop.bubbleId);
       else if (held) void combineAtBook(held, drop.bubbleId);
+      return;
+    }
+    // A shelf takes what is dropped on it. A thing taken off a shelf and let go over the book is
+    // put away, and let go anywhere else it stays where it was.
+    if (drop.zone?.startsWith("slot:")) {
+      const [, plot, slot] = drop.zone.split(":").map(Number);
+      void build(() => stockShelf(player, plot!, slot!, drop.entryId));
+      return;
+    }
+    if (place === "town" && drop.zone === "book" && shelf) {
+      void build(() => stockShelf(player, shelf.plot, shelf.slot, null));
       return;
     }
     // Otherwise the bubble has been handed over, so it leaves the board.
@@ -728,6 +747,12 @@ export function Workbench({ player, onLeave }: { player: string; onLeave: () => 
     // The job cell only takes jobs, and anything else let go over it lands on the board as usual.
     // The spellbook takes anything: a spell to learn, or something to try with the focus.
     zoneAt: (clientX, clientY, held) => {
+      // In the town the shelves of the picked building are what can be dropped on.
+      if (place === "town") {
+        for (const shelf of document.querySelectorAll<HTMLElement>("[data-slot]")) {
+          if (under(shelf, clientX, clientY)) return `slot:${shelf.dataset.slot}` as Zone;
+        }
+      }
       if (byId.get(held.entryId)?.kind === "job" && under(jobRef.current, clientX, clientY)) return "job";
       if (place === "bench" && under(spellbookRef.current, clientX, clientY)) return "spellbook";
       return under(panelRef.current, clientX, clientY) ? "book" : null;
@@ -856,6 +881,16 @@ export function Workbench({ player, onLeave }: { player: string; onLeave: () => 
               onRaise={(plot, building) => build(() => raiseBuilding(player, plot, building))}
               onUpgrade={(plot) => build(() => upgradeBuilding(player, plot))}
               onLeave={() => visit("bench")}
+              entries={byId}
+              carrying={dragged ?? null}
+              overShelf={drag.zone?.startsWith("slot:") ? drag.zone.slice(5) : null}
+              rules={shift?.rules ?? null}
+              onGrabShelf={(event, entry, plot, slot) => {
+                fromShelf.current = { plot, slot };
+                drag.start(event, { entryId: entry.id, bubbleId: null });
+              }}
+              onClearShelf={(plot, slot) => build(() => stockShelf(player, plot, slot, null))}
+              onHand={(plot) => build(() => lendHand(player, plot))}
             />
           )}
           <div className="toasts">
@@ -956,7 +991,10 @@ export function Workbench({ player, onLeave }: { player: string; onLeave: () => 
                 selected={selectedId ? byId.get(selectedId) : undefined}
                 status={loaded ? "" : loadError ? `${loadError} Trying again…` : "Loading…"}
                 onOrganize={(next, turn) => (turn ? pages.turn(turn, () => setOrganize(next)) : setOrganize(next))}
-                onGrab={(event, entry) => drag.start(event, { entryId: entry.id, bubbleId: null })}
+                onGrab={(event, entry) => {
+                  fromShelf.current = null;
+                  drag.start(event, { entryId: entry.id, bubbleId: null });
+                }}
                 onSpawn={spawn}
                 onInspect={(entry) => setSelectedId(entry.id)}
               />

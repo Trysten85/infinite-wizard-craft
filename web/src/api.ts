@@ -128,3 +128,14 @@ export function raiseBuilding(player: string, plot: number, building: string): P
 export function upgradeBuilding(player: string, plot: number): Promise<Earned> {
   return post(`/api/players/${player}/town/upgrade`, { plot });
 }
+
+// Puts a discovery on a building's shelf, or clears the shelf with `entry: null`. Free, at any
+// hour. A discovery sits on one shelf at a time, so stocking it here moves it from another.
+export function stockShelf(player: string, plot: number, slot: number, entry: string | null): Promise<Earned> {
+  return post(`/api/players/${player}/town/stock`, { plot, slot, entry });
+}
+
+// Lends a hand at a building this evening, which lifts its quality a step tonight. One candle.
+export function lendHand(player: string, plot: number): Promise<Earned> {
+  return post(`/api/players/${player}/town/hand`, { plot });
+}

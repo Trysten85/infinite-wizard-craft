@@ -1,6 +1,19 @@
 import { describe, expect, it } from "vitest";
-import type { BuildingView, DayView, TownView } from "../src/shared/schema";
-import { emptyPlot, needText, planBlock, plotCaption, plotStates, plotText, upgradeBlock } from "../web/src/town";
+import type { BuildingView, DayView, GameEntry, TownView } from "../src/shared/schema";
+import { data } from "./helpers";
+import {
+  canStock,
+  emptyPlot,
+  handBlock,
+  needText,
+  planBlock,
+  plotCaption,
+  plotStates,
+  plotText,
+  stockChange,
+  stockChangeText,
+  upgradeBlock,
+} from "../web/src/town";
 
 const farm: BuildingView = {
   id: "farm",
@@ -183,5 +196,82 @@ describe("upgradeBlock", () => {
     expect(upgradeBlock(met, 100, 3, day())).toBe("You need 50 more gold.");
     expect(upgradeBlock(met, 150, 3, day({ phase: "morning" }))).toBe("Building is evening work, and takes 1 candle. Come back at dusk.");
     expect(upgradeBlock(met, 150, 3, day())).toBe("");
+  });
+});
+
+// A material or spell that carries some of the farm's wants (plant, animal, liquid), at a tier.
+function thing(id: string, tags: string[], tier = 0, kind: GameEntry["kind"] = "material"): GameEntry {
+  return { id, name: id, kind, tags, tier } as GameEntry;
+}
+
+const shifts = data.balance.shifts;
+const hay = thing("hay", ["plant", "animal"]);
+const milk = thing("milk", ["liquid"]);
+const rock = thing("rock", ["mineral"]);
+
+function shelved(...ids: (string | null)[]): BuildingView {
+  return { ...farm, stock: ids.map((id, slot) => ({ slot, entry: id ? { id, name: id } : null })), next: null };
+}
+
+const known = new Map([hay, milk, rock].map((entry) => [entry.id, entry]));
+
+describe("stockChange", () => {
+  it("calls a thing that covers wants on a bare shelf a better stock, and names what it covers", () => {
+    expect(stockChange(shelved(null, null), known, hay, 0, shifts)).toEqual({ direction: "better", covers: ["plant", "animal"] });
+  });
+
+  it("says a thing the building does not want makes no difference", () => {
+    expect(stockChange(shelved(null, null), known, rock, 0, shifts)).toEqual({ direction: "same", covers: [] });
+  });
+
+  it("calls swapping a good thing for a useless one a worse stock", () => {
+    expect(stockChange(shelved("hay", null), known, rock, 0, shifts)).toEqual({ direction: "worse", covers: [] });
+  });
+
+  it("does not credit a want something else on the shelves already covers", () => {
+    expect(stockChange(shelved("hay", null), known, thing("grass", ["plant", "liquid"]), 1, shifts).covers).toEqual(["liquid"]);
+  });
+
+  it("moves a thing already on the building, so it is counted once", () => {
+    const view = shelved("hay", null);
+    expect(stockChange(view, known, hay, 1, shifts)).toEqual({ direction: "same", covers: ["plant", "animal"] });
+  });
+});
+
+describe("stockChangeText", () => {
+  it("says the direction and what it would cover", () => {
+    expect(stockChangeText({ direction: "better", covers: ["plant", "animal"] })).toBe("A better stock. Covers plant and animal.");
+    expect(stockChangeText({ direction: "worse", covers: [] })).toBe("A worse stock.");
+    expect(stockChangeText({ direction: "same", covers: [] })).toBe("No difference to its stock.");
+    expect(stockChangeText({ direction: "same", covers: ["liquid"] })).toBe("Covers liquid.");
+  });
+});
+
+describe("canStock", () => {
+  it("takes materials and spells, and never elements or jobs", () => {
+    expect(canStock(thing("a", [], 0, "material"))).toBe(true);
+    expect(canStock(thing("b", [], 0, "spell"))).toBe(true);
+    expect(canStock(thing("c", [], 0, "element"))).toBe(false);
+    expect(canStock(thing("d", [], 0, "job"))).toBe(false);
+  });
+});
+
+describe("handBlock", () => {
+  it("says bare shelves would change nothing", () => {
+    expect(handBlock(shelved(null, null), day())).toBe("Its shelves are bare, so a hand would change nothing.");
+  });
+
+  it("holds a hand until dusk, and names the candle it takes", () => {
+    expect(handBlock(shelved("hay"), day({ phase: "morning" }))).toBe(
+      "Lending a hand is evening work, and takes 1 candle. Come back at dusk.",
+    );
+  });
+
+  it("counts the candles", () => {
+    expect(handBlock(shelved("hay"), day({ candles: 0 }))).toBe("This takes 1 candle, and you have 0 left tonight.");
+  });
+
+  it("allows it in the evening with a candle and a stocked shelf", () => {
+    expect(handBlock(shelved("hay"), day())).toBe("");
   });
 });

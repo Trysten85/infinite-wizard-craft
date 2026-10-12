@@ -1,8 +1,11 @@
 import { useState } from "react";
-import type { DayView, NeedView, TownView } from "../../src/shared/schema";
+import type { PointerEvent } from "react";
+import type { DayView, GameEntry, NeedView, ShiftRules, TownView } from "../../src/shared/schema";
+import { qualityName } from "./day";
 import { Gold } from "./Gold";
+import { Shelves } from "./Shelves";
 import { PlotArt } from "./Street";
-import { emptyPlot, needText, planBlock, plotCaption, plotStates, plotText, upgradeBlock, type PlotState } from "./town";
+import { canStock, emptyPlot, handBlock, needText, planBlock, plotCaption, plotStates, plotText, upgradeBlock } from "./town";
 
 // How many bare lots to draw while the street is being read, or when the server has none to give.
 const QUIET_LOTS = 9;
@@ -22,11 +25,21 @@ type Props = {
   onRaise: (plot: number, building: string) => void;
   onUpgrade: (plot: number) => void;
   onLeave: () => void;
+  // What is on show for stocking: every discovery by id, what is being carried, the shelf it is
+  // over as "plot:slot", and the order board's numbers (null until it has been read).
+  entries: Map<string, GameEntry>;
+  carrying: GameEntry | null;
+  overShelf: string | null;
+  rules: ShiftRules | null;
+  onGrabShelf: (event: PointerEvent<HTMLElement>, entry: GameEntry, plot: number, slot: number) => void;
+  onClearShelf: (plot: number, slot: number) => void;
+  onHand: (plot: number) => void;
 };
 
 // The town: one street, drawn side-on, with a plot picked out and described under it. It takes
 // the board's place while it is up. Everything on it is the server's; the page only shows it.
-export function Town({ town, problem, gold, level, day, busy, onBuyPlot, onRaise, onUpgrade, onLeave }: Props) {
+export function Town(props: Props) {
+  const { town, problem, gold, level, day, busy, onBuyPlot, onRaise, onUpgrade, onLeave } = props;
   const [picked, setPicked] = useState<number | null>(null);
   const lit = day?.phase === "evening";
   const states = town ? plotStates(town, level) : [];
@@ -45,7 +58,7 @@ export function Town({ town, problem, gold, level, day, busy, onBuyPlot, onRaise
         {town && (
           <p>
             {town.plots.filter((plot) => plot.owned).length} of {town.deeds.have} deeds used
-            {town.cheer && ` · ${town.cheer.band}`}
+            {town.cheer && ` · ${town.cheer.band}, ${town.cheer.points} cheer`}
           </p>
         )}
         <button onClick={onLeave}>Back to the workbench</button>
@@ -62,7 +75,12 @@ export function Town({ town, problem, gold, level, day, busy, onBuyPlot, onRaise
                       <PlotArt state={state} building={plot.building?.id} lit={lit} />
                       <span className="plot-caption">
                         {plotCaption(plot, state) || <span className="sr-only">Plot {plot.index + 1}</span>}
-                        {plot.building && <span className="plot-tier"> {"★".repeat(plot.building.tier)}</span>}
+                        {plot.building && (
+                          <span className="plot-tier">
+                            {" "}
+                            {"★".repeat(plot.building.tier)} {qualityName(plot.building.quality)}
+                          </span>
+                        )}
                       </span>
                     </button>
                   </li>
@@ -83,15 +101,7 @@ export function Town({ town, problem, gold, level, day, busy, onBuyPlot, onRaise
         <div className="town-boxes">
           <section className="hud-box town-box" aria-label="The picked plot">
             {shown?.building ? (
-              <Standing
-                plot={shown.index}
-                building={shown.building}
-                gold={gold}
-                level={level}
-                day={day}
-                busy={busy}
-                onUpgrade={onUpgrade}
-              />
+              <Standing {...props} plot={shown.index} building={shown.building} />
             ) : (
               shown &&
               shownState && (
@@ -173,20 +183,21 @@ function Needs({ needs }: { needs: NeedView[] }) {
   );
 }
 
-type StandingProps = {
+type StandingProps = Props & {
   plot: number;
   building: NonNullable<TownView["plots"][number]["building"]>;
-  gold: number;
-  level: number;
-  day?: DayView;
-  busy: boolean;
-  onUpgrade: (plot: number) => void;
 };
 
 // A building that stands: what it pays, what it wants, and what the next tier would take.
-function Standing({ plot, building, gold, level, day, busy, onUpgrade }: StandingProps) {
+function Standing(props: StandingProps) {
+  const { plot, building, gold, level, day, busy, onUpgrade, entries, carrying, overShelf, rules, onGrabShelf, onClearShelf, onHand } =
+    props;
   const next = building.next;
   const block = next ? upgradeBlock(next, gold, level, day) : "";
+  const handWhy = handBlock(building, day);
+  // Only a discovery that can be stocked wakes the shelves, and only the picked building's.
+  const stockable = carrying && canStock(carrying) ? carrying : null;
+  const [overPlot, overSlot] = overShelf ? overShelf.split(":").map(Number) : [null, null];
   return (
     <>
       <h3>
@@ -195,7 +206,21 @@ function Standing({ plot, building, gold, level, day, busy, onUpgrade }: Standin
       <p>
         Pays <Gold amount={building.takings} label /> a night.
       </p>
-      <p className="town-none">Wants {building.wants.join(", ")}.</p>
+      <Shelves
+        plot={plot}
+        building={building}
+        entries={entries}
+        carrying={stockable}
+        over={overPlot === plot ? (overSlot ?? null) : null}
+        rules={rules}
+        busy={busy}
+        onGrab={(event, entry, slot) => onGrabShelf(event, entry, plot, slot)}
+        onClear={(slot) => onClearShelf(plot, slot)}
+      />
+      <button disabled={busy || handWhy !== ""} onClick={() => onHand(plot)}>
+        Lend a hand
+      </button>
+      {handWhy && <p className="town-why">{handWhy}</p>}
       {next ? (
         <>
           <h4>Tier {building.tier + 1}</h4>
