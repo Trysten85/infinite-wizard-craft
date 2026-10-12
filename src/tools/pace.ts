@@ -1,7 +1,8 @@
 // Show how long each level should take, and how fast saved players have really gone.
 //   npm run pace
-// Each level's XP comes partly from quests and the rest from discoveries. The hours are only as
-// good as the assumptions below, so compare them with the saved players at the bottom.
+// Each level's XP comes partly from quests and the rest from discoveries. A day is as many new
+// discoveries as the sun has notches, fewer once a shift takes its piece of each day. The hours
+// are only as good as the assumptions below, so compare them with the saved players at the bottom.
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
@@ -26,12 +27,14 @@ const data = loadGameData(process.cwd());
 const { xpStep, cap } = data.balance.levels;
 const row = (cells: (string | number)[], widths: number[]) => cells.map((cell, index) => String(cell).padEnd(widths[index]!)).join("");
 
-const widths = [7, 12, 16, 8, 18, 18, 8];
-console.log(row(["Level", "XP to next", "From quests", "Share", "From discoveries", "About", "Hours"], widths));
+const widths = [7, 12, 16, 8, 18, 18, 8, 8, 12];
+console.log(row(["Level", "XP to next", "From quests", "Share", "From discoveries", "About", "Hours", "Days", "Reached on"], widths));
 let totalHours = 0;
 let totalFound = 0;
-// Shifts: one opens every so many discoveries, from the level the first job quest opens at.
-const { shifts } = data.balance;
+let totalDays = 0;
+// Shifts: one a day, from the level the first job quest opens at. A day with its shift worked
+// has that much less room for discoveries.
+const { shifts, day } = data.balance;
 const jobFrom = data.quests.find((quest) => quest.id === "first-job")?.level ?? 1;
 let shiftCount = 0;
 let shiftXp = 0;
@@ -42,21 +45,23 @@ for (let level = 1; level < cap; level++) {
   const assumed = ASSUMED[Math.min(level, ASSUMED.length) - 1]!;
   const found = Math.ceil((span - fromQuests) / assumed.xpEach);
   const hours = found / assumed.perHour;
+  const days = found / (level >= jobFrom ? day.length - day.shiftNotches : day.length);
   totalHours += hours;
   totalFound += found;
+  totalDays += days;
   if (level >= jobFrom) {
-    const worked = Math.floor(found / shifts.every);
-    shiftCount += worked;
+    shiftCount += days;
     // A Good result on an order of the tier that level is given.
-    shiftXp += worked * payFor({ tags: [], tier: orderTierFor(level, data) }, "good", shifts).xp;
+    shiftXp += days * payFor({ tags: [], tier: orderTierFor(level, data) }, "good", shifts).xp;
   }
   const share = `${Math.round((fromQuests / span) * 100)}%`;
-  console.log(row([level, span, `${fromQuests} (${quests.length} quests)`, share, span - fromQuests, `${found} discoveries`, hours.toFixed(1)], widths));
+  console.log(row([level, span, `${fromQuests} (${quests.length} quests)`, share, span - fromQuests, `${found} discoveries`, hours.toFixed(1), days.toFixed(1), `day ${Math.ceil(totalDays) + 1}`], widths));
 }
 const atCap = data.quests.filter((quest) => quest.level === cap).length;
-console.log(`\nLevel ${cap} takes ${(xpStep * (cap - 1) * cap) / 2} XP: about ${totalFound} discoveries and ${totalHours.toFixed(1)} hours. ${atCap} more quests open there.`);
+console.log(`\nLevel ${cap} takes ${(xpStep * (cap - 1) * cap) / 2} XP: about ${totalFound} discoveries, ${totalHours.toFixed(1)} hours, and ${Math.round(totalDays)} days. ${atCap} more quests open there.`);
+console.log(`A day is ${day.length} new discoveries, or ${day.length - day.shiftNotches} with the shift worked, so about ${Math.round((totalHours * 60) / totalDays)} minutes at these speeds. With no shifts at all the climb is ${Math.ceil(totalFound / day.length)} days.`);
 const climb = (xpStep * (cap - 1) * cap) / 2;
-console.log(`Shifts open every ${shifts.every} discoveries once a job is taken up: about ${shiftCount} before level ${cap}, worth about ${shiftXp} XP at Good (${Math.round((shiftXp / climb) * 100)}% of the climb, on top of the table above).`);
+console.log(`One shift a day once a job is taken up (level ${jobFrom}): about ${Math.round(shiftCount)} before level ${cap}, worth about ${Math.round(shiftXp)} XP at Good (${Math.round((shiftXp / climb) * 100)}% of the climb, on top of the table above).`);
 console.log(`Discoveries pay ${data.balance.discoveryXpByTier.join(", ")} XP by tier. To make every level longer or shorter, change levels.xpStep in config/balance.json, and scale the quests' XP with it to keep their share.`);
 
 const dbPath = join(process.cwd(), "var/game.db");
@@ -66,6 +71,9 @@ if (existsSync(dbPath)) {
   const made = new Map(db.prepare("SELECT id, json FROM entries").all().map((saved) => [saved.id as string, JSON.parse(saved.json as string) as GameEntry]));
   const starting = new Set(data.balance.startingEntries);
   const players = db.prepare("SELECT DISTINCT player FROM discoveries ORDER BY player").all().map((saved) => saved.player as string);
+  // A save from before days has no day to read until the server has opened it once.
+  const hasDays = db.prepare("PRAGMA table_info(player_stats)").all().some((column) => column.name === "day");
+  const dayOf = (player: string) => (hasDays ? ((db.prepare("SELECT day FROM player_stats WHERE player = ?").get(player)?.day as number | undefined) ?? 1) : null);
   console.log(`\nSaved players (${players.length})`);
   for (const player of players) {
     const found = db.prepare("SELECT entry_id, discovered_at FROM discoveries WHERE player = ? ORDER BY discovered_at, rowid").all(player);
@@ -79,7 +87,11 @@ if (existsSync(dbPath)) {
     const xp = entries.reduce((total, entry) => total + xpForTier(entry!.tier, data.balance), 0);
     const perHour = active > 0 ? Math.round(found.length / (active / 3600)) : 0;
     const xpEach = entries.length > 0 ? Math.round(xp / entries.length) : 0;
-    console.log(`  ${player.padEnd(12)} ${String(found.length).padStart(4)} discoveries in ${Math.round(active / 60)} active minutes (${perHour} an hour), ${xpEach} XP each on average`);
+    const on = dayOf(player);
+    const days = on === null ? "" : `, on day ${on}`;
+    // What their speed makes of a day, to hold against the table above.
+    const dayLength = perHour > 0 ? `, a day of ${day.length} in about ${Math.round((day.length / perHour) * 60)} minutes` : "";
+    console.log(`  ${player.padEnd(12)} ${String(found.length).padStart(4)} discoveries in ${Math.round(active / 60)} active minutes (${perHour} an hour), ${xpEach} XP each on average${days}${dayLength}`);
   }
   db.close();
 }
