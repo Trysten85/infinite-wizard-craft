@@ -318,6 +318,7 @@ export function openStore(path: string) {
     });
   }
 
+  if (!statColumns.includes("evenings")) db.exec("ALTER TABLE player_stats ADD COLUMN evenings INTEGER NOT NULL DEFAULT 0");
   if (!statColumns.includes("shift_lift_day")) db.exec("ALTER TABLE player_stats ADD COLUMN shift_lift_day INTEGER NOT NULL DEFAULT 0");
 
   function transaction<T>(fn: () => T): T {
@@ -589,6 +590,17 @@ export function openStore(path: string) {
       db.prepare(
         "UPDATE player_stats SET day = ?, sun = ?, shift_done = ?, early = ?, candles_spent = ?, oil = ?, dawn_level = ?, last_ledger = ? WHERE player = ?",
       ).run(state.number, state.sun, state.shiftDone ? 1 : 0, state.early ? 1 : 0, state.spent, state.oil, dawnLevel, JSON.stringify(ledger), player);
+    },
+
+    // How many evening actions the player has ever taken, for the town quests.
+    countEvenings(player: string): number {
+      const row = db.prepare("SELECT evenings FROM player_stats WHERE player = ?").get(player);
+      return (row?.evenings as number | undefined) ?? 0;
+    },
+
+    addEvening(player: string): void {
+      db.prepare("INSERT OR IGNORE INTO player_stats (player) VALUES (?)").run(player);
+      db.prepare("UPDATE player_stats SET evenings = evenings + 1 WHERE player = ?").run(player);
     },
 
     // Notes the day a Great or Perfect shift was worked.

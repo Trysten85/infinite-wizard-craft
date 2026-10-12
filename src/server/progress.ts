@@ -77,12 +77,46 @@ export function createProgress(deps: {
       paid,
       events: store.countResolvedEvents(player),
       bought: store.getLedgerRefs(player, "shop").length,
+      // The town: people who have arrived, plots owned, what stands on them, evenings spent.
+      // Regulars and enchantments are counted from the evening's actions once those exist.
+      townsfolk: store.listPeople(player).filter((person) => person.job !== null).length,
+      plots: store.listPlots(player),
+      evenings: store.countEvenings(player),
+      regulars: 0,
+      enchantments: 0,
     };
   }
   type Measured = ReturnType<typeof measure>;
 
   // How far along a quest's condition is. It is met when `have` reaches `need`.
+  // The town quests' conditions. They are read through a plain shape so that they can be
+  // answered before the quest schema names them, and the rest of the switch is unchanged.
+  function measureTown(condition: { type: string; count?: number; tier?: number; building?: string }, state: Measured): { have: number; need: number } | null {
+    const count = condition.count ?? 1;
+    const standing = state.plots.filter((plot) => plot.building !== null);
+    switch (condition.type) {
+      case "townsfolk":
+        return { have: state.townsfolk, need: count };
+      case "plots":
+        return { have: state.plots.length, need: count };
+      case "buildings":
+        return { have: standing.filter((plot) => plot.tier >= (condition.tier ?? 1)).length, need: count };
+      case "built":
+        return { have: standing.some((plot) => plot.building === condition.building) ? 1 : 0, need: 1 };
+      case "evenings":
+        return { have: state.evenings, need: count };
+      case "regulars":
+        return { have: state.regulars, need: count };
+      case "enchantments":
+        return { have: state.enchantments, need: count };
+      default:
+        return null;
+    }
+  }
+
   function measureCondition(condition: Quest["done"], state: Measured): { have: number; need: number } {
+    const town = measureTown(condition, state);
+    if (town) return town;
     const things = "made" in condition && condition.made ? state.made : state.found;
     const count = (matches: (entry: GameEntry) => boolean) => things.filter(matches).length;
     switch (condition.type) {
@@ -115,6 +149,8 @@ export function createProgress(deps: {
       case "bought":
         return { have: state.bought, need: condition.count };
     }
+    // A condition type this does not know yet is never met, and never blocks anything.
+    return { have: 0, need: 1 };
   }
 
   function isDone(quest: Quest, state: Measured): boolean {

@@ -91,6 +91,7 @@ export function createDay(deps: {
   function spend(player: string, cost: number): DayTurn {
     check(player, cost);
     const was = today(player);
+    store.addEvening(player);
     return settle(player, was, spendCandles(was, cost));
   }
 
