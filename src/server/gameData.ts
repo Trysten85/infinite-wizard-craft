@@ -8,9 +8,11 @@ import {
   SHIFT_SLOTS,
   bakedComboSchema,
   balanceSchema,
+  buildingSchema,
   comboExampleSchema,
   comboKey,
   comboSchema,
+  dayTextSchema,
   entrySchema,
   eventSeedSchema,
   jobSchema,
@@ -28,8 +30,10 @@ import {
   tagSchema,
   type BakedCombo,
   type Balance,
+  type Building,
   type Combo,
   type ComboExample,
+  type DayText,
   type Entry,
   type EventSeed,
   type GameEntry,
@@ -45,6 +49,7 @@ import {
   type StorybookItem,
   type Tag,
 } from "../shared/schema";
+import type { TownWords } from "../shared/town";
 
 export type GameData = {
   balance: Balance;
@@ -56,6 +61,10 @@ export type GameData = {
   // How each job's work shift looks, by job id, and the plain words shifts are written in.
   jobSkins: Map<string, JobSkin>;
   shiftText: ShiftText;
+  // The plain lines the day's turns are told in.
+  dayText: DayText;
+  // The town's buildings, by id, in the order they are written.
+  buildings: Map<string, Building>;
   quests: Quest[];
   eventSeeds: EventSeed[];
   // Well-known fairy-tale creatures, objects, and wonders a magical combination may produce,
@@ -173,6 +182,8 @@ export function buildGameData(raw: {
   jobs?: Job[];
   jobSkins?: JobSkin[];
   shiftText?: ShiftText;
+  dayText?: DayText;
+  buildings?: Building[];
   quests?: Quest[];
   eventSeeds?: EventSeed[];
   storybook?: StorybookItem[];
@@ -445,6 +456,54 @@ export function buildGameData(raw: {
       if (!raw.shiftText.tagWords[tag]) problems.push(`the shift text has no words for tag "${tag}"`);
     }
   }
+  // The town. A building that names a job this game does not have, as its own or at any tier, is
+  // left out, as a skin is, so a game built from fewer jobs still loads. The test that lists the
+  // real buildings is what catches a misspelled job.
+  const { town } = balance;
+  const buildings = (raw.buildings ?? []).filter((building) =>
+    [building.job, ...building.tiers.flatMap((tier) => [tier.needsJob, tier.job])].every((named) => !named || jobs.some((job) => job.id === named)),
+  );
+  const buildingIds = new Set<string>();
+  const housed = new Set<string>();
+  const bakedThings = new Set(bakedEntries.map((entry) => entry.id));
+  for (const building of buildings) {
+    const label = `building "${building.id}"`;
+    if (buildingIds.has(building.id)) problems.push(`duplicate building id "${building.id}"`);
+    buildingIds.add(building.id);
+    if (building.job) {
+      if (housed.has(building.job)) problems.push(`job "${building.job}" has two buildings`);
+      housed.add(building.job);
+    }
+    if (building.tiers.length !== town.tiers.length) problems.push(`${label} has ${building.tiers.length} tiers, and the town has ${town.tiers.length}`);
+    for (const tag of [...building.wants, ...building.enchantTags]) {
+      if (!tagMap.has(tag)) problems.push(`${label} uses unknown tag "${tag}"`);
+    }
+    // The model can never give an author-only tag, so nothing a player makes would carry it.
+    for (const tag of building.wants) {
+      if (tagMap.get(tag)?.assignedBy === "author") problems.push(`${label} wants "${tag}", which only an author can give`);
+    }
+    for (const [index, tier] of building.tiers.entries()) {
+      for (const need of tier.needs ?? []) {
+        if ("entry" in need) {
+          // A named need must be something with a hand-written recipe, so it can always be made.
+          if (!entryIds.has(need.entry) || bakedThings.has(need.entry)) problems.push(`${label} needs "${need.entry}", which has no hand-written recipe`);
+        } else if (!tagMap.has(need.tag)) problems.push(`${label} needs unknown tag "${need.tag}"`);
+      }
+      for (const perk of tier.perks) {
+        if ((perk.type === "discovery-gold" || perk.type === "gift") && perk.tags.some((tag) => !tagMap.has(tag))) problems.push(`${label} has a perk with an unknown tag at tier ${index + 1}`);
+        if (perk.type === "lifts" && !(raw.buildings ?? []).some((other) => other.id === perk.building)) problems.push(`${label} lifts unknown building "${perk.building}"`);
+        if (perk.type === "lifts" && perk.building === building.id) problems.push(`${label} lifts itself`);
+      }
+    }
+  }
+  if (town.deedsByLevel.length !== balance.levels.cap) problems.push("town.deedsByLevel must have one number for each level");
+  if (town.deedsByLevel.some((deeds, index) => deeds < (town.deedsByLevel[index - 1] ?? 0))) problems.push("town.deedsByLevel must never go down as the level rises");
+  if (town.deedsByLevel.at(-1)! > town.plotPrices.length) problems.push("town.deedsByLevel hands out more deeds than there are plots");
+  if (town.tiers.some((tier, index) => tier.level > balance.levels.cap || tier.level < (town.tiers[index - 1]?.level ?? 1))) {
+    problems.push("town.tiers must ask for levels within the cap, never lower than the tier before");
+  }
+
+  if (balance.day.noon >= balance.day.length) problems.push("the day's noon must come before its length, so that there is an afternoon");
   const { qualities, ranks } = balance.shifts;
   if (qualities.some((quality, index) => quality.id !== QUALITIES[index] || quality.from < (qualities[index - 1]?.from ?? -Infinity))) {
     problems.push(`shift qualities must be ${QUALITIES.join(", ")}, each starting at a higher score than the last`);
@@ -514,6 +573,15 @@ export function buildGameData(raw: {
     spells: spellMap,
     jobs: new Map(jobs.map((job) => [job.id, job])),
     jobSkins: new Map(jobSkins.map((skin) => [skin.job, skin])),
+    buildings: new Map(buildings.map((building) => [building.id, building])),
+    dayText: raw.dayText ?? {
+      dusk: ["Dusk."],
+      turnedIn: ["You turn in early."],
+      night: { "last-candle": ["The last candle is spent."], bed: ["You go to bed."], "midnight-oil": ["The evening has gone."] },
+      morning: ["Morning."],
+      shopRestocked: ["The shop has new stock."],
+      newOrders: ["There are new orders on the board."],
+    },
     shiftText: raw.shiftText ?? { tagWords: {}, results: { meh: ["It works."], good: ["It does the job."], great: ["The customer smiles."], perfect: ["It is worth talking about."] } },
     quests,
     eventSeeds,
@@ -555,6 +623,8 @@ export function readGameFiles(rootDir: string) {
     jobs: readJson(join(rootDir, "data/jobs.json"), z.array(jobSchema)),
     jobSkins: readJson(join(rootDir, "data/job-skins.json"), z.array(jobSkinSchema)),
     shiftText: readJson(join(rootDir, "data/shift-text.json"), shiftTextSchema),
+    dayText: readJson(join(rootDir, "data/day-text.json"), dayTextSchema),
+    buildings: readJson(join(rootDir, "data/buildings.json"), z.array(buildingSchema)),
     quests: readJson(join(rootDir, "data/quests.json"), z.array(questSchema)),
     eventSeeds: readJson(join(rootDir, "data/event-seeds.json"), z.array(eventSeedSchema)),
     storybook: readJson(join(rootDir, "data/storybook.json"), z.array(storybookItemSchema)),
@@ -564,6 +634,15 @@ export function readGameFiles(rootDir: string) {
 
 // `baked: false` leaves the approved bakes out: the game as it stood before them. The bake and
 // the bench both want that, since they are about pairs the model has yet to be asked.
+// The words the town's needs are said in: the names of things and jobs, and a plain phrase for a tag.
+export function townWords(data: GameData): TownWords {
+  return {
+    entryName: (id) => data.entries.get(id)?.name ?? id,
+    jobName: (id) => data.jobs.get(id)?.name ?? id,
+    tagWords: (tag) => data.shiftText.tagWords[tag] ?? tag,
+  };
+}
+
 export function loadGameData(rootDir: string, options: { baked?: boolean } = {}): GameData {
   const files = readGameFiles(rootDir);
   return buildGameData(options.baked === false ? { ...files, baked: [] } : files);

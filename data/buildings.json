@@ -1,0 +1,80 @@
+[
+  {
+    "id": "farm",
+    "name": "Farm",
+    "job": "farmer",
+    "price": 30,
+    "wants": ["plant", "animal", "liquid"],
+    "enchantTags": ["healing", "enhance"],
+    "tiers": [
+      {"needs": [{"entry": "mud"}, {"entry": "animal"}], "perks": [{"type": "lifts", "building": "tavern", "steps": 1}]},
+      {"perks": [{"type": "lifts", "building": "tavern", "steps": 1}, {"type": "lifts", "building": "herb-garden", "steps": 1}]},
+      {"perks": [{"type": "lifts", "building": "tavern", "steps": 1}, {"type": "lifts", "building": "herb-garden", "steps": 1}]}
+    ]
+  },
+  {
+    "id": "market-stall",
+    "name": "Market Stall",
+    "job": "merchant",
+    "price": 50,
+    "wants": ["reagent", "enchanting", "industrial", "knowledge"],
+    "enchantTags": ["knowledge", "utility"],
+    "tiers": [
+      {"needs": [{"entry": "tree"}, {"entry": "glass"}], "perks": [{"type": "opens-shop"}]},
+      {"perks": [{"type": "opens-shop"}, {"type": "shop-shelves", "shelves": "tailored"}]},
+      {"perks": [{"type": "opens-shop"}, {"type": "shop-shelves", "shelves": "tailored"}, {"type": "shop-discount", "share": 0.1}]}
+    ]
+  },
+  {
+    "id": "tavern",
+    "name": "Tavern",
+    "job": "innkeeper",
+    "price": 80,
+    "wants": ["brewing", "liquid", "plant", "animal"],
+    "enchantTags": ["utility", "healing"],
+    "tiers": [
+      {"needs": [{"entry": "spirits"}, {"entry": "food"}, {"entry": "tree"}], "perks": [{"type": "meals", "lift": 0.2, "goldPerLevel": 5}]},
+      {"perks": [{"type": "meals", "lift": 0.2, "goldPerLevel": 5}, {"type": "rumour", "every": 3}]},
+      {"perks": [{"type": "meals", "lift": 0.3, "goldPerLevel": 5}, {"type": "rumour", "every": 3}]}
+    ]
+  },
+  {
+    "id": "smithy",
+    "name": "Smithy",
+    "job": "blacksmith",
+    "price": 70,
+    "wants": ["forging", "metal", "mineral", "industrial"],
+    "enchantTags": ["energy", "protection"],
+    "tiers": [
+      {"needs": [{"entry": "forge"}, {"entry": "iron"}], "perks": [{"type": "discovery-gold", "tags": ["metal", "mineral", "forging"], "share": {"meh": 0.25, "good": 0.5, "great": 0.75, "perfect": 1}}]},
+      {"perks": [{"type": "discovery-gold", "tags": ["metal", "mineral", "forging"], "share": {"meh": 0.4, "good": 0.75, "great": 1.1, "perfect": 1.5}}]},
+      {"perks": [{"type": "discovery-gold", "tags": ["metal", "mineral", "forging"], "share": {"meh": 0.5, "good": 1, "great": 1.5, "perfect": 2}}]}
+    ]
+  },
+  {
+    "id": "herb-garden",
+    "name": "Herb Garden",
+    "job": "herbalist",
+    "price": 50,
+    "wants": ["plant", "healing", "reagent", "liquid"],
+    "enchantTags": ["healing", "transform"],
+    "tiers": [
+      {"needs": [{"entry": "herb"}, {"entry": "mud"}], "perks": [{"type": "discovery-gold", "tags": ["plant", "reagent", "healing"], "share": {"meh": 0.25, "good": 0.5, "great": 0.75, "perfect": 1}}]},
+      {"needsJob": "alchemist", "job": "alchemist", "perks": [{"type": "discovery-gold", "tags": ["plant", "reagent", "healing"], "share": {"meh": 0.25, "good": 0.5, "great": 0.75, "perfect": 1}}, {"type": "gift", "tags": ["plant", "reagent", "healing"], "every": 4}]},
+      {"needsJob": "alchemist", "job": "alchemist", "perks": [{"type": "discovery-gold", "tags": ["plant", "reagent", "healing"], "share": {"meh": 0.25, "good": 0.5, "great": 0.75, "perfect": 1}}, {"type": "gift", "tags": ["plant", "reagent", "healing"], "every": 2}]}
+    ]
+  },
+  {
+    "id": "wizards-tower",
+    "name": "Wizard's Tower",
+    "job": "wizard",
+    "price": 100,
+    "wants": ["knowledge", "enchanting", "mind", "energy"],
+    "enchantTags": ["knowledge", "protection"],
+    "tiers": [
+      {"needs": [{"entry": "spellbook"}, {"entry": "crystal"}], "perks": [{"type": "learn-discount", "share": 0.25}]},
+      {"perks": [{"type": "learn-discount", "share": 0.25}, {"type": "enchant-days", "days": 2}]},
+      {"perks": [{"type": "learn-discount", "share": 0.25}, {"type": "enchant-days", "days": 2}, {"type": "candles", "count": 1}]}
+    ]
+  }
+]

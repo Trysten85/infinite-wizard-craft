@@ -80,6 +80,14 @@
     "touch": {"name": "Touch", "staples": [{"id": "spoon-of-honey", "name": "A spoon of honey", "tags": ["healing"]}, {"id": "rare-petal", "name": "A rare petal", "tags": ["rare"], "rank": "master"}], "from": {"kinds": ["spell", "material"], "tags": ["healing", "rare", "mind"]}}
   },
   {
+    "job": "innkeeper",
+    "flavor": "Suppers, rounds, and whoever came in out of the rain",
+    "subjects": ["Supper for a cart driver who has come a long way", "A round for the harvest crew", "A quiet corner for two people who are not speaking", "Something warm for a wet night"],
+    "base": {"name": "Drink or dish", "staples": [{"id": "house-ale", "name": "The house ale", "tags": ["brewing"]}], "from": {"kinds": ["material"], "tags": ["brewing", "liquid", "plant", "animal"]}},
+    "method": {"name": "Method", "staples": [{"id": "pour", "name": "Pour", "tags": ["liquid"]}, {"id": "cook", "name": "Cook", "tags": ["energy"]}, {"id": "listen", "name": "Listen", "tags": ["mind"]}, {"id": "cellar", "name": "Age it in the cellar", "tags": ["enhance"], "rank": "journeyman"}]},
+    "touch": {"name": "Touch", "staples": [{"id": "seat-by-the-fire", "name": "A seat by the fire", "tags": ["healing"]}, {"id": "good-bottle", "name": "The good bottle", "tags": ["rare"], "rank": "master"}], "from": {"kinds": ["spell", "material"], "tags": ["healing", "utility", "enhance"]}}
+  },
+  {
     "job": "wizard",
     "flavor": "Lost cats, cold soup, and other small emergencies",
     "subjects": ["A lost cat, last seen on a roof", "Soup that has gone cold", "A draft under the door", "A lantern that will not stay lit"],

@@ -2,12 +2,11 @@ import { describe, expect, it } from "vitest";
 import { buildGameData, readGameFiles } from "../src/server/gameData";
 import { chosenFrom, optionsFor, orderText, orderTierFor, resultLine, slotTags, stockOrder } from "../src/server/shifts/orders";
 import { QUALITIES, RANKS, SHIFT_SLOTS, type GameEntry, type RankId, type ShiftOption, type ShiftRules } from "../src/shared/schema";
-import { coveredTags, matchScore, meetsTier, payFor, previewRange, qualityFor, rankFor, rankView, resolveQuality, shiftIn, type ShiftPick } from "../src/shared/shifts";
+import { coveredTags, matchScore, meetsTier, payFor, previewRange, qualityFor, rankFor, rankView, resolveQuality, type ShiftPick } from "../src/shared/shifts";
 import { data, seeded } from "./helpers";
 
 // Numbers pinned for the sums below, so retuning config/balance.json does not move these tests.
 const rules: ShiftRules = {
-  every: 10,
   board: 3,
   tierBonus: 0.15,
   qualities: [
@@ -159,18 +158,6 @@ describe("rank", () => {
   });
 });
 
-describe("when a shift opens", () => {
-  it("is at once for a player who has not had one, then every ten discoveries", () => {
-    expect(shiftIn(0, null, rules)).toBe(0);
-    expect(shiftIn(37, null, rules)).toBe(0);
-    expect(shiftIn(37, 37, rules)).toBe(10);
-    expect(shiftIn(41, 37, rules)).toBe(6);
-    expect(shiftIn(47, 37, rules)).toBe(0);
-    // Discoveries past the tenth are not saved up toward the shift after.
-    expect(shiftIn(80, 37, rules)).toBe(0);
-  });
-});
-
 describe("the shift numbers in the balance file", () => {
   const live = data.balance.shifts;
 
@@ -181,7 +168,6 @@ describe("the shift numbers in the balance file", () => {
       { id: "great", gold: 1.4, xp: 1.3, rep: 1 },
       { id: "perfect", gold: 1.8, xp: 1.6, rep: 2 },
     ]);
-    expect(live.every).toBe(10);
   });
 
   it("keep a shift's XP small beside a level, so discoveries and quests stay the way to level", () => {

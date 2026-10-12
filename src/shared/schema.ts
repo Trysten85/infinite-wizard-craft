@@ -224,17 +224,40 @@ export type Standing = {
   requests: RequestView[];
   // Recipes people have mentioned, newest last. The server always sends this.
   hints?: HintView[];
-  // An event is waiting, or will be once this many more points are earned.
+  // A visitor is waiting to be sat with. `eventIn` is counted in days: 0 while today's visitor is
+  // on the way or waiting, and 1 once the player has sat with them.
   eventReady: boolean;
   eventIn: number;
   // The job the player has taken up, or null before they choose one. The server always sends
   // this. Events and the shop go by it, not by whichever job was discovered last.
   job?: { id: string; name: string } | null;
-  // A shift is open, or will be after this many more discoveries. Sent once shifts are served.
+  // A shift is open: a job is taken up, it is noon or later, and today's shift is not worked.
   shiftReady?: boolean;
-  shiftIn?: number;
+  // Where the player is in their day. Sent once the day is served.
+  day?: DayView;
 };
 export type PlayerProgress = Progress & Standing;
+
+// Why the rules refused something. A refusal comes back as { error, code }: `error` is a sentence
+// for the player, and `code` is one of these, for the page to act on.
+export type RuleCode =
+  | "rule"
+  | "no-focus"
+  | "missing-needs"
+  | "no-result"
+  | "not-enough-gold"
+  | "sold-out"
+  | "level-too-low"
+  | "no-job"
+  | "shift-not-ready"
+  // The day: an evening action tried before dusk, or with too few candles left.
+  | "not-evening"
+  | "no-candles"
+  // The town: no deed for another plot, a building's needs not yet discovered, and the shop
+  // asked for before a Market Stall stands.
+  | "no-deed"
+  | "needs-missing"
+  | "no-shop";
 
 // What a player just earned, for the page to announce. A filled request is listed among the
 // quests, and pays no XP.
@@ -250,7 +273,8 @@ export type ShopSlot = {
   // Bought from this shelf, or since made by the player.
   sold: boolean;
 };
-export type ShopView = { slots: ShopSlot[]; restockIn: number };
+// The shelf, which is restocked each morning.
+export type ShopView = { slots: ShopSlot[] };
 
 // Rows drafted by `npm run craft`. Only rows with status "ok" are live in the game.
 export const draftStatusSchema = z.enum(["draft", "ok", "review"]);
@@ -357,6 +381,78 @@ export const shiftTextSchema = z.strictObject({
 });
 export type ShiftText = z.infer<typeof shiftTextSchema>;
 
+// The town. A building is raised on a plot, has a tier from 1 up, and gives something back to
+// crafting. The rules are in src/shared/town.ts and the design is in Town Guide.md.
+
+// Something the player must have discovered before a building can be raised or raised a tier.
+// It is checked, never taken. Either a named thing with a hand-written recipe, or anything
+// carrying a tag, optionally at a depth and optionally made by the player's own hand.
+export const needSchema = z.union([
+  z.strictObject({ entry: idSchema }),
+  z.strictObject({ tag: z.string(), depth: z.number().int().min(1).optional(), made: z.boolean().optional() }),
+]);
+export type Need = z.infer<typeof needSchema>;
+
+const shareSchema = z.number().min(0);
+// What a building gives back. A closed list: code knows what each one does.
+export const perkSchema = z.discriminatedUnion("type", [
+  // The shop is open, with its random shelves.
+  z.strictObject({ type: z.literal("opens-shop") }),
+  // More of the shop's shelves.
+  z.strictObject({ type: z.literal("shop-shelves"), shelves: z.enum(["tailored"]) }),
+  // Shop prices lower by this share.
+  z.strictObject({ type: z.literal("shop-discount"), share: shareSchema }),
+  // More gold for a discovery carrying one of these tags, by this building's quality tonight.
+  z.strictObject({ type: z.literal("discovery-gold"), tags: z.array(z.string()).min(1), share: z.record(z.enum(QUALITIES), shareSchema) }),
+  // Another building's quality is this many steps better.
+  z.strictObject({ type: z.literal("lifts"), building: idSchema, steps: z.number().int().min(1) }),
+  // Spells cost this share less to learn.
+  z.strictObject({ type: z.literal("learn-discount"), share: shareSchema }),
+  // A free hint every so many days.
+  z.strictObject({ type: z.literal("rumour"), every: z.number().int().min(1) }),
+  // A gift carrying one of these tags every so many days.
+  z.strictObject({ type: z.literal("gift"), tags: z.array(z.string()).min(1), every: z.number().int().min(1) }),
+  // Enchantments last this many days longer.
+  z.strictObject({ type: z.literal("enchant-days"), days: z.number().int().min(1) }),
+  // More candles each evening.
+  z.strictObject({ type: z.literal("candles"), count: z.number().int().min(1) }),
+  // Meals are served: tomorrow's discoveries pay this share more, for this much gold a level.
+  z.strictObject({ type: z.literal("meals"), lift: shareSchema, goldPerLevel: z.number().int().min(0) }),
+]);
+export type Perk = z.infer<typeof perkSchema>;
+
+// One tier of one building. `perks` is everything the building gives at that tier, not only
+// what the tier adds. `needs` are named things on top of what every building of that tier needs.
+const buildingTierSchema = z.strictObject({
+  needs: z.array(needSchema).optional(),
+  // A townsperson who must have arrived first.
+  needsJob: idSchema.optional(),
+  // From this tier the building is run by this job and not the one that brought its plan.
+  job: idSchema.optional(),
+  perks: z.array(perkSchema),
+});
+export const buildingSchema = z.strictObject({
+  id: idSchema,
+  name: z.string().min(1),
+  // The job whose townsperson brings this building's plan. Left out for a civic building.
+  job: idSchema.optional(),
+  // What raising it costs in gold. Later tiers cost what `town.tiers` says.
+  price: z.number().int().min(0),
+  // The tags it wants on its shelves. Its quality is how well its stock covers them.
+  wants: z.array(z.string()).min(1),
+  // A learned spell carrying one of these can be cast on it.
+  enchantTags: z.array(z.string()),
+  // Lowest first, one for each row of `town.tiers`.
+  tiers: z.array(buildingTierSchema).min(1),
+});
+export type Building = z.infer<typeof buildingSchema>;
+
+// What a player can spend a candle on in the evening: sitting with tonight's visitor, a meal at
+// the Tavern, calling on a townsperson, lending a hand at a building, enchanting one, raising one
+// a tier, and raising a new one.
+export const EVENING_ACTIONS = ["visitor", "meal", "call", "hand", "enchant", "upgrade", "build"] as const;
+export type EveningAction = (typeof EVENING_ACTIONS)[number];
+
 export const balanceSchema = z.strictObject({
   startingEntries: z.array(idSchema).min(1),
   depthPerTier: z.number().int().min(1),
@@ -373,8 +469,6 @@ export const balanceSchema = z.strictObject({
   // Gold for a first discovery made by combining, by the entry's tier.
   discoveryGoldByTier: z.array(z.number().int().min(0)).min(1),
   shop: z.strictObject({
-    // The shelf restocks after this many new discoveries made by combining.
-    restockEvery: z.number().int().min(1),
     basePrice: z.number().int().min(0),
     pricePerDepth: z.number().int().min(0),
     // "Missing steps" are the combos the player still has not made on the way to the item.
@@ -383,16 +477,13 @@ export const balanceSchema = z.strictObject({
     neverSells: z.array(idSchema),
   }),
   events: z.strictObject({
-    // An event arrives when the player has earned this many points.
-    every: z.number().int().min(1),
-    points: z.strictObject({ discovery: z.number().int(), quest: z.number().int(), spell: z.number().int(), level: z.number().int() }),
     // How big an event is. `gold` is what a Generous or Sharp response moves; `scale` multiplies rep and fondness.
     stakes: z.record(stakesSchema, z.strictObject({ gold: z.number().int().min(0), scale: z.number().min(0) })),
     // What each response type does. `gold` is a multiple of the stakes' gold.
     effects: z.record(responseTypeSchema, z.strictObject({ gold: z.number(), rep: z.number().int(), fondness: z.number().int() })),
     // Lowest first. A band applies from its `from` value upward.
     repBands: z
-      .array(z.strictObject({ name: z.string(), from: z.number().int(), shopPrice: z.number(), requestPay: z.number(), eventEvery: z.number().int() }))
+      .array(z.strictObject({ name: z.string(), from: z.number().int(), shopPrice: z.number(), requestPay: z.number() }))
       .min(1),
     // How often a known person comes back, once the player has met enough people.
     repeatShare: z.number().min(0).max(1),
@@ -425,10 +516,45 @@ export const balanceSchema = z.strictObject({
     // A person whose fondness reaches this far either way has had their story.
     settledAt: z.number().int().min(1),
   }),
+  // The day is a budget of the player's own actions. Nothing here is a timer.
+  day: z.strictObject({
+    // Notches from dawn to dusk. A new discovery made by combining moves the sun one notch.
+    length: z.number().int().min(1),
+    // The notch at which the order board opens. Before it is morning, from it afternoon.
+    noon: z.number().int().min(0),
+    // Notches that working the shift moves the sun.
+    shiftNotches: z.number().int().min(0),
+    // Evening actions, and how many there are when the player turns in early.
+    candles: z.number().int().min(1),
+    earlyCandles: z.number().int().min(0),
+    // Discoveries past dusk, with no candle spent between them, before night falls by itself.
+    nightAfter: z.number().int().min(1),
+    // What each evening action costs in candles.
+    costs: z.record(z.enum(EVENING_ACTIONS), z.number().int().min(0)),
+    // One-night happenings: the first day one may appear, and the chance of one each day.
+    tonight: z.strictObject({ fromDay: z.number().int().min(1), chance: z.number().min(0).max(1) }),
+  }),
+  town: z.strictObject({
+    // What each plot along the street costs, the first one first. They are bought in order.
+    plotPrices: z.array(z.number().int().min(0)).min(1),
+    // How many plots a player of each level may own, level 1 first.
+    deedsByLevel: z.array(z.number().int().min(0)).min(1),
+    // One row per building tier, lowest first. `gold` is null where the building's own price
+    // applies. `made` asks for that many different things the player made themselves, each at
+    // that depth or deeper and each carrying one of the building's wants: null asks for none.
+    tiers: z
+      .array(
+        z.strictObject({
+          gold: z.number().int().min(0).nullable(),
+          level: z.number().int().min(1),
+          slots: z.number().int().min(0),
+          takings: z.number().int().min(0),
+          made: z.strictObject({ count: z.number().int().min(1), depth: z.number().int().min(1) }).nullable(),
+        }),
+      )
+      .min(1),
+  }),
   shifts: z.strictObject({
-    // A shift opens after this many new discoveries made by combining, counted the way the shop
-    // counts toward a restock. The first one is open as soon as a job is taken up.
-    every: z.number().int().min(1),
     // How many orders the board holds.
     board: z.number().int().min(1),
     // A shift's score is the share of the order's tags the chosen inputs cover, plus this when
@@ -488,6 +614,110 @@ export const balanceSchema = z.strictObject({
 });
 export type Balance = z.infer<typeof balanceSchema>;
 
+// The day. A player crafts through the morning, may work a shift from noon, spends candles in the
+// evening, and sees a ledger when night falls. The rules are in src/shared/day.ts.
+export type DayRules = Balance["day"];
+export const DAY_PHASES = ["morning", "afternoon", "evening"] as const;
+export type DayPhase = (typeof DAY_PHASES)[number];
+// Why night fell: the last candle was spent, the player went to bed, or they crafted on past dusk
+// until the evening had gone.
+export const NIGHT_REASONS = ["last-candle", "bed", "midnight-oil"] as const;
+export type NightReason = (typeof NIGHT_REASONS)[number];
+
+// A one-night happening, once it has been announced. `taken` is set when the player took part.
+export type TonightView = { id: string; name: string; line: string; taken: boolean };
+
+// What the night's ledger shows, in the order it shows it.
+export type Ledger = {
+  // The day that just ended, and why it did.
+  day: number;
+  fell: NightReason;
+  takings: { plot: number; building: string; name: string; quality: QualityId; gold: number }[];
+  // Null until there is a town to be cheerful.
+  cheer: { points: number; band: string } | null;
+  // Anything a perk grew or brought.
+  brought: { kind: "gift" | "rumour"; line: string }[];
+  // A one-night happening the player did not take part in, in a line.
+  missed: string | null;
+  // The player gained a level today, and with it a deed.
+  deed: boolean;
+  // Plain remarks: how the night fell, and what the morning brings.
+  lines: string[];
+};
+
+// Where the player is in their day, for the page.
+export type DayView = {
+  number: number;
+  sun: number;
+  length: number;
+  noon: number;
+  phase: DayPhase;
+  // Evening actions left, and how many this evening has in all. Only spendable in the evening.
+  candles: number;
+  candlesMax: number;
+  // Discoveries still to make before night falls by itself. Null outside the evening.
+  nightIn: number | null;
+  // The player may turn in early: it is past noon and not yet dusk. `turnInCandles` is how many
+  // candles the evening would then have, so the page can say what turning in gives up.
+  canTurnIn: boolean;
+  turnInCandles: number;
+  // What each evening action costs in candles.
+  costs: Record<EveningAction, number>;
+  // Today's shift has been worked.
+  shiftDone: boolean;
+  // Null until it is announced at noon, and on a day with no happening.
+  tonight: TonightView | null;
+  // Last night's ledger, so the page can show it again after a reload.
+  lastLedger: Ledger | null;
+};
+
+// The plain lines the day is written in until the model writes them.
+export const dayTextSchema = z.strictObject({
+  dusk: z.array(z.string().min(1)).min(1),
+  turnedIn: z.array(z.string().min(1)).min(1),
+  night: z.record(z.enum(NIGHT_REASONS), z.array(z.string().min(1)).min(1)),
+  morning: z.array(z.string().min(1)).min(1),
+  shopRestocked: z.array(z.string().min(1)).min(1),
+  newOrders: z.array(z.string().min(1)).min(1),
+});
+export type DayText = z.infer<typeof dayTextSchema>;
+
+// The town, for the page.
+export type TownRules = Balance["town"];
+
+// One thing a building needs, in words, and whether the player has it. `progress` is only set
+// for a need that counts something.
+export type NeedView = { label: string; met: boolean; progress?: { have: number; need: number } };
+
+// A building standing on a plot. `next` is what raising it a tier takes, or null at the top tier.
+// Stock, quality above Meh, and enchantments arrive with slice 3 and slice 4.
+export type BuildingView = {
+  id: string;
+  name: string;
+  tier: number;
+  quality: QualityId;
+  // What it will pay tonight.
+  takings: number;
+  wants: string[];
+  stock: { slot: number; entry: { id: string; name: string } | null }[];
+  enchantment: { spell: { id: string; name: string }; daysLeft: number } | null;
+  next: { gold: number; level: number; needs: NeedView[]; ready: boolean } | null;
+};
+
+export type TownView = {
+  // Every plot along the street. `opensAt` is the level whose deeds reach that plot.
+  plots: { index: number; owned: boolean; price: number; opensAt: number; building: BuildingView | null }[];
+  // How many plots the player's level lets them own, and how many the highest level would.
+  deeds: { have: number; max: number };
+  // Null until Cheer is worked out, in slice 3.
+  cheer: { points: number; band: string } | null;
+  // `person` is the id of their row among the people the player knows.
+  townsfolk: { person: number; job: string; name: string; housed: boolean; fondness: number; regular: boolean }[];
+  // Buildings the player holds the plan for and has not raised. `ready` means the gold, the
+  // level, and the needs are all there. It says nothing of the hour or the candles.
+  plans: { building: string; name: string; price: number; candles: number; needs: NeedView[]; ready: boolean }[];
+};
+
 // The shift numbers the page needs to preview a result. Sent with the board.
 export type ShiftRules = Balance["shifts"];
 
@@ -502,12 +732,11 @@ export type ShiftOrder = { id: number; text: string; tags: string[]; tier: numbe
 export type RankView = { id: RankId; name: string; shifts: number; next: { name: string; shifts: number } | null };
 
 // Everything the page needs to show a shift. `job` is null until the player takes one up, and
-// then the rest is empty. `shiftIn` counts the discoveries still to make before `ready`.
+// then the rest is empty. `ready` is true from noon until today's shift is worked.
 export type ShiftBoard = {
   job: { id: string; name: string } | null;
   rank: RankView | null;
   ready: boolean;
-  shiftIn: number;
   // The job's names for the three slots.
   slots: Record<ShiftSlot, string>;
   orders: ShiftOrder[];

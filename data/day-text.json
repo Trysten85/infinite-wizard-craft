@@ -1,0 +1,36 @@
+{
+  "dusk": [
+    "The lamps come on along the street.",
+    "Dusk. Somebody is frying onions, and the street smells of it.",
+    "The light goes gold, then blue. The street is awake."
+  ],
+  "turnedIn": [
+    "You shut the book early. The street is only just lighting up.",
+    "Enough for one day. There is still a little evening left."
+  ],
+  "night": {
+    "last-candle": [
+      "The last candle gutters. That was the evening.",
+      "Out of candles, and not a minute wasted."
+    ],
+    "bed": [
+      "You turn in. The street carries on quietly without you.",
+      "Bed. The kettle will keep until morning."
+    ],
+    "midnight-oil": [
+      "You look up from the bench and the street has gone dark. The evening went by without you.",
+      "The lamp burns low over the workbench. Everybody else went to bed some time ago."
+    ]
+  },
+  "morning": [
+    "Morning. The street smells of bread and wet stone.",
+    "A new day. Somewhere a goose is already complaining.",
+    "Morning, and the kettle is on."
+  ],
+  "shopRestocked": [
+    "The shop has new stock."
+  ],
+  "newOrders": [
+    "There are new orders on the board."
+  ]
+}

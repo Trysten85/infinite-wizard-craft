@@ -23,7 +23,7 @@ function newCombiner() {
 
 describe("jobs", () => {
   it("are all entries of kind job, mundane and magic", () => {
-    expect(jobs).toHaveLength(22);
+    expect(jobs).toHaveLength(23);
     expect(jobs.filter((job) => job.magic)).toHaveLength(12);
     expect(data.jobs.has("sorcerer")).toBe(false);
     for (const job of jobs) expect(data.entries.get(job.id), job.id).toMatchObject({ kind: "job", name: job.name });
@@ -63,6 +63,13 @@ describe("jobs", () => {
     for (const recipe of makesHealer) expect(data.entries.get(recipe.inputs[1])!.tags, recipe.inputs[1]).toContain("healing");
   });
 
+  it("make an innkeeper from a person and spirits, a mundane job that wants what a tavern serves", () => {
+    const innkeeper = data.jobs.get("innkeeper")!;
+    expect(innkeeper).toMatchObject({ magic: false, inputs: ["person", "spirits"], wantedTags: ["brewing", "liquid", "plant", "animal"] });
+    expect(data.combos.get("person+spirits")).toMatchObject({ result: "innkeeper" });
+    expect(data.jobSkins.get("innkeeper")!.base.from!.tags.sort()).toEqual([...innkeeper.wantedTags].sort());
+  });
+
   it("mark Wizard, and only Wizard, as the job for the first job quest", () => {
     expect(jobs.filter((job) => job.starter).map((job) => job.id)).toEqual(["wizard"]);
   });
@@ -82,7 +89,7 @@ describe("jobs", () => {
   it("are listed for the journal with a hint and no name", async () => {
     const response = await createApp(newCombiner()).request("/api/jobs");
     const body = (await response.json()) as { jobs: Record<string, unknown>[] };
-    expect(body.jobs).toHaveLength(22);
+    expect(body.jobs).toHaveLength(23);
     expect(body.jobs.find((job) => job.id === "spy")).toEqual({ id: "spy", magic: false, hint: "Someone who likes the shade and listens well. Curtains are involved.", starter: false });
     expect(body.jobs.find((job) => job.id === "wizard")).toMatchObject({ starter: true });
   });
@@ -160,7 +167,7 @@ describe("taking up a job", () => {
 
   it("has a route, which answers with where the player now stands", async () => {
     const game = withTwoJobs();
-    const app = createApp(game.combiner, { progress: game.progress, shop: game.shop, events: game.events });
+    const app = createApp(game.combiner, { progress: game.progress, shop: game.shop, day: game.day, events: game.events });
     const before = (await (await app.request("/api/players/ann")).json()) as Record<string, any>;
     expect(before.progress.job).toBeNull();
 

@@ -80,10 +80,14 @@ evening, and sees a ledger at night. Nothing about the town yet.
     `data/day-text.json` (`data.dayText`), since the ledger's `lines` need words. `RuleCode` is
     in `src/shared/schema.ts`; two lines changed in `combiner.ts` (the import and a re-export).
   - **Left for later:** the `tonightChance` column on `events.repBands` (no draft numbers yet;
-    `tonightComes` takes the band's shift as an argument, so E1 can add the column), and the
-    old counters, which stay until D2 says nothing reads them.
+    `tonightComes` takes the band's shift as an argument, so E1 can add the column).
+  - **2026-10-12:** the old counters are removed, on Backend's word that nothing reads them
+    after D2 and D3: `shifts.every`, `shop.restockEvery`, `events.every`, `events.points`, the
+    `eventEvery` column of `events.repBands`, and `shiftIn` in `src/shared/shifts.ts`. The
+    fields `ShiftBoard.shiftIn`, `Standing.shiftIn`, and `ShopView.restockIn` went the same day,
+    once the Page stopped reading them (7bf3029).
 
-### D2 · Backend · claimed by infinite-spell-craft-7e
+### D2 · Backend · done
 - **What:** save the day, run it, and move the three old counters onto it.
 - **Depends on:** D1.
 - **Guide:** "The day", "What the day replaces", "Saved games".
@@ -100,18 +104,42 @@ evening, and sees a ledger at night. Nothing about the town yet.
   ticket on (one candle, refused with `not-evening` or `no-candles`), while the test-event route
   stays open at any time; last night's ledger is still readable after a reload; a saved game from before this opens on day 1 with nothing
   lost; the old counters' config keys are gone once nothing reads them (ask Rules to remove them).
-- **Notes:** claimed 2026-10-11. Building starts when D1's types and `src/shared/day.ts` land,
-  so that no rule maths is written twice. The Backend tickets after this (D3, S3, Q2, E2) are
-  mine too, taken one at a time in order, since they all change the same few files.
+- **Notes:** done 2026-10-12 by infinite-spell-craft-7e (Backend). `npm test` (664) and typecheck
+  pass. The live save was backed up (`var/game.before-day-2026-10-11.db`) and has moved over:
+  three players at dawn on day 1, with gold, discoveries, spells, people, and shelves unchanged.
+  The README's "The day (routes)" has the whole contract. The Backend tickets after this (D3,
+  S3, Q2, E2) are mine too, one at a time.
+  - **For D4 (Page):** every route that returns `progress` now sends `night` and `dusk` beside
+    it, and `progress.day` is always there. `POST /day/end` answers `{ rewards, night, dusk,
+    progress }`. `GET /event` answers `{ event }` only (no `eventIn`), and `event` is null
+    before dusk. The candle for a visit goes on the answer that ends it (the second beat, or
+    `avoid` at the door), so `night` can come back on that answer and never on the first.
+    `progress.eventIn` is still sent, now in days: 0 while today's visitor is on the way or
+    waiting, 1 once they have been seen. `ShopView.restockIn`, `ShiftBoard.shiftIn`, and
+    `progress.shiftIn` are no longer sent.
+  - **For Rules:** nothing of mine reads `shop.restockEvery`, `events.every`, `events.points`,
+    `eventEvery`, `shifts.every`, or `shiftIn` in `src/shared/shifts.ts` any more (D3 cleared
+    the last of them). `src/server/crafted.ts` is gone: nothing counts
+    discoveries any more, since the sun moves on a combine that answers `firstDiscovery`.
+  - **Four things I settled in code that the guide does not say** are under "Questions for
+    design" below, for Design to keep or change.
 
-### D3 · Backend · open
+### D3 · Backend · done
 - **What:** teach `npm run pace` about days.
 - **Depends on:** D2.
 - **Guide:** "Draft numbers", "Tests to write: pace".
 - **Touches:** `src/tools/pace.ts`.
 - **Done when:** it prints days per level beside discoveries and hours, and the days saved
   players have taken.
-- **Notes:**
+- **Notes:** done 2026-10-12 by infinite-spell-craft-7e (Backend). `npm run pace` has a Days
+  column and the day each level is reached on, a line on what a day comes to, and the day each
+  saved player is on. A day is counted as `day.length` discoveries before the first job quest's
+  level and `length - shiftNotches` from it, with the shift worked every day.
+  - **For Design:** at today's numbers level 5 is reached on day 31 with a shift every day, and
+    on day 26 with none. The guide's range is day 25 to 30, so a player who never misses a
+    shift lands a day past it. Levels are reached on days 5, 13, 21, and 31. At the assumed
+    speeds a day is about 10 minutes; the three saved players have gone faster, 2 to 5 minutes
+    a day. The gold columns the guide's "Pace" test asks for wait for the town (S3).
 
 ### D4 · Page · done
 - **What:** show the day.
@@ -204,7 +232,7 @@ pay takings at night, and the shop is earned.
     approve the `spirits + person` row, since an approved row for a pair with a hand-written
     recipe stops the data loading ("defined twice").
 
-### S3 · Backend · open
+### S3 · Backend · done
 - **What:** save and serve the town.
 - **Depends on:** S1, D2.
 - **Guide:** "The street", "Townsfolk bring the buildings", "Buildings", "The shop is earned",
@@ -466,6 +494,50 @@ Add a line: ticket id, your session name, the question. Answers are written bene
     as its own takings, which is right. The guide's "Buildings" now carries the shares and the
     rounding. Wherever the sum is done (`src/shared/town.ts` or `settle`), a test should hold a
     1-gold discovery to an extra of 1.
+- **D2 · infinite-spell-craft-7e (Backend):** four things D2 does that the guide leaves open.
+  None changes a rule or a number; say if any should be otherwise.
+  1. **When the visit's candle is taken.** On the answer that ends the conversation, not the
+     one that starts it. Taken at the start, a last candle would bring night, the ledger, and a
+     new morning while the player was still mid-sentence with the visitor. The check
+     (`not-evening`, `no-candles`) is made on every answer. A conversation left half-way when
+     night falls carries on the next evening.
+  2. **When the visitor is written.** The guide says from dawn. D2 starts on the first thing
+     the player makes that day, so that opening the page (or a test player made by another
+     session) never sets the model working. A visitor still has most of a day to be written in.
+  3. **A `dusk` line beside `night`.** `data/day-text.json` has lines for dusk and for turning
+     in early, and no shape carried them. Every route that returns `progress` now also returns
+     `dusk: string | null`, set on the action that brought the evening on.
+  4. **Old saves' day numbers.** Events and people in a save from before days were numbered by
+     event count (a player on "day 12" of events now starts on day 1). Their numbers are moved
+     back to end at day 0, keeping order and gaps, so follow-ups fall due in real days and no
+     old visit looks as if it happened in the future.
+  Also for the Page's eye: after turning in early the shift is still open that evening
+  (`shiftOpen` runs from noon until night), while the page's "call it a day" warning says the
+  shift is lost.
+- **S3 · infinite-spell-craft-7e (Backend):** things S3 does that the guide leaves open, and one
+  rule that bites a real save.
+  1. **A saved player who never bought from the shop loses it.** The guide gives the stall to
+     anyone who has bought from the shop. Jaclyn (level 3, 160 gold, 18 things) has not, so her
+     Shop is shut until she makes a Merchant and raises a stall. That is the rule as written,
+     and it is also the one thing S3 takes from a saved player. Should every player saved
+     before the town be given the stall, bought from it or not?
+  2. **Townsfolk names.** They go by their trade ("The Blacksmith") until E1's names file
+     lands; E2 can rename them then.
+  3. **Townsfolk are never the evening's visitor,** and do not count toward
+     `events.maxActivePeople`. Otherwise six arrivals would fill the cast and every visitor
+     would be a familiar face. Their names are still kept from the model.
+  4. **One of each building.** A second Smithy is refused.
+  5. **The first plot is free but must still be bought** (`POST /town/plots`), since
+     `refusePlot` treats it like any other.
+  6. **Extra discovery gold is its own ledger row** (reason `perk`) and is part of
+     `rewards.gold`, so the page shows one sum. If the player should see the extra named, the
+     shape needs a field.
+  7. **`learn-discount` is not in force yet** though it is a tier 1 perk (the Wizard's Tower).
+     Spell entries carry one `learnCost` for everybody, so charging less would show one price
+     and take another. It needs a per-player price in the view; say where it should go.
+  8. **Refusal order for a raise:** the guide's level, needs, gold, then the hour, then the
+     candles. And a player who turned in early cannot raise a new building that evening (one
+     candle, and it takes two).
 
 ## Log
 

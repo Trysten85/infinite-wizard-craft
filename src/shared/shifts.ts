@@ -32,12 +32,6 @@ export function rankView(shiftsDone: number, rules: ShiftRules): RankView {
   return { id: rank.id, name: rank.name, shifts: shiftsDone, next: next ? { name: next.name, shifts: next.shifts } : null };
 }
 
-// How many more discoveries until a shift opens. `crafted` is the count the shop restocks on, and
-// `lastShiftAt` what that count was at the player's last shift, or null if they have had none.
-export function shiftIn(crafted: number, lastShiftAt: number | null, rules: ShiftRules): number {
-  return lastShiftAt === null ? 0 : Math.max(0, rules.every - (crafted - lastShiftAt));
-}
-
 // Which of the order's tags the chosen inputs cover between them.
 export function coveredTags(ask: ShiftAsk, pick: ShiftPick): string[] {
   const chosen = new Set(inputsOf(pick).flatMap((input) => input.tags));

@@ -117,7 +117,7 @@ Drafted spells and materials are not listed until they are approved (`npm run cr
 | Enlarge/Reduce | Transmutation | 2 | Transmutation + Longstrider (needs Iron) | 12 |
 | Fly | Transmutation | 3 | Transmutation + Enlarge/Reduce (needs Feather) | 15 |
 
-### Jobs (22)
+### Jobs (23)
 
 | Name | Type | Made from | Combos |
 |---|---|---|---|
@@ -131,6 +131,7 @@ Drafted spells and materials are not listed until they are approved (`npm run cr
 | Soldier | mundane | Person + Iron | 7 |
 | Spy | mundane | Person + Shadow | 6 |
 | Tea Shop Owner | mundane | Merchant + Tea | 12 |
+| Innkeeper | mundane | Person + Spirits | 7 |
 | Wizard | magic | Person + Spellbook | 7 |
 | Alchemist | magic | Herbalist + Transmutation | 10 |
 | Runesmith | magic | Blacksmith + Spellbook | 11 |
@@ -1051,6 +1052,16 @@ Drafted spells and materials are not listed until they are approved (`npm run cr
 10. Fire + Water = Steam
 11. Herb + Steam = Tea
 12. Merchant + Tea = Tea Shop Owner
+
+#### Innkeeper
+
+1. Water + Earth = Mud
+2. Fire + Air = Light
+3. Mud + Light = Life
+4. Mud + Life = Person
+5. Fire + Water = Steam
+6. Steam + Life = Spirits
+7. Person + Spirits = Innkeeper
 
 #### Wizard
 

@@ -1,4 +1,4 @@
-import { comboKey, slugify, type CombineResult, type ComboDraft, type GameEntry } from "../shared/schema";
+import { comboKey, slugify, type CombineResult, type ComboDraft, type GameEntry, type RuleCode } from "../shared/schema";
 import type { Blocklist } from "./blocklist";
 import { pairShare } from "./comboContext";
 import type { ComboGenerator } from "./comboGenerator";
@@ -7,7 +7,8 @@ import type { Store } from "./store";
 import { canonicalName, isBanned, isOnlyIngredients, isRealName, overusedIn } from "./names";
 import { endsCleanly, tooLong } from "./voice";
 
-export type RuleCode = "rule" | "no-focus" | "missing-needs" | "no-result" | "not-enough-gold" | "sold-out" | "level-too-low" | "no-job" | "shift-not-ready";
+// The list of codes lives with the shared types, so the page can read it too.
+export type { RuleCode };
 
 // Thrown when the player asks for something the rules don't allow.
 export class RuleError extends Error {

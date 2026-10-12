@@ -1,0 +1,155 @@
+import type { Building, GameEntry, Need, NeedView, Perk, QualityId, ShiftRules, TownRules } from "./schema";
+
+// The rules of the town, as plain functions of what the player has and the numbers under `town`
+// in config/balance.json. Nothing here touches a saved game. Tiers are counted from 1, and plots
+// from 0.
+
+// Something the player has discovered, and whether they made it themselves. A thing bought or
+// given is held but not made.
+export type Held = { entry: Pick<GameEntry, "id" | "kind" | "tags" | "depth">; made: boolean };
+
+// What a need or a label is said in. The game data supplies these.
+export type TownWords = { entryName: (id: string) => string; jobName: (id: string) => string; tagWords: (tag: string) => string };
+
+// What a player brings to a building's door.
+export type Builder = { held: Held[]; jobs: string[]; level: number; gold: number };
+
+// What a plot costs, or null if the street has no such plot.
+export function plotPrice(index: number, rules: TownRules): number | null {
+  return rules.plotPrices[index] ?? null;
+}
+
+// How many plots a player of this level may own. A level past the table takes its last row.
+export function deedsFor(level: number, rules: TownRules): number {
+  const table = rules.deedsByLevel;
+  const deeds = table[Math.min(Math.max(level, 1), table.length) - 1]!;
+  return Math.min(deeds, rules.plotPrices.length);
+}
+
+// The level whose deeds first reach this plot, or null if no level's do.
+export function levelForPlot(index: number, rules: TownRules): number | null {
+  const at = rules.deedsByLevel.findIndex((deeds) => deeds > index);
+  return at === -1 || index >= rules.plotPrices.length ? null : at + 1;
+}
+
+// Why the next plot along cannot be bought, or null if it can. Plots are bought in order, so the
+// next one is the one numbered by how many the player owns.
+export function refusePlot(owned: number, level: number, gold: number, rules: TownRules): "no-deed" | "not-enough-gold" | null {
+  if (owned >= deedsFor(level, rules)) return "no-deed";
+  return plotPrice(owned, rules)! > gold ? "not-enough-gold" : null;
+}
+
+// What may sit on a building's shelves, and so what its made needs count: materials and spells.
+export function isStockable(entry: Pick<GameEntry, "kind">): boolean {
+  return entry.kind === "material" || entry.kind === "spell";
+}
+
+// Whether the player has what a need asks for.
+export function needMet(need: Need, held: Held[]): boolean {
+  if ("entry" in need) return held.some((thing) => thing.entry.id === need.entry);
+  return held.some((thing) => thing.entry.tags.includes(need.tag) && thing.entry.depth >= (need.depth ?? 0) && (!need.made || thing.made));
+}
+
+// The different things a player made themselves that a building would want on its shelves, at
+// this depth or deeper. A higher tier asks for some number of these.
+export function wantedThings(building: Building, held: Held[], depth: number): Held[] {
+  const seen = new Set<string>();
+  return held.filter((thing) => {
+    const counts = thing.made && isStockable(thing.entry) && thing.entry.depth >= depth && thing.entry.tags.some((tag) => building.wants.includes(tag));
+    if (!counts || seen.has(thing.entry.id)) return false;
+    seen.add(thing.entry.id);
+    return true;
+  });
+}
+
+// How many stock slots a building of this tier has.
+export function slotsAt(tier: number, rules: TownRules): number {
+  return rules.tiers[tier - 1]?.slots ?? 0;
+}
+
+export function topTier(building: Building, rules: TownRules): number {
+  return Math.min(building.tiers.length, rules.tiers.length);
+}
+
+// The gold and the level that raising a building to this tier takes. The first tier costs the
+// building's own price.
+export function tierCost(building: Building, tier: number, rules: TownRules): { gold: number; level: number } {
+  const row = rules.tiers[tier - 1]!;
+  return { gold: row.gold ?? building.price, level: row.level };
+}
+
+function capital(text: string): string {
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+function article(name: string): string {
+  return /^[aeiou]/i.test(name) ? "An" : "A";
+}
+
+// Everything raising a building to this tier needs, each said in words and marked met or not:
+// its named things, any townsperson who must have arrived, and the things the player must have made.
+export function checkNeeds(building: Building, tier: number, player: Pick<Builder, "held" | "jobs">, rules: TownRules, words: TownWords): NeedView[] {
+  const own = building.tiers[tier - 1];
+  const views: NeedView[] = (own?.needs ?? []).map((need) => {
+    if ("entry" in need) return { label: words.entryName(need.entry), met: needMet(need, player.held) };
+    const how = [need.made ? "made by you" : "", need.depth ? `${need.depth} or more steps deep` : ""].filter(Boolean);
+    return { label: [capital(words.tagWords(need.tag)), ...how].join(", "), met: needMet(need, player.held) };
+  });
+  if (own?.needsJob) {
+    const name = words.jobName(own.needsJob);
+    views.push({ label: `${article(name)} ${name} in town`, met: player.jobs.includes(own.needsJob) });
+  }
+  const made = rules.tiers[tier - 1]?.made;
+  if (made) {
+    const have = Math.min(made.count, wantedThings(building, player.held, made.depth).length);
+    views.push({
+      label: `${made.count} things you made, ${made.depth} or more steps deep, that the ${building.name} wants`,
+      met: have >= made.count,
+      progress: { have, need: made.count },
+    });
+  }
+  return views;
+}
+
+// Why a building cannot be raised to this tier, or null if it can: the level first, then the
+// needs, then the gold. The plot, the hour, and the candles are checked elsewhere.
+export function refuseTier(building: Building, tier: number, player: Builder, rules: TownRules): "level-too-low" | "needs-missing" | "not-enough-gold" | null {
+  const cost = tierCost(building, tier, rules);
+  if (player.level < cost.level) return "level-too-low";
+  const words: TownWords = { entryName: (id) => id, jobName: (id) => id, tagWords: (tag) => tag };
+  if (checkNeeds(building, tier, player, rules, words).some((need) => !need.met)) return "needs-missing";
+  return cost.gold > player.gold ? "not-enough-gold" : null;
+}
+
+// Everything a building gives at this tier.
+export function perksAt(building: Building, tier: number): Perk[] {
+  return building.tiers[tier - 1]?.perks ?? [];
+}
+
+// Every perk of one type across the buildings standing, each with the building it comes from.
+export function perksOf<T extends Perk["type"]>(standing: { building: Building; tier: number }[], type: T): { perk: Extract<Perk, { type: T }>; building: Building; tier: number }[] {
+  return standing.flatMap(({ building, tier }) =>
+    perksAt(building, tier)
+      .filter((perk): perk is Extract<Perk, { type: T }> => perk.type === type)
+      .map((perk) => ({ perk, building, tier })),
+  );
+}
+
+// What a building pays for the night: its tier's takings, scaled by its quality tonight, and
+// raised by `share` (the town's Cheer, and anything else that lifts takings, added together).
+export function takingsFor(tier: number, quality: QualityId, rules: TownRules, shifts: ShiftRules, share = 0): number {
+  const base = rules.tiers[tier - 1]?.takings ?? 0;
+  const scale = shifts.qualities.find((item) => item.id === quality)?.gold ?? 1;
+  return Math.round(base * scale * (1 + share));
+}
+
+// The extra gold a discovery earns from buildings that pay for its kind. `base` is the gold the
+// discovery pays without them. Each perk counts at the quality its building has tonight. The
+// extra is rounded up, and is never less than 1 when a building pays at all: most early
+// discoveries pay very little, and a perk the player cannot see paying is one they do not have.
+export function extraDiscoveryGold(base: number, tags: string[], paying: { perk: Extract<Perk, { type: "discovery-gold" }>; quality: QualityId }[]): number {
+  const share = paying.filter(({ perk }) => perk.tags.some((tag) => tags.includes(tag))).reduce((total, { perk, quality }) => total + perk.share[quality], 0);
+  if (share <= 0) return 0;
+  // The small amount taken off keeps a sum such as 10 x 1.1 from being rounded up past 11.
+  return Math.max(1, Math.ceil(base * share - 1e-9));
+}

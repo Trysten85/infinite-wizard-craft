@@ -101,7 +101,7 @@ The server owns gold, XP, level, quests, and learned spells. They are saved per 
 | `GET /api/players/:player` | also `progress` |
 | `POST /api/players/:player/combine` | also `progress` and `rewards` |
 | `POST /api/players/:player/learn` with `{ spell }` | `{ spell, cost, rewards, progress }` |
-| `GET /api/players/:player/shop` | `{ slots, restockIn }` |
+| `GET /api/players/:player/shop` | `{ slots }`, or 400 with code `no-shop` until a Market Stall stands |
 | `POST /api/players/:player/shop/buy` with `{ slot }` | `{ entry, rewards, progress, shop }` |
 
 - `progress` is `{ xp, level, levelInto, levelSpan, gold, learned, quests }`.
@@ -114,7 +114,9 @@ The server owns gold, XP, level, quests, and learned spells. They are saved per 
   takes, wherever the entry appears (the player's entries, a combine result, a shop slot). The
   learn route also returns the `cost` paid.
 - Each shop slot is `{ slot, type, reason, entry, price, sold }`. `type` is `random` or `tailored`,
-  and `reason` says why a tailored item was picked. `restockIn` counts new discoveries to go.
+  and `reason` says why a tailored item was picked. The shelf is stocked afresh each morning
+  (see "The day (routes)"), and a bought slot stays empty until then. The shop is earned: see
+  "The town (routes)" for when it opens and how many shelves it has.
 - The types are exported from `src/shared/schema.ts`: `Progress`, `Rewards`, `ShopSlot`, `ShopView`.
 - More error codes: `not-enough-gold`, `sold-out`, and `level-too-low` (all 400).
 
@@ -148,17 +150,17 @@ the shop shelf from the shop routes. Learned spells saved in a browser are not c
 
 ### Events
 
-An event arrives when a player has earned 15 points: 1 per new discovery made by combining,
-2 per quest or request finished, 1 per spell learned, 3 per level gained.
+There is one visitor a day. They are written once the player has made something that day, are
+only seen from dusk, and sitting with them takes a candle (see "The day (routes)").
 
 An event is a short conversation in two beats. Someone arrives with something on their mind, the
 player reacts, the person says what they are after, and the player answers.
 
 | Route | Returns |
 |---|---|
-| `GET /api/players/:player/event` | `{ event, eventIn }`. `event` is null until one is waiting. Answers at once |
-| `POST /api/players/:player/event/respond` with `{ type, beat? }` | `{ outcome, effects, next, request, hint, gift, rewards, progress }` |
-| `POST /api/players/:player/event/test` with `{ seed? }` | `{ event, eventIn, seed }` |
+| `GET /api/players/:player/event` | `{ event }`. `event` is null until one is waiting and it is dusk. Answers at once |
+| `POST /api/players/:player/event/respond` with `{ type, beat? }` | `{ outcome, effects, next, request, hint, gift, rewards, night, dusk, progress }` |
+| `POST /api/players/:player/event/test` with `{ seed? }` | `{ event, seed }` |
 
 - An event is `{ id, beat, beats, earlier, kind, mood, person, scene, responses }`. `earlier` is
   the conversation so far: `[{ scene, chosen, outcome }]`. Each response is `{ type, text }`, where
@@ -181,19 +183,28 @@ player reacts, the person says what they are after, and the player answers.
 - **Timing:** an event is written whole, out of sight, before the player hears of it: the arrival,
   and the second beat for both ways of carrying on. That takes a minute or two. Once it is
   waiting, playing it never waits on the model.
-  - `progress.eventReady` is true only when an event is waiting. Every route that returns
-    `progress` carries it, so the page can show that someone has arrived after any action.
-  - `eventIn: 0` with `eventReady: false` means an event has been earned and is on its way.
-  - The points an event cost are spent when it appears, not when it is earned.
+  - `progress.eventReady` is true only when a visitor is waiting, at any time of day. Every
+    route that returns `progress` carries it. The visitor is shown, and can be answered, only
+    from dusk: before it `GET /event` answers `{ event: null }` and responding is refused with
+    `not-evening`.
+  - `progress.eventIn` is now counted in days: 0 while today's visitor is on the way or waiting,
+    1 once the player has sat with them. `eventIn: 0` with `eventReady: false` means a visitor
+    is on the way, or will be as soon as the player makes something today.
+  - Writing starts with the first thing the player makes in a day, never on opening the page.
+  - A visitor the player does not sit with waits: the same one is at the door the next evening,
+    and nobody new is written until they have been seen.
+  - The candle (`day.costs.visitor`) is taken when the conversation ends, at the second beat or
+    at the door, so night never falls in the middle of one. Responding is refused with
+    `no-candles` when too few are left.
   - If the server stops part-way through, the event is carried on from what was already written
     the next time that player does anything.
 - **Test route:** writes a fresh event and returns it as soon as the arrival is written (the
-  second beats follow behind it, so answering straight away can wait). It needs no points and
-  spends none, and an event already waiting is replaced. It is a real event: playing it changes gold, standing, and fondness.
+  second beats follow behind it, so answering straight away can wait). It works at any time of
+  day and costs no candle, it is not the day's visitor, and an event already waiting is replaced. It is a real event: playing it changes gold, standing, and fondness.
   Seed ids are in `data/event-seeds.json`, plus `repeat` to bring back someone the player has met.
 
 ```
-npm run events -- <player>    # the people a player knows, every event, and open requests
+npm run events -- <player>    # the day a player is on, the people they know, every event, and open requests
 ```
 
 Seeds are in `data/event-seeds.json`; every number is under `events` in `config/balance.json`.
@@ -256,10 +267,116 @@ Saving shifts and serving them to the page is the shift service's job, described
   also raise standing.
 - **Ranks** come from shifts done in that job and are never lost: Apprentice, Journeyman at 8,
   Master at 20. A build score is not asked for yet (`score: null`).
-- **Timing**: one shift opens every 10 discoveries made by combining, counted the way the shop
-  counts toward a restock. The first is open as soon as a job is taken up (`shiftIn`).
+- **Timing**: one shift a day, open from noon until night (`shiftOpen` in `src/shared/day.ts`).
+  A shift not worked is not saved up.
 - Order and result text is plain for now, from `data/shift-text.json`. Every number is under
   `shifts` in `config/balance.json`.
+
+### The day (rules)
+
+The design is in `Town Guide.md`. The rules are plain functions in `src/shared/day.ts`, and the
+numbers are under `day` in `config/balance.json`. Nothing is a timer: only the player's own
+actions move the day.
+
+- **The sun** moves one notch for a new discovery made by combining, and `shiftNotches` for a
+  shift (`afterAction`). It is morning until `noon`, afternoon until `length`, then evening.
+- **The shift** is open from noon until night, once a day (`shiftOpen`). It is not saved up.
+- **Candles** are the evening's actions. `refuseCandles` answers `not-evening` or `no-candles`.
+- **Night** falls when the last candle is spent, when the player goes to bed, or after
+  `nightAfter` discoveries past dusk with no candle spent between them (`nightFalls`).
+- **Turning in early** (from noon) brings dusk at once with `earlyCandles`, not night.
+- A day in progress is a `DayState`; `dayView` turns it into `progress.day` for the page.
+- Plain lines for dusk, night, and morning are in `data/day-text.json`.
+
+### The town (rules)
+
+The rules are plain functions in `src/shared/town.ts`, the buildings are in
+`data/buildings.json`, and the numbers are under `town` in `config/balance.json`.
+
+- **Plots** are bought in order (`plotPrice`), up to the deeds the player's level gives
+  (`deedsFor`). `refusePlot` answers `no-deed` or `not-enough-gold`.
+- **A building** has a price, the tags it wants on its shelves, the tags a spell must carry to
+  be cast on it, and one entry per tier. A tier lists everything the building gives at that
+  tier (`perks`), named things it needs, and a townsperson who must have arrived (`needsJob`).
+- **Needs** are checked, never taken. A named thing must have a hand-written recipe. A higher
+  tier also asks for some number of different things the player made themselves, at a depth,
+  that the building wants (`town.tiers[].made`). Only materials and spells count.
+  `checkNeeds` says each need in words; `refuseTier` answers `level-too-low`, `needs-missing`,
+  or `not-enough-gold`, in that order.
+- **Takings** (`takingsFor`) are the tier's, scaled by the building's quality tonight.
+- **Perks** are a closed list (`perkSchema`). `perksOf` gathers one kind across the town.
+- A test holds the town to never being blocked: every named need and every townsperson can be
+  made by fixed recipes, and every building can reach Good from fixed recipes alone.
+
+### The day (routes)
+
+The day service (`src/server/day.ts`) saves where each player is in their day and runs it with
+the rules above.
+
+| Route | Returns |
+|---|---|
+| `POST /api/players/:player/day/end` (no body) | `{ rewards, night, dusk, progress }` |
+
+- `progress.day` is a `DayView` on every `progress`: `{ number, sun, length, noon, phase,
+  candles, candlesMax, nightIn, canTurnIn, shiftDone, tonight, lastLedger, ... }`.
+- **Every route that returns `progress` also returns `night` and `dusk`.** `night` is the
+  `Ledger` when that action ended the day, otherwise null. `dusk` is a line to show when that
+  action brought the evening on, otherwise null. Only combining, working a shift, the last
+  answer to a visitor, and `day/end` can set either.
+- **The sun** moves when a combine answers `firstDiscovery: true`, and when a shift is worked.
+  Making something again, buying, learning, and gifts leave it alone.
+- **`day/end`** is one call for both ways of stopping. From dusk it is going to bed: `night`
+  comes back. From noon it is turning in early: `dusk` comes back, and the evening has
+  `earlyCandles`. In the morning it is refused (400, code `rule`).
+- **Night** also falls by itself: on the candle that was the last (`night` on that response,
+  for now only the last answer to a visitor), and on the `nightAfter`th new discovery after
+  dusk with no candle spent between them (`night` on that combine).
+- When night falls the ledger is saved and the player is at dawn on the next day in the same
+  step. `progress.day.lastLedger` is that ledger until the next night, so it survives a reload.
+- **Each morning** the shop has a new shelf, the order board opens again at noon, and a new
+  visitor is written once the player has made something.
+- **The ledger** has `takings` empty and `cheer` null until there is a town. `deed` is true
+  when the player gained a level that day. `lines` are plain, from `data/day-text.json`.
+- **Saved games** from before days open at dawn on day 1 with everything they had and the
+  shelf they last saw. The day numbers on old events and people, which were counted in events,
+  are moved back to end at day 0, keeping their order and the gaps between them.
+
+### The town (routes)
+
+The town service (`src/server/town.ts`) saves each player's street and serves it with the rules
+above.
+
+| Route | Returns |
+|---|---|
+| `GET /api/players/:player/town` | A `TownView`: `{ plots, deeds, cheer, townsfolk, plans }` |
+| `POST /api/players/:player/town/plots` (no body) | `{ plot, rewards, night, dusk, progress }` |
+| `POST /api/players/:player/town/build` with `{ plot, building }` | `{ rewards, night, dusk, progress }` |
+| `POST /api/players/:player/town/upgrade` with `{ plot }` | `{ rewards, night, dusk, progress }` |
+
+- **Townsfolk** arrive when their job is discovered, taken up or not, as a row among the
+  player's people with `job` set. Until they are given names they go by their trade ("The
+  Blacksmith"). They are never the evening's visitor and do not count against the cast of
+  people met through events. A townsperson whose job has a building brings its plan.
+- **Plots** are bought in order, at any time of day. Refused with `no-deed` (the level's deeds
+  are used up) or `not-enough-gold`. The first is free, and still has to be bought.
+- **Raising a building** needs a plot the player owns with nothing on it, the plan in hand, and
+  no building of that kind standing already (all `rule`). Then, in this order: `level-too-low`,
+  `needs-missing` (the sentence lists what is missing), `not-enough-gold`, `not-evening`,
+  `no-candles`. It costs `day.costs.build` candles. Raising a tier is the same with
+  `day.costs.upgrade`. Either can take the last candle, and then `night` comes back.
+- **Takings** are paid by each standing building when night falls, through the gold ledger
+  (reason `takings`, once a night a plot), and listed in the ledger's `takings`. Every building
+  is Meh until stock gives it a quality, and Meh still pays.
+- **Perks in force now:** `opens-shop`, `shop-shelves` (the three tailored shelves, filled from
+  the next morning), `shop-discount`, and `discovery-gold` (extra gold for a new discovery made
+  by combining that carries one of the building's tags, ledger reason `perk`, included in
+  `rewards.gold`). The other perk types are in the data and do nothing yet.
+- **In the view,** `cheer` is null, every `stock` slot is empty, `enchantment` is null, and
+  `regular` is false until those arrive. `plans[].ready` and `next.ready` mean the level, the
+  needs, and the gold are there; they say nothing of the hour or the candles.
+- **Saved games:** a player who had bought from the shop and owns no plot is given the Market
+  Stall on plot 0 at the tier with every shelf, the first time anything asks about their town.
+  A saved player who never bought anything has no shop until they raise the stall.
 
 ### Work shifts (routes)
 
@@ -268,8 +385,8 @@ writes the log.
 
 | Route | Returns |
 |---|---|
-| `GET /api/players/:player/shift` | A `ShiftBoard`: `{ job, rank, ready, shiftIn, slots, orders, options, rules }` |
-| `POST /api/players/:player/shift` with `{ order, base, method, touch? }` | `{ result, rewards, progress, shift }` |
+| `GET /api/players/:player/shift` | A `ShiftBoard`: `{ job, rank, ready, slots, orders, options, rules }` |
+| `POST /api/players/:player/shift` with `{ order, base, method, touch? }` | `{ result, rewards, night, dusk, progress, shift }` |
 
 - The board is for the job the player has taken up. With no job, `job` is null and the rest is
   empty. It always holds `shifts.board` open orders: filling one brings a new one, and an open
@@ -281,9 +398,9 @@ writes the log.
   the page preview a result with `previewRange` from `src/shared/shifts.ts`.
 - `rewards` is whatever else the shift set off (a quest finished by its XP), as elsewhere.
   `shift` is the board afterwards.
-- `progress` carries `shiftReady` and `shiftIn`: a shift is ready when a job is taken up and
-  `shiftIn` is 0. After a shift, `shiftIn` counts down from `shifts.every` with each thing made
-  by combining. Things bought or given do not count.
+- `progress.shiftReady` is true when a job is taken up, it is noon or later, and today's shift
+  has not been worked. `progress.day.shiftDone` says the last of those by itself. `ready` on
+  the board is the same answer. A shift moves the sun `day.shiftNotches`, which can bring dusk.
 - Refusals are 400 with a `code`: `no-job`, `shift-not-ready`, or `rule` for an order that is
   not on the board or a choice that is not on offer.
 - Gold is paid through the ledger (reason `shift`), XP counts toward level like any other, and
