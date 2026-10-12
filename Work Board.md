@@ -25,8 +25,8 @@ Statuses: `open`, `claimed by <name>`, `blocked: <why>`, `done`.
 | Lane | Owns | Does not touch |
 |---|---|---|
 | **Design** | `Town Guide.md`, this board, draft numbers, pacing checks | Code |
-| **Rules** | `src/shared/` (types and pure rule maths), `data/`, `config/balance.json`, the tests for those | Store, routes, page |
-| **Backend** | `src/server/store.ts`, the services, `src/server/app.ts`, `src/tools/`, the README's API notes, their tests | Rule maths, data content, page |
+| **Rules** | `src/shared/` (types and pure rule maths), `data/`, `config/balance.json`, loading and checking content in `src/server/gameData.ts`, the pure order and option builders in `src/server/shifts/orders.ts`, the tests for those | Store, routes, page |
+| **Backend** | `src/server/store.ts`, the services, `src/server/app.ts`, `src/tools/`, the README's API notes, their tests | Rule maths, data content, `gameData.ts`, `shifts/orders.ts`, page |
 | **Page** | `web/`, `tests/web*` | Anything under `src/server` |
 | **Bake** | Reviewed rows in `data/baked-combos.json`, the bake tools | Everything else |
 
@@ -40,9 +40,9 @@ restarted, so check `ListAgents`):
 |---|---|
 | Design | infinite-spell-craft-0a |
 | Rules | infinite-spell-craft-23 |
-| Backend | not yet reported |
+| Backend | infinite-spell-craft-7e |
 | Page | infinite-spell-craft-e6 |
-| Bake | infinite-spell-craft-e8 |
+| Bake | infinite-spell-craft-7e (the same session that signed as `-e8` below, since renamed) |
 
 Standing rules are in `CLAUDE.md`.
 
@@ -67,7 +67,7 @@ evening, and sees a ledger at night. Nothing about the town yet.
   `events.every`, and `events.points` are left in place until D2 stops reading them.
 - **Notes:**
 
-### D2 · Backend · open
+### D2 · Backend · claimed by infinite-spell-craft-7e
 - **What:** save the day, run it, and move the three old counters onto it.
 - **Depends on:** D1.
 - **Guide:** "The day", "What the day replaces", "Saved games".
@@ -84,7 +84,9 @@ evening, and sees a ledger at night. Nothing about the town yet.
   ticket on (one candle, refused with `not-evening` or `no-candles`), while the test-event route
   stays open at any time; last night's ledger is still readable after a reload; a saved game from before this opens on day 1 with nothing
   lost; the old counters' config keys are gone once nothing reads them (ask Rules to remove them).
-- **Notes:**
+- **Notes:** claimed 2026-10-11. Building starts when D1's types and `src/shared/day.ts` land,
+  so that no rule maths is written twice. The Backend tickets after this (D3, S3, Q2, E2) are
+  mine too, taken one at a time in order, since they all change the same few files.
 
 ### D3 · Backend · open
 - **What:** teach `npm run pace` about days.
@@ -130,13 +132,17 @@ pay takings at night, and the shop is earned.
   slots and quality are in the schema but may be unused until slice 3.
 - **Notes:**
 
-### S2 · Rules · open
+### S2 · Rules · blocked: the recipe is not recorded yet
 - **What:** the Innkeeper.
 - **Depends on:** nothing. Needs Trysten's answer to open question 1 in the guide.
 - **Guide:** "Buildings", "Open questions".
 - **Touches:** `data/jobs.json`, `data/job-skins.json`, `Recipe Key.md` (generated: `npm run key`).
 - **Done when:** the job is reachable, has a skin, and the job tests pass.
-- **Notes:**
+- **Notes:** 2026-10-11, design: Trysten told the Rules session he settled this with another
+  session. As of commit 621231a no Innkeeper is in `data/jobs.json`, `data/job-skins.json`, or
+  `data/combos.json`, and nothing about it is on this board. Design has asked Trysten for the
+  recipe and for who writes the job. Until that is recorded here, nobody should add it. If you
+  are the session he settled it with, write the recipe on this line.
 
 ### S3 · Backend · open
 - **What:** save and serve the town.
@@ -176,7 +182,11 @@ pay takings at night, and the shop is earned.
   steam + tree, metal + glass. No building needs any of them by name. At least three approved
   things carry each of `brewing`, `forging`, `enchanting`, `knowledge`, and `industrial`, since
   buildings want those tags. Spirits + Person ("Bartender") is left for S2 to settle.
-- **Notes:**
+- **Notes:** parked on Trysten's word (2026-10-11): the combo bake is not a priority now and may
+  be overwritten by quest and main gameplay work. All 727 pairs are drafts with a suggested
+  verdict in `data/combo-triage.csv`, waiting on his review. Nothing baked is in the game. The
+  town should not wait on this ticket: tier 1 needs are hand-written, and a player's own
+  discoveries carry the wanted tags whether or not any baked row is approved.
 
 ---
 
@@ -333,6 +343,10 @@ Add a line: ticket id, your session name, the question. Answers are written bene
 ## Log
 
 - 2026-10-11: board opened by the design session, with slices 1 to 4.
+- 2026-10-11: the Rules session relayed two things from Trysten. The meal keeps its 20% gold
+  and XP lift and `levels.xpStep` is left alone (guide open question 2, now settled). The
+  Innkeeper is said to be settled with another session, but nothing is recorded, so S2 is
+  blocked. The Rules lane also holds `src/server/gameData.ts` and `src/server/shifts/orders.ts`.
 - 2026-10-11: design answered the first seven questions. Changed: D1, D2, D4, and S5; in the
   guide, three buildings' wants, the pedlar, the day count to level 5, and the page shapes
   (`lastLedger`, `shiftDone`, `shiftReady` kept, `RuleCode` moved to shared).

@@ -351,7 +351,8 @@ This is what learned spells are for, and what makes a higher spell tier worth re
 
 - Costs `5 x level` gold and one candle. One an evening.
 - **Tomorrow, discoveries pay 20% more gold and XP.** It ends at the next night.
-- The XP part changes how fast levels come. See "Open questions".
+- The XP part brings levels a little sooner. Trysten has accepted that as the numbers stand, so
+  `levels.xpStep` is left alone.
 
 ## The shop is earned
 
@@ -490,8 +491,8 @@ reload is readable from a GET.
 
 1. **The Innkeeper's recipe.** Draft: Person + Spirits. The bake drafted "Bartender" for that
    pair; a hand-written job would take its place.
-2. **The meal's XP lift.** 20% more XP on fed days would bring level 5 forward by up to a few
-   days. Keep it, make it gold only, or stretch `levels.xpStep` to match?
+2. **The meal's XP lift.** Settled 2026-10-11, as relayed by the Rules session: keep the 20%
+   lift to gold and XP, and leave `levels.xpStep` alone.
 3. **`utility`.** The model puts it on a great many things, so it is left out of every building's
    wants. Is that right, or should some building want it?
 4. **The level cap.** With a town, level 5 comes between day 25 and day 30 and tier 3 opens at the
