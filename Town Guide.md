@@ -176,6 +176,7 @@ Some evenings carry a one-night happening. It is the only thing a player can mis
 | `nightAfter` | 6 | Discoveries past dusk, with no candle spent, before night falls by itself |
 | `tonight.fromDay` | 4 | First day a one-night happening may appear |
 | `tonight.chance` | 0.25 | Chance each day, before the reputation band's shift |
+| `events.repBands[].tonightChance` | Wobbly -0.10, Fine 0, Liked +0.05, Beloved +0.10 | Added to `tonight.chance`. It takes the place of `eventEvery`. Set in slice 4 (E1) |
 
 Saved players have gone at 120 to 160 discoveries an hour, so a day is about seven minutes. A day
 is 10 discoveries, or 8 with the shift worked, so the roughly 245 discoveries to level 5 come to
