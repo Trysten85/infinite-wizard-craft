@@ -62,6 +62,12 @@
   "town": {
     "plotPrices": [0, 30, 60, 100, 150, 210, 280, 360, 450],
     "deedsByLevel": [2, 3, 5, 7, 9],
+    "cheer": [
+      { "name": "Quiet", "from": 0, "takings": 0 },
+      { "name": "Pleasant", "from": 4, "takings": 0.1 },
+      { "name": "Lively", "from": 9, "takings": 0.2 },
+      { "name": "Merry", "from": 15, "takings": 0.3 }
+    ],
     "tiers": [
       { "gold": null, "level": 1, "slots": 2, "takings": 5, "made": null },
       { "gold": 150, "level": 3, "slots": 3, "takings": 12, "made": { "count": 2, "depth": 5 } },

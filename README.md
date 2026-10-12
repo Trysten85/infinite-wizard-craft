@@ -304,7 +304,17 @@ The rules are plain functions in `src/shared/town.ts`, the buildings are in
   `checkNeeds` says each need in words; `refuseTier` answers `level-too-low`, `needs-missing`,
   or `not-enough-gold`, in that order.
 - **Takings** (`takingsFor`) are the tier's, scaled by the building's quality tonight.
-- **Perks** are a closed list (`perkSchema`). `perksOf` gathers one kind across the town.
+- **Perks** are a closed list (`perkSchema`). `perksOf` gathers one kind across the town, with
+  the quality of the building each comes from.
+- **Quality** (`buildingScore`, `buildingQuality`): the share of a building's wants its stock
+  covers between them, plus `shifts.tierBonus` when the best stocked thing meets the building's
+  tier, plus a live enchantment's bonus, plus the owner's rank bonus at their own building. It
+  is judged on the shift's scale with no luck. Lifts (`liftsFor`, a lent hand, a good shift)
+  then move it up, never past Perfect, and an empty building is always Meh.
+  `previewQuality` answers the same sum with one thing added or cleared.
+- **Cheer** (`cheerPoints`, `cheerBand`): a point per quality step of each building, per
+  regular, and per live enchantment, in the bands under `town.cheer`. Worked out each time, never
+  stored. A band raises takings by its share.
 - A test holds the town to never being blocked: every named need and every townsperson can be
   made by fixed recipes, and every building can reach Good from fixed recipes alone.
 
@@ -352,6 +362,8 @@ above.
 | `POST /api/players/:player/town/plots` (no body) | `{ plot, rewards, night, dusk, progress }` |
 | `POST /api/players/:player/town/build` with `{ plot, building }` | `{ rewards, night, dusk, progress }` |
 | `POST /api/players/:player/town/upgrade` with `{ plot }` | `{ rewards, night, dusk, progress }` |
+| `POST /api/players/:player/town/stock` with `{ plot, slot, entry }` | `{ rewards, night, dusk, progress }`. `entry: null` clears the shelf |
+| `POST /api/players/:player/town/hand` with `{ plot }` | `{ rewards, night, dusk, progress }` |
 
 - **Townsfolk** arrive when their job is discovered, taken up or not, as a row among the
   player's people with `job` set. Until they are given names they go by their trade ("The
@@ -364,15 +376,28 @@ above.
   `needs-missing` (the sentence lists what is missing), `not-enough-gold`, `not-evening`,
   `no-candles`. It costs `day.costs.build` candles. Raising a tier is the same with
   `day.costs.upgrade`. Either can take the last candle, and then `night` comes back.
+- **Stock** is a discovery on a shelf (a material or a spell the player has discovered), up to
+  the tier's slots. Stocking is free and at any hour. A discovery is on one shelf at a time, so
+  stocking it somewhere else moves it. Refusals are `rule`.
+- **Quality** is worked out once in `standingBuildings` (`src/server/town.ts`) from the stock,
+  the tier, other buildings' `lifts` perks, a hand lent this evening, a Great or Perfect shift
+  worked today (own building only), and the owner's rank (own building only: the one their
+  job runs). An empty building is Meh. **A hand** costs `day.costs.hand` candle, once a
+  building an evening, and is refused on bare shelves.
+- **Cheer** is `townCheer`: points from every building's quality, in the bands under
+  `town.cheer`. `TownView.cheer` and the night ledger's `cheer` carry `{ points, band }` (the
+  ledger's is null on an empty street), and the band's share raises every building's takings.
 - **Takings** are paid by each standing building when night falls, through the gold ledger
-  (reason `takings`, once a night a plot), and listed in the ledger's `takings`. Every building
-  is Meh until stock gives it a quality, and Meh still pays.
-- **Perks in force now:** `opens-shop`, `shop-shelves` (the three tailored shelves, filled from
+  (reason `takings`, once a night a plot), at the quality it has tonight and raised by Cheer,
+  and listed in the ledger's `takings`. Meh still pays.
+- **Perks in force now, added:** `lifts`, `candles` (an extra evening candle, counted by
+  `progress.day.candles` and by when night falls), and `rumour` and `gift` (on every `every`th
+  day, at night, listed in the ledger's `brought`).
+- **Perks in force:** `opens-shop`, `shop-shelves` (the three tailored shelves, filled from
   the next morning), `shop-discount`, and `discovery-gold` (extra gold for a new discovery made
   by combining that carries one of the building's tags, ledger reason `perk`, included in
-  `rewards.gold`). The other perk types are in the data and do nothing yet.
-- **In the view,** `cheer` is null, every `stock` slot is empty, `enchantment` is null, and
-  `regular` is false until those arrive. `plans[].ready` and `next.ready` mean the level, the
+  `rewards.gold`). `meals`, `enchant-days` and `learn-discount` do nothing yet.
+- **In the view,** `enchantment` is null and `regular` is false until those arrive. `plans[].ready` and `next.ready` mean the level, the
   needs, and the gold are there; they say nothing of the hour or the candles.
 - **Saved games:** a player who had bought from the shop and owns no plot is given the Market
   Stall on plot 0 at the tier with every shelf, the first time anything asks about their town.

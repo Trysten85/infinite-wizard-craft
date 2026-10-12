@@ -539,6 +539,9 @@ export const balanceSchema = z.strictObject({
     plotPrices: z.array(z.number().int().min(0)).min(1),
     // How many plots a player of each level may own, level 1 first.
     deedsByLevel: z.array(z.number().int().min(0)).min(1),
+    // Cheer is how good life in the town is. Lowest first: a band applies from its `from` points
+    // upward, and `takings` is the share its buildings' takings are raised by.
+    cheer: z.array(z.strictObject({ name: z.string().min(1), from: z.number().int().min(0), takings: z.number().min(0) })).min(1),
     // One row per building tier, lowest first. `gold` is null where the building's own price
     // applies. `made` asks for that many different things the player made themselves, each at
     // that depth or deeper and each carrying one of the building's wants: null asks for none.

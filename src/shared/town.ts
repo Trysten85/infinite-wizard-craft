@@ -1,4 +1,5 @@
-import type { Building, GameEntry, Need, NeedView, Perk, QualityId, ShiftRules, TownRules } from "./schema";
+import { QUALITIES, type Building, type GameEntry, type Need, type NeedView, type Perk, type QualityId, type ShiftRules, type TownRules } from "./schema";
+import { qualityFor } from "./shifts";
 
 // The rules of the town, as plain functions of what the player has and the numbers under `town`
 // in config/balance.json. Nothing here touches a saved game. Tiers are counted from 1, and plots
@@ -126,13 +127,98 @@ export function perksAt(building: Building, tier: number): Perk[] {
   return building.tiers[tier - 1]?.perks ?? [];
 }
 
-// Every perk of one type across the buildings standing, each with the building it comes from.
-export function perksOf<T extends Perk["type"]>(standing: { building: Building; tier: number }[], type: T): { perk: Extract<Perk, { type: T }>; building: Building; tier: number }[] {
-  return standing.flatMap(({ building, tier }) =>
+// Every perk of one type across the buildings standing, each with the building it comes from
+// and, when the building carries one, the quality it has tonight.
+export function perksOf<T extends Perk["type"]>(
+  standing: { building: Building; tier: number; quality?: QualityId }[],
+  type: T,
+): { perk: Extract<Perk, { type: T }>; building: Building; tier: number; quality: QualityId }[] {
+  return standing.flatMap(({ building, tier, quality = "meh" }) =>
     perksAt(building, tier)
       .filter((perk): perk is Extract<Perk, { type: T }> => perk.type === type)
-      .map((perk) => ({ perk, building, tier })),
+      .map((perk) => ({ perk, building, tier, quality })),
   );
+}
+
+// What lifts a building's quality, each in steps: another building's `lifts` perk, a hand
+// lent this evening, and a Great or Perfect shift at the player's own building.
+export type Lifts = { perks: number; hand: number; shift: number };
+
+// How many steps of lift the standing buildings give one building, by the `lifts` perks that
+// name it. A building never lifts itself.
+export function liftsFor(target: string, standing: { building: Building; tier: number }[]): number {
+  return perksOf(standing, "lifts")
+    .filter(({ perk, building }) => perk.building === target && building.id !== target)
+    .reduce((total, { perk }) => total + perk.steps, 0);
+}
+
+// The shelves of a building: what is stocked on them, as the things that count toward quality.
+export type Stocked = Pick<GameEntry, "tags" | "tier">;
+
+// The score a building's stock earns, before any lift. It is the share of the building's wants
+// covered by its stock between them, plus the shifts' tier bonus when the best stocked thing is
+// at least the building's tier, plus a live enchantment's bonus, plus the owner's rank bonus
+// (only at their own building). There is no luck in it. An empty building scores nothing.
+export function buildingScore(
+  building: Building,
+  tier: number,
+  stock: Stocked[],
+  extra: { enchantBonus?: number; rankBonus?: number },
+  shifts: ShiftRules,
+): number {
+  if (stock.length === 0) return 0;
+  const carried = new Set(stock.flatMap((item) => item.tags));
+  const share = building.wants.filter((want) => carried.has(want)).length / building.wants.length;
+  const fine = Math.max(...stock.map((item) => item.tier)) >= tier ? shifts.tierBonus : 0;
+  return share + fine + (extra.enchantBonus ?? 0) + (extra.rankBonus ?? 0);
+}
+
+// Moves a quality up by steps, never past the best. Nothing here ever lowers one.
+export function liftQuality(quality: QualityId, steps: number): QualityId {
+  const index = Math.min(QUALITIES.length - 1, QUALITIES.indexOf(quality) + Math.max(0, steps));
+  return QUALITIES[index]!;
+}
+
+// A building's quality tonight: its stock's score on the shift's scale, then every lift, capped
+// at Perfect. An empty building is Meh whatever lifts it, and still pays.
+export function buildingQuality(
+  building: Building,
+  tier: number,
+  stock: Stocked[],
+  extra: { enchantBonus?: number; rankBonus?: number; lifts?: Partial<Lifts> },
+  shifts: ShiftRules,
+): QualityId {
+  // Nothing on the shelves is nothing to lift: an empty building is Meh, and lifts wait for stock.
+  if (stock.length === 0) return qualityFor(0, shifts);
+  const base = qualityFor(buildingScore(building, tier, stock, extra, shifts), shifts);
+  const lifts = extra.lifts ?? {};
+  return liftQuality(base, (lifts.perks ?? 0) + (lifts.hand ?? 0) + (lifts.shift ?? 0));
+}
+
+// What the quality would be with one more thing on the shelf, or with one taken off it, so the
+// page can show it before the player places or clears a discovery. `without` is an index.
+export function previewQuality(
+  building: Building,
+  tier: number,
+  stock: Stocked[],
+  change: { add?: Stocked; without?: number },
+  extra: Parameters<typeof buildingQuality>[3],
+  shifts: ShiftRules,
+): QualityId {
+  const next = stock.filter((_, index) => index !== change.without);
+  if (change.add) next.push(change.add);
+  return buildingQuality(building, tier, next, extra, shifts);
+}
+
+// Cheer: one point per quality step of each building (Meh 0, Good 1, Great 2, Perfect 3), one
+// per regular, one per live enchantment. Worked out each time and never stored.
+export function cheerPoints(qualities: QualityId[], regulars: number, enchantments: number): number {
+  return qualities.reduce((total, quality) => total + QUALITIES.indexOf(quality), 0) + regulars + enchantments;
+}
+
+// The band these points fall in: the last one whose `from` they have reached.
+export function cheerBand(points: number, rules: TownRules) {
+  return rules.cheer.findLast((band) => points >= band.from) ?? rules.cheer[0]!;
 }
 
 // What a building pays for the night: its tier's takings, scaled by its quality tonight, and

@@ -246,7 +246,7 @@ pay takings at night, and the shop is earned.
   only in the evening, with the gold, the needs, an empty plot, and two candles; takings are paid
   at night through the ledger with reason `takings`; the shop is refused before the stall stands;
   a saved player who has bought from the shop has a tier 2 stall.
-- **Notes:** done 2026-10-12 by infinite-spell-craft-7e (Backend), not committed. `npm test`
+- **Notes:** done 2026-10-12 by infinite-spell-craft-7e (Backend), committed as a1a20c7 (D2 and S3 together) and ba34e64 (D3). `npm test`
   (688) and typecheck pass. The save was backed up first
   (`var/game.before-town-2026-10-12.db`). The README's "The town (routes)" has the contract.
   - **For S4 (Page):** `GET /town` answers a `TownView`. `POST /town/plots` answers `{ plot,
@@ -323,7 +323,7 @@ pay takings at night, and the shop is earned.
 Goal: discoveries matter after the moment they are made. The player stocks buildings and sees
 quality, Cheer, and takings move.
 
-### Q1 · Rules · open
+### Q1 · Rules · done
 - **What:** quality and Cheer as pure functions.
 - **Depends on:** S1.
 - **Guide:** "Stock and quality", "Your own building", "Cheer".
@@ -332,9 +332,20 @@ quality, Cheer, and takings move.
   `config/balance.json` (Cheer bands), tests.
 - **Done when:** the page can import the same function to preview quality before a discovery is
   placed; every lift is capped at Perfect; an empty building is Meh.
-- **Notes:**
+- **Notes:** done by infinite-spell-craft-23, not committed. `npm test` (700) and typecheck pass.
+  - **For Q2** (all in `src/shared/town.ts`): `buildingQuality(building, tier, stock, { enchantBonus,
+    rankBonus, lifts: { perks, hand, shift } }, shifts)` with `stock` as `{ tags, tier }[]`;
+    `liftsFor(targetId, standing)` gives the `perks` steps; `cheerPoints(qualities, regulars,
+    enchantments)` and `cheerBand(points, town)` (`.takings` is the share to pass as the last
+    argument of `takingsFor`). `perksOf` now returns `quality` beside each perk, so `perksGiven`
+    can go. Lend-a-hand and a good shift are steps you pass in (1 each), not saved by me.
+  - **For Q3:** `previewQuality(building, tier, stock, { add?, without? }, extra, shifts)` is the
+    function to import for "what would this do before I place it".
+  - **Settled inside the rules:** an empty building is Meh whatever lifts or enchantments it
+    has, so a lent hand on an empty shelf does nothing. The rank bonus is passed by the caller
+    and only at the player's own building. `town.cheer` bands are in `config/balance.json`.
 
-### Q2 · Backend · open
+### Q2 · Backend · done
 - **What:** stocking, lending a hand, raising a tier, and the perks that wait on tiers.
 - **Depends on:** Q1, S3.
 - **Guide:** "Stock and quality", "Buildings" (the tier table and what each gives back).
@@ -343,7 +354,20 @@ quality, Cheer, and takings move.
 - **Done when:** a discovery sits in one building at a time; moving it is free at any time of
   day; takings follow quality and Cheer; a Great or Perfect shift lifts the player's own
   building that night.
-- **Notes:**
+- **Notes:** done 2026-10-12 by infinite-spell-craft-7e (Backend). `npm test` (716) and typecheck
+  pass; the save was backed up first (`var/game.before-stock-2026-10-12.db`). Contract is in the
+  README's "The town (routes)".
+  - **For Q3 (Page):** `POST /town/stock { plot, slot, entry|null }` (free, any hour) and
+    `POST /town/hand { plot }` (one candle, evening only, once a building a night, refused on
+    bare shelves) both answer `{ rewards, night, dusk, progress }`. `GET /town` now has real
+    `stock`, `quality`, `takings`, and `cheer`. Use `previewQuality` from `src/shared/town.ts`
+    for the "what would this do" read. A rumour or a gift arrives in the night ledger's
+    `brought`.
+  - **Left for E2:** `meals` and `enchant-days` (the Tavern, enchanting), `learn-discount`
+    (needs Design's answer on where the price shows), and regulars and enchantments in Cheer.
+  - **Settled in code:** rumours and gifts fall on days that are a multiple of `every`, at
+    night, with no state saved; the choice of thing is random among what the player lacks and
+    could reach. A hand on bare shelves is refused rather than wasted.
 
 ### Q3 · Page · open
 - **What:** the inside of a building.

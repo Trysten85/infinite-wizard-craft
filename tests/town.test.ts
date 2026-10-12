@@ -4,8 +4,15 @@ import { buildPath } from "../src/server/paths";
 import { QUALITIES, type Building, type GameEntry, type Perk, type RuleCode, type ShiftRules, type TownRules } from "../src/shared/schema";
 import { qualityFor } from "../src/shared/shifts";
 import {
+  buildingQuality,
+  buildingScore,
+  cheerBand,
+  cheerPoints,
   checkNeeds,
   deedsFor,
+  liftQuality,
+  liftsFor,
+  previewQuality,
   extraDiscoveryGold,
   isStockable,
   levelForPlot,
@@ -28,6 +35,12 @@ import { data } from "./helpers";
 const rules: TownRules = {
   plotPrices: [0, 30, 60, 100, 150, 210, 280, 360, 450],
   deedsByLevel: [2, 3, 5, 7, 9],
+  cheer: [
+    { name: "Quiet", from: 0, takings: 0 },
+    { name: "Pleasant", from: 4, takings: 0.1 },
+    { name: "Lively", from: 9, takings: 0.2 },
+    { name: "Merry", from: 15, takings: 0.3 },
+  ],
   tiers: [
     { gold: null, level: 1, slots: 2, takings: 5, made: null },
     { gold: 150, level: 3, slots: 3, takings: 12, made: { count: 2, depth: 5 } },
@@ -402,5 +415,107 @@ describe("the town's refusal codes", () => {
     const fromRules: (RuleCode | null)[] = [refusePlot(2, 1, 0, rules), refuseTier(tavern, 1, { held: [], jobs: [], level: 1, gold: 0 }, rules)];
     expect(fromRules).toEqual(["no-deed", "needs-missing"]);
     expect(codes).toHaveLength(3);
+  });
+});
+
+describe("a building's quality", () => {
+  const stock = (...items: [string[], number][]) => items.map(([tags, tier]) => ({ tags, tier }));
+  const quality = (items: ReturnType<typeof stock>, extra: Parameters<typeof buildingQuality>[3] = {}, tier = 1) => buildingQuality(tavern, tier, items, extra, shifts);
+
+  it("is Meh when empty, whatever lifts it, and still pays", () => {
+    expect(buildingScore(tavern, 1, [], {}, shifts)).toBe(0);
+    expect(quality([])).toBe("meh");
+    expect(quality([], { lifts: { perks: 3, hand: 1, shift: 1 }, enchantBonus: 1 })).toBe("meh");
+    expect(takingsFor(1, "meh", rules, shifts)).toBeGreaterThan(0);
+  });
+
+  it("steps up with the share of its wants the stock covers between them", () => {
+    // The Tavern wants brewing, liquid, plant, animal. Stock of tier 1 meets a tier 1 building.
+    expect(buildingScore(tavern, 1, stock([["brewing"], 1]), {}, shifts)).toBeCloseTo(0.25 + shifts.tierBonus);
+    expect(quality(stock([["brewing"], 1]))).toBe("meh");
+    expect(quality(stock([["brewing"], 1], [["liquid"], 1]))).toBe("good");
+    expect(quality(stock([["brewing"], 1], [["liquid"], 1], [["plant"], 1]))).toBe("great");
+    expect(quality(stock([["brewing", "liquid"], 1], [["plant", "animal"], 1]))).toBe("perfect");
+    // Shallow stock covers the same wants but earns no tier bonus, so it falls a step short.
+    expect(quality(stock([["brewing", "liquid"], 0], [["plant", "animal"], 0]))).toBe("great");
+    expect(quality(stock([["brewing"], 0], [["liquid"], 0], [["plant"], 0]))).toBe("good");
+  });
+
+  it("gains the tier bonus only when the best stocked thing meets the building's tier", () => {
+    const shallow = stock([["brewing", "liquid"], 0]);
+    const deep = stock([["brewing", "liquid"], 2]);
+    expect(buildingScore(tavern, 2, shallow, {}, shifts)).toBeCloseTo(0.5);
+    expect(buildingScore(tavern, 2, deep, {}, shifts)).toBeCloseTo(0.5 + shifts.tierBonus);
+  });
+
+  it("gains an enchantment's bonus, and the owner's rank bonus only at their own building", () => {
+    const one = stock([["brewing"], 1]);
+    expect(buildingScore(tavern, 1, one, { enchantBonus: 0.2 }, shifts)).toBeCloseTo(0.25 + shifts.tierBonus + 0.2);
+    expect(buildingScore(tavern, 1, one, { rankBonus: 0.1 }, shifts)).toBeCloseTo(0.25 + shifts.tierBonus + 0.1);
+    expect(quality(one, { enchantBonus: 0.3 })).toBe("good");
+    expect(quality(one, {})).toBe("meh");
+  });
+
+  it("is moved up by lifts, a lent hand, and a good shift, and never past Perfect", () => {
+    const two = stock([["brewing"], 1], [["liquid"], 1]);
+    expect(quality(two)).toBe("good");
+    expect(quality(two, { lifts: { perks: 1 } })).toBe("great");
+    expect(quality(two, { lifts: { perks: 1, hand: 1 } })).toBe("perfect");
+    expect(quality(two, { lifts: { perks: 2, hand: 1, shift: 1 } })).toBe("perfect");
+    expect(liftQuality("perfect", 5)).toBe("perfect");
+    // Nothing lowers a quality.
+    expect(liftQuality("good", -2)).toBe("good");
+    expect(liftQuality("meh", 0)).toBe("meh");
+  });
+
+  it("is not luck: the same stock always gives the same quality", () => {
+    const items = stock([["brewing"], 1], [["plant"], 1]);
+    expect(new Set(Array.from({ length: 20 }, () => quality(items))).size).toBe(1);
+  });
+
+  it("can be previewed with a discovery added or cleared, matching the real result after", () => {
+    const have = stock([["brewing"], 1]);
+    const added = { tags: ["liquid", "plant"], tier: 1 };
+    const previewed = previewQuality(tavern, 1, have, { add: added }, {}, shifts);
+    expect(previewed).toBe(quality([...have, added]));
+    expect(previewed).not.toBe(quality(have));
+    expect(previewQuality(tavern, 1, [...have, added], { without: 1 }, {}, shifts)).toBe(quality(have));
+    // The stock itself is not changed by previewing.
+    expect(have).toHaveLength(1);
+  });
+});
+
+describe("lifts from other buildings", () => {
+  const standing = (tier: number) => [...data.buildings.values()].map((item) => ({ building: item, tier }));
+
+  it("are the steps of every `lifts` perk that names a building, and a building never lifts itself", () => {
+    expect(liftsFor("tavern", standing(1))).toBe(1);
+    expect(liftsFor("herb-garden", standing(1))).toBe(0);
+    expect(liftsFor("herb-garden", standing(2))).toBe(1);
+    expect(liftsFor("farm", standing(3))).toBe(0);
+    expect(liftsFor("tavern", [])).toBe(0);
+  });
+
+  it("travel with perksOf alongside the quality of the building that gives them", () => {
+    const found = perksOf([{ building: building("smithy"), tier: 1, quality: "great" }, { building: herbGarden, tier: 1 }], "discovery-gold");
+    expect(found.map((item) => [item.building.id, item.quality])).toEqual([["smithy", "great"], ["herb-garden", "meh"]]);
+  });
+});
+
+describe("Cheer", () => {
+  it("is a point per quality step, per regular, and per live enchantment", () => {
+    expect(cheerPoints([], 0, 0)).toBe(0);
+    expect(cheerPoints(["meh", "good", "great", "perfect"], 0, 0)).toBe(6);
+    expect(cheerPoints(["good"], 2, 1)).toBe(4);
+  });
+
+  it("falls in a band from its first point, and the last band holds from there up", () => {
+    expect([0, 3, 4, 8, 9, 14, 15, 99].map((points) => cheerBand(points, rules).name)).toEqual(["Quiet", "Quiet", "Pleasant", "Pleasant", "Lively", "Lively", "Merry", "Merry"]);
+  });
+
+  it("raises takings by the band's share", () => {
+    const band = (points: number) => cheerBand(points, rules).takings;
+    expect([0, 4, 9, 15].map(band)).toEqual([0, 0.1, 0.2, 0.3]);
+    expect(takingsFor(3, "good", rules, shifts, band(15))).toBe(31);
   });
 });
