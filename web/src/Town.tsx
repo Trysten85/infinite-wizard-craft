@@ -137,7 +137,11 @@ export function Town({ town, problem, gold, level, day, busy, onBuyPlot, onRaise
               {town.townsfolk.map((person) => (
                 <li key={person.person}>
                   <h4>
-                    {person.name} <span className="town-job">{jobName(person.job)}</span>
+                    {person.name}
+                    {/* Someone named for their trade ("The Farmer") needs no second telling of it. */}
+                    {!person.name.toLowerCase().includes(jobName(person.job).toLowerCase()) && (
+                      <span className="town-job"> {jobName(person.job)}</span>
+                    )}
                   </h4>
                   <p className="town-none">{person.housed ? "Has a place on the street." : "Looking for somewhere to work."}</p>
                 </li>

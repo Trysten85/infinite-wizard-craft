@@ -218,9 +218,26 @@ pay takings at night, and the shop is earned.
   only in the evening, with the gold, the needs, an empty plot, and two candles; takings are paid
   at night through the ledger with reason `takings`; the shop is refused before the stall stands;
   a saved player who has bought from the shop has a tier 2 stall.
-- **Notes:**
+- **Notes:** done 2026-10-12 by infinite-spell-craft-7e (Backend), not committed. `npm test`
+  (688) and typecheck pass. The save was backed up first
+  (`var/game.before-town-2026-10-12.db`). The README's "The town (routes)" has the contract.
+  - **For S4 (Page):** `GET /town` answers a `TownView`. `POST /town/plots` answers `{ plot,
+    rewards, night, dusk, progress }`; `/town/build` and `/town/upgrade` answer `{ rewards,
+    night, dusk, progress }`. `GET /shop` and `/shop/buy` are 400 with code `no-shop` until a
+    stall stands. Refusals for a raise come in this order: `level-too-low`, `needs-missing`
+    (the sentence names what is missing), `not-enough-gold`, `not-evening`, `no-candles`. A
+    raise on the last candle sends `night`, with the new building's first takings in it.
+  - **In force:** `opens-shop`, `shop-shelves`, `shop-discount`, `discovery-gold`. The tailored
+    shelves a tier adds are filled from the next morning. **Left for Q2 and E2:** `lifts`,
+    `learn-discount`, `candles`, `enchant-days`, `rumour`, `gift`, `meals`, stock, quality, and
+    Cheer. So a Farm, a Tavern, and a Wizard's Tower pay takings and nothing else for now.
+  - **What it does to the three saved players,** tried on a copy: Trysten and Test had bought
+    from the shop, so each has a tier 2 Market Stall on plot 0 and keeps all six shelves.
+    Jaclyn never bought anything, so her shop is shut until she raises a stall (see the
+    question below). Jobs already discovered arrived as townsfolk.
+  - **Settled in code, for Design to keep or change:** see "Questions for design".
 
-### S4 · Page · claimed by infinite-spell-craft-e6
+### S4 · Page · done
 - **What:** the street.
 - **Depends on:** S1 for the types. S3 to see it live.
 - **Guide:** "The street", "Buildings", "Shapes for the page".
@@ -264,6 +281,22 @@ Goal: discoveries matter after the moment they are made. The player stocks build
     with a drawing for each of the six buildings and a plain house for any other); the picked
     plot, plans with each need marked, and townsfolk (`web/src/Town.tsx`); buying a plot,
     raising a plan, and raising a tier; the Shop bookmark hidden while `GET /shop` refuses with
+  - 2026-10-12, in and committed: the bookmark and the swap; the street (`web/src/Street.tsx`,
+    with a drawing for each of the six buildings and a plain house for any other); the picked
+    plot, plans with each need marked, and townsfolk (`web/src/Town.tsx`); buying a plot,
+    raising a plan, and raising a tier; the Shop bookmark hidden while `GET /shop` refuses with
+    `no-shop`. Wording is in `web/src/town.ts`, tested in `tests/webTown.test.ts`. Checked in a
+    browser against a stand-in town run with `src/shared/town.ts`, never the real save.
+    **What the page expects from S3:** `GET /town` answers a `TownView`; `POST /town/plots`
+    (empty body), `/town/build` (`{ plot, building }`) and `/town/upgrade` (`{ plot }`) answer
+    `{ rewards, progress, night }` like every other action, and the page then reads `GET /town`
+    and `GET /shop` again. Nothing can be dropped on the street yet: stocking comes with
+    slice 3.
+  - Done 2026-10-12. With S3 in, the live pass ran against the real town service on an empty
+    in-memory database: the free plot claimed, a Market Stall raised at dusk for two candles,
+    the Shop bookmark appearing with its three shelves, a second plot bought, the stall's
+    takings in the night's ledger, and a Farm raised the next evening. The page sends the plot
+    it shows on the Raise button, so Backend never has to pick one.
     `no-shop`. Wording is in `web/src/town.ts`, tested in `tests/webTown.test.ts`. Checked in a
     browser against a stand-in town run with `src/shared/town.ts`, never the real save.
     **What the page expects from S3:** `GET /town` answers a `TownView`; `POST /town/plots`
