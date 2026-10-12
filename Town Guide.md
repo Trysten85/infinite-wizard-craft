@@ -260,6 +260,15 @@ What each gives back to crafting, by tier:
 
 - The Herb Garden's tier 2 also needs the Alchemist to have arrived. A tier may name a job this
   way (`needsJob`).
+- The things a higher tier asks the player to have made are materials or spells, the same things
+  that can sit on a shelf. A deep job carrying a want does not count.
+- Raising is refused for the level first, then the needs, then the gold, so the player hears
+  about the longest wait first.
+- **Extra discovery gold** is a share of the discovery's own gold, set by the building's quality
+  that night. Smithy (Meh / Good / Great / Perfect): tier 1 `0.25 / 0.5 / 0.75 / 1`, tier 2
+  `0.4 / 0.75 / 1.1 / 1.5`, tier 3 `0.5 / 1 / 1.5 / 2`. Herb Garden: `0.25 / 0.5 / 0.75 / 1` at
+  every tier, since its later tiers give gifts. **The extra is rounded up, so it is never less
+  than 1 gold.** A perk the player cannot see paying is a perk they do not have.
 - A gift follows the rules events already use for gifts (`events.payoff`): something the player
   lacks and could reach, never one of `payoff.never`.
 
@@ -306,7 +315,7 @@ on the model's luck:
 - A building can always reach Good: at least half of each building's wants are carried by things
   with fixed recipes. Counted on 2026-10-11, every building has at least three such wants.
 - **The last want or two must be found.** `brewing` and `enchanting` are carried by nothing with
-  a fixed recipe today, and `knowledge` by one spell. A player gets them by combining: the model
+  a fixed recipe today (`knowledge` has four spells). A player gets them by combining: the model
   gives those tags to what it makes (26 and 77 of the 727 baked drafts carry them). Hunting for
   "something brewed for the Tavern" is the reason to go back to the board, which is the point.
 - Tiers 2 and 3 ask for things made at depth 5 and depth 8. Almost nothing hand-written is that
@@ -437,6 +446,8 @@ progress.day: {
   candles, candlesMax,
   nightIn,            // discoveries until night falls by itself; evening only
   canTurnIn,          // true from noon
+  turnInCandles,      // what the evening will have if the player turns in early
+  costs,              // every evening action's candle cost, read as day.costs.visitor
   shiftDone,          // today's shift has been worked
   tonight: { id, name, line, taken } | null,  // null until announced at noon
   lastLedger: Ledger | null                   // last night's, so the page can reopen it after a reload

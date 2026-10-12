@@ -144,7 +144,7 @@ evening, and sees a ledger at night. Nothing about the town yet.
 Goal: the first playable town. Townsfolk arrive, the player buys plots and raises buildings, they
 pay takings at night, and the shop is earned.
 
-### S1 · Rules · open
+### S1 · Rules · done
 - **What:** buildings as data, and the town's rule maths.
 - **Depends on:** D1.
 - **Guide:** "The town" through "Buildings", "Perk types", "The shop is earned".
@@ -155,9 +155,34 @@ pay takings at night, and the shop is earned.
 - **Done when:** the six buildings load and are checked against the tag list and the jobs; the
   never-blocked test in the guide passes with no baked row approved; stock
   slots and quality are in the schema but may be unused until slice 3.
-- **Notes:**
+- **Notes:** done by infinite-spell-craft-23, not committed. `npm test` (641) and typecheck pass.
+  - **For S3:** the buildings are `data.buildings` (a map by id, from `data/buildings.json`);
+    the rules are in `src/shared/town.ts`. Build a `Held` list for the player (each discovery
+    with `made`: false for anything bought or given, the same rule as the quests' `made`).
+    Then `refusePlot(owned, level, gold, rules)`, `refuseTier(building, tier, player, rules)`
+    (answers `level-too-low`, `needs-missing`, `not-enough-gold`, in that order; the plot, the
+    hour, and the candles are yours to check, with `day.costs.build` and `day.costs.upgrade`),
+    `checkNeeds(...)` for the `needs` lists in the views (pass `townWords(data)` from
+    `src/server/gameData.ts`), `tierCost`, `slotsAt`, `takingsFor(tier, quality, town, shifts)`
+    (every building is `"meh"` until Q1 gives quality), `perksOf(standing, "opens-shop")` and the
+    like, and `extraDiscoveryGold(base, tags, paying)` for `settle`. Tiers count from 1 and
+    plots from 0.
+  - **For S4:** `TownView`, `BuildingView`, and `NeedView` are in `src/shared/schema.ts`. Past
+    the guide's sketch: each plot has `opensAt` (the level whose deeds reach it); a need may
+    carry `progress: { have, need }`; `cheer` is null until Q1; `stock` entries and the
+    enchantment's spell are `{ id, name }`. `deeds.have` is how many plots the player's level
+    allows, and `deeds.max` how many the top level does.
+  - **Settled inside the rules:** a tier's `perks` in the data is everything the building
+    gives at that tier, not only what the tier adds. The things a higher tier asks the player
+    to have made must be materials or spells (what can sit on a shelf), so a job does not
+    count. The Herb Garden's tiers 2 and 3 carry `job: "alchemist"` as well as `needsJob`. A
+    building that names a job the game does not have is left out, as a skin is.
+  - **Never blocked:** passes with no baked row. Every building has at least half its wants
+    behind fixed, stockable things, and two fixed things can cover half on a first tier's two
+    shelves. Only `brewing` and `enchanting` have nothing fixed behind them. `knowledge` has
+    four fixed spells, not one (True Strike, Detect Magic, Locate Object, Clairvoyance).
 
-### S2 · Rules · open
+### S2 · Rules · done
 - **What:** the Innkeeper: Person + Spirits.
 - **Depends on:** nothing.
 - **Guide:** "Buildings", "Open questions".
@@ -169,6 +194,12 @@ pay takings at night, and the shop is earned.
   is a Bake file, so if it gets in the way of loading, ask infinite-spell-craft-7e to turn it
   down (`npm run bake -- reject`) and do not edit it yourself. Wants for score and the skin:
   `brewing, liquid, plant, animal`, matching the Tavern in the guide.
+  - Done by infinite-spell-craft-23, not committed. `innkeeper` is in `data/jobs.json` (Person
+    + Spirits, seven combinations from the start, mundane) with a skin in
+    `data/job-skins.json`, and `Recipe Key.md` is regenerated. There are now 23 jobs. Every
+    baked row is still a draft, so "Bartender" does not get in the way. **For Bake:** do not
+    approve the `spirits + person` row, since an approved row for a pair with a hand-written
+    recipe stops the data loading ("defined twice").
 
 ### S3 · Backend · open
 - **What:** save and serve the town.
@@ -186,7 +217,7 @@ pay takings at night, and the shop is earned.
   a saved player who has bought from the shop has a tier 2 stall.
 - **Notes:**
 
-### S4 · Page · open
+### S4 · Page · claimed by infinite-spell-craft-e6
 - **What:** the street.
 - **Depends on:** S1 for the types. S3 to see it live.
 - **Guide:** "The street", "Buildings", "Shapes for the page".
@@ -197,6 +228,11 @@ pay takings at night, and the shop is earned.
   empty plots show their price; a plot past the player's deeds says which level opens it.
 - **Notes:** Trysten, 2026-10-11: the way in is a Town button like the Shop's bookmark, and it
   swaps the board between crafting and the town (the book stays where it is).
+  - Claimed 2026-10-12 on Trysten's word: "start on the town button, make it another bookmark
+    for now". The Town bookmark sits with Discovered and Shop and swaps the board for the
+    street. Built against `TownView` as it stands in the working tree and the routes in the
+    guide's sketch, before S1 is done and before S3 exists, so it shows a quiet street when
+    `GET /town` is not there.
 
 ### S5 · Bake · blocked: the bake is parked on Trysten's word
 - **What:** approve the town's staples first.
@@ -375,15 +411,34 @@ Add a line: ticket id, your session name, the question. Answers are written bene
   the visitor, so the cue can show it without the page knowing the evening table (say
   `visitorCandles`). If a general map of evening costs is planned for E2, either field can be
   that map's first entry.
-
-## Log
-
-- 2026-10-11: Trysten settled the Innkeeper: Person + Spirits, overwriting the bake's
-  "Bartender" draft. S2 is open again.
-- 2026-10-11: board opened by the design session, with slices 1 to 4.
   - **Rules (infinite-spell-craft-23), 2026-10-11:** both are on `DayView` and required:
     `turnInCandles`, and `costs`, a map of every evening action's candle cost, read as
     `day.costs.visitor`. The page reads both and holds no number of its own.
+- **S1 · infinite-spell-craft-23 (Rules):** the guide gives no numbers for the Smithy's and
+  the Herb Garden's "extra gold for discoveries". I set drafts in `data/buildings.json`, as a
+  share of the discovery's own gold by the building's quality tonight (Meh / Good / Great /
+  Perfect): Smithy tier 1 `0.25 / 0.5 / 0.75 / 1`, tier 2 `0.4 / 0.75 / 1.1 / 1.5`, tier 3
+  `0.5 / 1 / 1.5 / 2`; Herb Garden `0.25 / 0.5 / 0.75 / 1` at every tier, since its later tiers
+  give gifts. Discovery gold is 1, 3, 6, or 10 by tier, so a Good tier 1 Smithy adds 5 to a
+  deep metal discovery and nothing to a shallow one. Are those the size you want? They are
+  only numbers in the data file, so changing them needs no code.
+  - **Design, 2026-10-12:** the shares are the size I want; keep all of them. One change, and
+    it is a rule, not a number: **round the extra up, so it is never less than 1 gold** whenever
+    the perk applies. Most early discoveries pay 1 or 3 gold, so rounding to nearest would make
+    the Smithy pay nothing for most of the first days, and a perk the player cannot see paying
+    is a perk they do not have. At these sizes a Good tier 1 Smithy is worth about as much a day
+    as its own takings, which is right. The guide's "Buildings" now carries the shares and the
+    rounding. Wherever the sum is done (`src/shared/town.ts` or `settle`), a test should hold a
+    1-gold discovery to an extra of 1.
+
+## Log
+
+- 2026-10-12: design kept the Rules lane's discovery-gold shares and added one rule: the extra
+  is rounded up, never less than 1 gold. The guide also takes in the Rules lane's rulings from
+  S1 (what counts as "made", the order of refusals) and its count of four `knowledge` spells.
+- 2026-10-11: Trysten settled the Innkeeper: Person + Spirits, overwriting the bake's
+  "Bartender" draft. S2 is open again.
+- 2026-10-11: board opened by the design session, with slices 1 to 4.
 - 2026-10-11: infinite-spell-craft-7e holds Backend and Bake, and has claimed D2. The bake is
   parked, so design changed the guarantee: the town never waits on it. The test is now "never
   blocked" (a building can always be raised and can always reach Good from fixed recipes); it no
