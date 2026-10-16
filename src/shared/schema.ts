@@ -197,6 +197,9 @@ export type EventView = {
   kind: (typeof EVENT_KINDS)[number];
   mood: (typeof MOODS)[number][];
   person: { name: string; role: string; returning: boolean };
+  // Where the visitor sits: at the door until a Tavern stands, then at the Tavern. Left out, it
+  // is the door.
+  place?: "door" | "tavern";
   scene: string;
   // A Skilled response that uses one of the player's spells names it in `spell`.
   responses: { type: ResponseType; text: string; spell?: { id: string; name: string } }[];
