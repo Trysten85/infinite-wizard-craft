@@ -31,6 +31,8 @@ describe("learnNote", () => {
   it("names the level a spell takes before its price, when the player is short of it", () => {
     expect(learnNote({ ...priced, learnLevel: 5 }, [], 1000, 4)).toBe("Needs level 5");
     expect(learnNote({ ...priced, learnLevel: 5 }, [], 1000, 5)).toBe("Learn for 40 gold");
+    expect(learnNote({ ...priced, learnPrice: 30 }, [], 35, 4)).toBe("Learn for 30 gold");
+    expect(learnNote({ ...priced, learnPrice: 30 }, [], 20, 4)).toBe("Costs 30 gold");
   });
 });
 

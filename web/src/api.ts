@@ -139,3 +139,23 @@ export function stockShelf(player: string, plot: number, slot: number, entry: st
 export function lendHand(player: string, plot: number): Promise<Earned> {
   return post(`/api/players/${player}/town/hand`, { plot });
 }
+
+// Calls on a townsperson: a plain line and more fondness. One candle, once a person an evening.
+export function callOn(player: string, person: number): Promise<Earned & { line: string; fondness: number }> {
+  return post(`/api/players/${player}/town/call`, { person });
+}
+
+// A meal at the Tavern, for gold and a candle. Tomorrow's discoveries pay `lift` more.
+export function haveMeal(player: string): Promise<Earned & { lift: number; cost: number }> {
+  return post(`/api/players/${player}/town/meal`, {});
+}
+
+// Casts a learned spell on a building for `days` days. One candle.
+export function enchantBuilding(player: string, plot: number, spell: string): Promise<Earned & { days: number }> {
+  return post(`/api/players/${player}/town/enchant`, { plot, spell });
+}
+
+// Takes part in tonight's happening where there is something to do. No candle.
+export function takeTonight(player: string): Promise<Earned & { line: string; entry: { id: string; name: string } | null; price: number }> {
+  return post(`/api/players/${player}/town/tonight`, {});
+}

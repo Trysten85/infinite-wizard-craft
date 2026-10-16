@@ -1,4 +1,14 @@
-import type { Building, BuildingView, DayView, GameEntry, NeedView, QualityId, ShiftRules, TownView } from "../../src/shared/schema";
+import type {
+  Building,
+  BuildingView,
+  DayView,
+  GameEntry,
+  NeedView,
+  QualityId,
+  ShiftRules,
+  TonightView,
+  TownView,
+} from "../../src/shared/schema";
 import { qualityName } from "./day";
 import { QUALITIES } from "../../src/shared/schema";
 import { buildingQuality, isStockable, type Stocked } from "../../src/shared/town";
@@ -85,11 +95,19 @@ export function upgradeBlock(next: NonNullable<BuildingView["next"]>, gold: numb
 }
 
 // What a plot is, in a sentence, for a plot with no building on it.
-export function plotText(plot: Plot, state: PlotState, town: TownView, gold: number): string {
+// The first plot needs a first job, which the server holds to (`no-job`); `hasJob` lets the page
+// say so before the player tries.
+export function plotNeedsJob(plot: Plot, state: PlotState, hasJob: boolean): boolean {
+  return state === "for-sale" && plot.index === 0 && !hasJob;
+}
+
+export function plotText(plot: Plot, state: PlotState, town: TownView, gold: number, hasJob = true): string {
   if (state === "empty") return "An empty plot of yours. Raise one of your plans on it.";
   if (state === "locked")
     return `Your deeds cover ${count(town.deeds.have, "plot", "plots")}. Level ${plot.opensAt} brings a deed for this one.`;
   if (state === "later") return "Plots are bought in order along the street. This one comes later.";
+  if (plotNeedsJob(plot, state, hasJob))
+    return `Your first job earns you a place in town. Take one up, and this plot is ${plot.price} gold.`;
   if (plot.price === 0) return "The next plot along, and it is free.";
   return gold < plot.price
     ? `The next plot along, for ${plot.price} gold. You need ${plot.price - gold} more.`
@@ -160,4 +178,49 @@ export function handBlock(building: BuildingView, day: DayView | undefined): str
   if (day.phase !== "evening") return `Lending a hand is evening work, and takes ${candles}. Come back at dusk.`;
   if (day.candles < day.costs.hand) return `This takes ${candles}, and you have ${day.candles} left tonight.`;
   return "";
+}
+
+// The building that serves meals. A meal needs one standing, and the server says no otherwise.
+export const TAVERN = "tavern";
+
+// The two happenings that are taken by asking, and what asking is called. The rest work through
+// what the player would do anyway, and the server says so if they are asked for here.
+const ASKED_FOR: Record<string, string> = { pedlar: "Look through the pedlar's pack", stargazer: "Ask the stargazer" };
+
+export function tonightAction(tonight: TonightView | null): string | null {
+  return tonight && !tonight.taken ? (ASKED_FOR[tonight.id] ?? null) : null;
+}
+
+// Why an evening action costing this many candles can't be done now, or "" when it can.
+export function eveningBlock(candles: number, day: DayView | undefined): string {
+  if (!day || candles === 0) return "";
+  const cost = count(candles, "candle", "candles");
+  if (day.phase !== "evening") return `This is evening work, and takes ${cost}. Come back at dusk.`;
+  if (day.candles < candles) return `This takes ${cost}, and you have ${day.candles} left tonight.`;
+  return "";
+}
+
+// One line of what the evening offers: what it is, what it costs, and whether it can be done now.
+export type Offer = { id: string; label: string; cost: string; ok: boolean };
+
+// Everything tonight offers and what each costs, so the player can choose where the candles go.
+export function eveningOffers(day: DayView, town: TownView, have: { visitor: boolean; spells: number; called: number }): Offer[] {
+  const standing = town.plots.flatMap((plot) => (plot.building ? [plot.building] : []));
+  const free = town.plots.some((plot) => plot.owned && !plot.building);
+  const row = (id: string, label: string, candles: number): Offer => ({
+    id,
+    label,
+    cost: candles === 0 ? "free" : count(candles, "candle", "candles"),
+    ok: eveningBlock(candles, day) === "",
+  });
+  const offers: Offer[] = [];
+  if (have.visitor) offers.push(row("visitor", "Sit with tonight's visitor", day.costs.visitor));
+  if (town.townsfolk.length > have.called) offers.push(row("call", "Call on someone in town", day.costs.call));
+  if (standing.some((building) => building.id === TAVERN)) offers.push(row("meal", "A meal at the Tavern, for gold", day.costs.meal));
+  if (standing.some((building) => building.stock.some((shelf) => shelf.entry)))
+    offers.push(row("hand", "Lend a hand at a building", day.costs.hand));
+  if (standing.length > 0 && have.spells > 0) offers.push(row("enchant", "Cast a spell on a building", day.costs.enchant));
+  if (free && town.plans.some((plan) => plan.ready)) offers.push(row("build", "Raise a building", day.costs.build));
+  if (tonightAction(day.tonight)) offers.push(row("tonight", day.tonight!.name, 0));
+  return offers;
 }

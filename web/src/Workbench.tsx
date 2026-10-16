@@ -15,6 +15,7 @@ import {
   ApiError,
   buy,
   buyPlot,
+  callOn,
   chooseJob,
   combine,
   endDay,
@@ -22,11 +23,14 @@ import {
   fetchPlayer,
   fetchShift,
   fetchShop,
+  enchantBuilding,
   fetchTown,
+  haveMeal,
   learn,
   lendHand,
   raiseBuilding,
   stockShelf,
+  takeTonight,
   respondToEvent,
   testEvent,
   upgradeBuilding,
@@ -79,7 +83,7 @@ type Tab = "discovered" | "shop";
 // Places a dragged bubble can be handed over, besides the board: the book of discoveries takes
 // anything back, the job cell takes a job, and the spellbook takes a spell to be learned.
 // A shelf in the town is a zone too, named "slot:plot:shelf".
-type Zone = "book" | "job" | "spellbook" | `slot:${number}:${number}`;
+type Zone = "book" | "job" | "spellbook" | `slot:${number}:${number}` | `plot:${number}`;
 
 // A short message that fades on its own. `gold` is what was gained, or lost when negative.
 type Toast = {
@@ -131,6 +135,9 @@ export function Workbench({ player, onLeave }: { player: string; onLeave: () => 
   const [town, setTown] = useState<TownView | null>(null);
   const [townProblem, setTownProblem] = useState("");
   const [townBusy, setTownBusy] = useState(false);
+  // Who has been called on this evening, kept by day so a new day starts clean. The server is the
+  // one that refuses a second call, and this only keeps the button honest in between.
+  const [called, setCalled] = useState<{ day: number; people: number[] }>({ day: 0, people: [] });
   // The shop is shut until a Market Stall stands. A server from before the town never says so.
   const [shopShut, setShopShut] = useState(false);
   const [bubbles, setBubbles] = useState<Bubble[]>([]);
@@ -378,6 +385,12 @@ export function Workbench({ player, onLeave }: { player: string; onLeave: () => 
     }
     // A shelf takes what is dropped on it. A thing taken off a shelf and let go over the book is
     // put away, and let go anywhere else it stays where it was.
+    if (drop.zone?.startsWith("plot:")) {
+      const plot = Number(drop.zone.slice(5));
+      const spell = byId.get(drop.entryId);
+      if (spell?.kind === "spell") void cast(plot, spell);
+      return;
+    }
     if (drop.zone?.startsWith("slot:")) {
       const [, plot, slot] = drop.zone.split(":").map(Number);
       void build(() => stockShelf(player, plot!, slot!, drop.entryId));
@@ -698,6 +711,71 @@ export function Workbench({ player, onLeave }: { player: string; onLeave: () => 
     }
   }
 
+  // Says what an evening action came to, in the same place as everything else that is earned.
+  function tell(id: string, label: string, name: string) {
+    setToasts((current) => [...current.filter((toast) => toast.id !== id), { id, label, name }]);
+  }
+
+  async function callOnPerson(person: number) {
+    setTownBusy(true);
+    setError("");
+    try {
+      const { line, ...earned } = await callOn(player, person);
+      setCalled((now) => ({ day: day?.number ?? 0, people: [...(now.day === (day?.number ?? 0) ? now.people : []), person] }));
+      earn(earned);
+      tell(`call-${person}`, "You call on them:", line);
+      readTown();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setTownBusy(false);
+    }
+  }
+
+  async function haveAMeal() {
+    setTownBusy(true);
+    setError("");
+    try {
+      const { lift, cost, ...earned } = await haveMeal(player);
+      earn(earned);
+      tell("meal", "A meal at the Tavern:", `${cost} gold, and tomorrow's discoveries pay ${Math.round(lift * 100)}% more`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setTownBusy(false);
+    }
+  }
+
+  async function cast(plot: number, spell: GameEntry) {
+    setTownBusy(true);
+    setError("");
+    try {
+      const { days, ...earned } = await enchantBuilding(player, plot, spell.id);
+      earn(earned);
+      tell("enchant", `${spell.name} is cast:`, `it will last ${days} ${days === 1 ? "day" : "days"}`);
+      readTown();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setTownBusy(false);
+    }
+  }
+
+  async function takePart() {
+    setTownBusy(true);
+    setError("");
+    try {
+      const { line, entry, price, ...earned } = await takeTonight(player);
+      earn(earned);
+      tell("tonight", "Tonight:", entry && price > 0 ? `${line} ${entry.name}, for ${price} gold.` : line);
+      readTown();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setTownBusy(false);
+    }
+  }
+
   function openOrders() {
     setShiftResult(null);
     setOrdersOpen(true);
@@ -751,6 +829,12 @@ export function Workbench({ player, onLeave }: { player: string; onLeave: () => 
       if (place === "town") {
         for (const shelf of document.querySelectorAll<HTMLElement>("[data-slot]")) {
           if (under(shelf, clientX, clientY)) return `slot:${shelf.dataset.slot}` as Zone;
+        }
+        // A learned spell dropped on a standing building is cast on it.
+        if (byId.get(held.entryId)?.kind === "spell") {
+          for (const plot of document.querySelectorAll<HTMLElement>("[data-plot]")) {
+            if (under(plot, clientX, clientY)) return `plot:${plot.dataset.plot}` as Zone;
+          }
         }
       }
       if (byId.get(held.entryId)?.kind === "job" && under(jobRef.current, clientX, clientY)) return "job";
@@ -877,6 +961,7 @@ export function Workbench({ player, onLeave }: { player: string; onLeave: () => 
               level={progress.level}
               day={day}
               busy={townBusy}
+              hasJob={!!progress.job}
               onBuyPlot={() => build(() => buyPlot(player))}
               onRaise={(plot, building) => build(() => raiseBuilding(player, plot, building))}
               onUpgrade={(plot) => build(() => upgradeBuilding(player, plot))}
@@ -891,6 +976,13 @@ export function Workbench({ player, onLeave }: { player: string; onLeave: () => 
               }}
               onClearShelf={(plot, slot) => build(() => stockShelf(player, plot, slot, null))}
               onHand={(plot) => build(() => lendHand(player, plot))}
+              called={new Set(called.day === (day?.number ?? 0) ? called.people : [])}
+              spells={learnedSpells.length}
+              visitorWaiting={progress.eventReady || event !== null}
+              overPlot={drag.zone?.startsWith("plot:") ? Number(drag.zone.slice(5)) : null}
+              onCall={callOnPerson}
+              onMeal={haveAMeal}
+              onTonight={takePart}
             />
           )}
           <div className="toasts">

@@ -4,14 +4,18 @@ import { data } from "./helpers";
 import {
   canStock,
   emptyPlot,
+  eveningBlock,
+  eveningOffers,
   handBlock,
   needText,
   planBlock,
   plotCaption,
   plotStates,
+  plotNeedsJob,
   plotText,
   stockChange,
   stockChangeText,
+  tonightAction,
   upgradeBlock,
 } from "../web/src/town";
 
@@ -126,6 +130,16 @@ describe("plotText", () => {
   it("says what the next plot costs, and how much gold is still short", () => {
     expect(plotText(street.plots[2]!, "for-sale", street, 80)).toBe("The next plot along, for 60 gold.");
     expect(plotText(street.plots[2]!, "for-sale", street, 45)).toBe("The next plot along, for 60 gold. You need 15 more.");
+  });
+
+  it("says the first plot waits on a first job, and what it costs", () => {
+    const first = { index: 0, owned: false, price: 10, opensAt: 1, building: null };
+    expect(plotNeedsJob(first, "for-sale", false)).toBe(true);
+    expect(plotNeedsJob(first, "for-sale", true)).toBe(false);
+    expect(plotNeedsJob(street.plots[2]!, "for-sale", false)).toBe(false);
+    expect(plotText(first, "for-sale", street, 50, false)).toBe(
+      "Your first job earns you a place in town. Take one up, and this plot is 10 gold.",
+    );
   });
 
   it("says which level opens a plot past the player's deeds", () => {
@@ -306,5 +320,80 @@ describe("handBlock", () => {
 
   it("allows it in the evening with a candle and a stocked shelf", () => {
     expect(handBlock(shelved("hay"), day())).toBe("");
+  });
+});
+
+describe("eveningBlock", () => {
+  it("holds evening work until dusk, and counts the candles", () => {
+    expect(eveningBlock(1, day({ phase: "afternoon" }))).toBe("This is evening work, and takes 1 candle. Come back at dusk.");
+    expect(eveningBlock(2, day({ candles: 1 }))).toBe("This takes 2 candles, and you have 1 left tonight.");
+    expect(eveningBlock(1, day())).toBe("");
+  });
+
+  it("lets a free action through at any hour", () => {
+    expect(eveningBlock(0, day({ phase: "morning" }))).toBe("");
+  });
+});
+
+describe("tonightAction", () => {
+  const tonight = (id: string, taken = false) => ({ id, name: id, line: "", taken });
+  it("offers asking for the pedlar and the stargazer only, and only until taken", () => {
+    expect(tonightAction(tonight("pedlar"))).toBe("Look through the pedlar's pack");
+    expect(tonightAction(tonight("stargazer"))).toBe("Ask the stargazer");
+    expect(tonightAction(tonight("musician"))).toBeNull();
+    expect(tonightAction(tonight("pedlar", true))).toBeNull();
+    expect(tonightAction(null)).toBeNull();
+  });
+});
+
+describe("eveningOffers", () => {
+  const tavern: BuildingView = {
+    ...farm,
+    id: "tavern",
+    name: "Tavern",
+    stock: [{ slot: 0, entry: { id: "hay", name: "hay" } }],
+    next: null,
+  };
+  const street = town({
+    plots: [
+      { index: 0, owned: true, price: 0, opensAt: 1, building: tavern },
+      { index: 1, owned: true, price: 30, opensAt: 1, building: null },
+    ],
+    townsfolk: [{ person: 1, job: "farmer", name: "Pim", housed: true, fondness: 0, regular: false }],
+    plans: [plan],
+  });
+  const ids = (offers: ReturnType<typeof eveningOffers>) => offers.map((offer) => offer.id);
+
+  it("lists every evening action that has something to act on, with its cost", () => {
+    const offers = eveningOffers(day(), street, { visitor: true, spells: 1, called: 0 });
+    expect(ids(offers)).toEqual(["visitor", "call", "meal", "hand", "enchant", "build"]);
+    expect(offers.find((offer) => offer.id === "build")).toMatchObject({ cost: "2 candles", ok: true });
+  });
+
+  it("leaves out what there is nothing to do with", () => {
+    expect(ids(eveningOffers(day(), { ...street, townsfolk: [], plans: [] }, { visitor: false, spells: 0, called: 0 }))).toEqual([
+      "meal",
+      "hand",
+    ]);
+    expect(ids(eveningOffers(day(), street, { visitor: false, spells: 0, called: 1 }))).toEqual(["meal", "hand", "build"]);
+  });
+
+  it("marks what the candles left cannot pay for", () => {
+    const offers = eveningOffers(day({ candles: 1 }), street, { visitor: true, spells: 1, called: 0 });
+    expect(offers.map((offer) => [offer.id, offer.ok])).toEqual([
+      ["visitor", true],
+      ["call", true],
+      ["meal", true],
+      ["hand", true],
+      ["enchant", true],
+      ["build", false],
+    ]);
+  });
+
+  it("includes tonight's happening only when it is taken by asking", () => {
+    const withPedlar = day({ tonight: { id: "pedlar", name: "A travelling pedlar", line: "", taken: false } });
+    expect(ids(eveningOffers(withPedlar, street, { visitor: false, spells: 0, called: 1 }))).toContain("tonight");
+    const musician = day({ tonight: { id: "musician", name: "A musician", line: "", taken: false } });
+    expect(ids(eveningOffers(musician, street, { visitor: false, spells: 0, called: 1 }))).not.toContain("tonight");
   });
 });

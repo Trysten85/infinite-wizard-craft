@@ -5,7 +5,22 @@ import { qualityName } from "./day";
 import { Gold } from "./Gold";
 import { Shelves } from "./Shelves";
 import { PlotArt } from "./Street";
-import { canStock, emptyPlot, handBlock, needText, planBlock, plotCaption, plotStates, plotText, upgradeBlock } from "./town";
+import {
+  canStock,
+  emptyPlot,
+  eveningBlock,
+  eveningOffers,
+  handBlock,
+  needText,
+  planBlock,
+  plotCaption,
+  plotStates,
+  plotNeedsJob,
+  plotText,
+  TAVERN,
+  tonightAction,
+  upgradeBlock,
+} from "./town";
 
 // How many bare lots to draw while the street is being read, or when the server has none to give.
 const QUIET_LOTS = 9;
@@ -22,6 +37,8 @@ type Props = {
   // True while something is being bought or raised.
   busy: boolean;
   onBuyPlot: () => void;
+  // Whether the player has taken up a job. The first plot waits on one.
+  hasJob: boolean;
   onRaise: (plot: number, building: string) => void;
   onUpgrade: (plot: number) => void;
   onLeave: () => void;
@@ -34,12 +51,22 @@ type Props = {
   onGrabShelf: (event: PointerEvent<HTMLElement>, entry: GameEntry, plot: number, slot: number) => void;
   onClearShelf: (plot: number, slot: number) => void;
   onHand: (plot: number) => void;
+  // The evening's other actions. `called` is who has been called on this evening, `spells` how
+  // many the player has learned, and `overPlot` the plot a carried spell is held over.
+  called: ReadonlySet<number>;
+  spells: number;
+  visitorWaiting: boolean;
+  overPlot: number | null;
+  onCall: (person: number) => void;
+  onMeal: () => void;
+  onTonight: () => void;
 };
 
 // The town: one street, drawn side-on, with a plot picked out and described under it. It takes
 // the board's place while it is up. Everything on it is the server's; the page only shows it.
 export function Town(props: Props) {
   const { town, problem, gold, level, day, busy, onBuyPlot, onRaise, onUpgrade, onLeave } = props;
+  const casting = props.carrying?.kind === "spell" ? props.carrying : null;
   const [picked, setPicked] = useState<number | null>(null);
   const lit = day?.phase === "evening";
   const states = town ? plotStates(town, level) : [];
@@ -71,7 +98,12 @@ export function Town(props: Props) {
                 const state = states[plot.index]!;
                 return (
                   <li key={plot.index}>
-                    <button className={`plot ${state}`} aria-pressed={plot.index === shown?.index} onClick={() => setPicked(plot.index)}>
+                    <button
+                      className={`plot ${state} ${casting && plot.building ? "castable" : ""} ${props.overPlot === plot.index ? "over" : ""}`}
+                      data-plot={plot.building ? plot.index : undefined}
+                      aria-pressed={plot.index === shown?.index}
+                      onClick={() => setPicked(plot.index)}
+                    >
                       <PlotArt state={state} building={plot.building?.id} lit={lit} />
                       <span className="plot-caption">
                         {plotCaption(plot, state) || <span className="sr-only">Plot {plot.index + 1}</span>}
@@ -99,6 +131,15 @@ export function Town(props: Props) {
         <p className="town-quiet">{problem || "Reading the street…"}</p>
       ) : (
         <div className="town-boxes">
+          {day && (
+            <Evening
+              day={day}
+              offers={eveningOffers(day, town, { visitor: props.visitorWaiting, spells: props.spells, called: props.called.size })}
+              casting={casting}
+              busy={busy}
+              onTonight={props.onTonight}
+            />
+          )}
           <section className="hud-box town-box" aria-label="The picked plot">
             {shown?.building ? (
               <Standing {...props} plot={shown.index} building={shown.building} />
@@ -107,9 +148,9 @@ export function Town(props: Props) {
               shownState && (
                 <>
                   <h3>Plot {shown.index + 1}</h3>
-                  <p>{plotText(shown, shownState, town, gold)}</p>
+                  <p>{plotText(shown, shownState, town, gold, props.hasJob)}</p>
                   {shownState === "for-sale" && (
-                    <button disabled={busy || gold < shown.price} onClick={onBuyPlot}>
+                    <button disabled={busy || gold < shown.price || plotNeedsJob(shown, shownState, props.hasJob)} onClick={onBuyPlot}>
                       {shown.price === 0 ? "Claim this plot" : "Buy this plot"}
                       {shown.price > 0 && <Gold amount={shown.price} />}
                     </button>
@@ -153,7 +194,11 @@ export function Town(props: Props) {
                       <span className="town-job"> {jobName(person.job)}</span>
                     )}
                   </h4>
-                  <p className="town-none">{person.housed ? "Has a place on the street." : "Looking for somewhere to work."}</p>
+                  <p className="town-none">
+                    {person.housed ? "Has a place on the street." : "Looking for somewhere to work."}
+                    {person.regular && " A regular."}
+                  </p>
+                  <CallOn called={props.called.has(person.person)} day={day} busy={busy} onCall={() => props.onCall(person.person)} />
                 </li>
               ))}
             </ul>
@@ -221,6 +266,22 @@ function Standing(props: StandingProps) {
         Lend a hand
       </button>
       {handWhy && <p className="town-why">{handWhy}</p>}
+      {building.enchantment && (
+        <p className="town-enchant">
+          {building.enchantment.spell.name} is cast on it, for {building.enchantment.daysLeft}{" "}
+          {building.enchantment.daysLeft === 1 ? "more day" : "more days"}.
+        </p>
+      )}
+      {building.id === TAVERN && (
+        <>
+          <button disabled={busy || eveningBlock(day?.costs.meal ?? 0, day) !== ""} onClick={props.onMeal}>
+            Have a meal
+          </button>
+          <p className="town-none">
+            {eveningBlock(day?.costs.meal ?? 0, day) || "Costs gold by your level. Tomorrow's discoveries pay more."}
+          </p>
+        </>
+      )}
       {next ? (
         <>
           <h4>Tier {building.tier + 1}</h4>
@@ -234,6 +295,67 @@ function Standing(props: StandingProps) {
       ) : (
         <p className="town-none">It is as fine as a building gets.</p>
       )}
+    </>
+  );
+}
+
+// The evening at a glance: how many candles are left, and each thing tonight offers with what it
+// costs. A carried spell says where it can go. Tonight's happening is announced here from noon.
+function Evening({
+  day,
+  offers,
+  casting,
+  busy,
+  onTonight,
+}: {
+  day: DayView;
+  offers: ReturnType<typeof eveningOffers>;
+  casting: GameEntry | null;
+  busy: boolean;
+  onTonight: () => void;
+}) {
+  const asking = tonightAction(day.tonight);
+  const evening = day.phase === "evening";
+  return (
+    <section className="hud-box town-box evening-box" aria-label="This evening">
+      <h3>{evening ? "This evening" : "This evening, from dusk"}</h3>
+      {evening && (
+        <p className="town-none">
+          {day.candles} of {day.candlesMax} {day.candlesMax === 1 ? "candle" : "candles"} left.
+        </p>
+      )}
+      {day.tonight && (
+        <p className={`day-tonight ${day.tonight.taken ? "taken" : ""}`}>
+          {day.tonight.taken ? `${day.tonight.name}: you have had your share.` : day.tonight.line}
+        </p>
+      )}
+      {casting && <p className="town-why">Drop {casting.name} on a building to cast it there.</p>}
+      <ul className="offers">
+        {offers.map((offer) => (
+          <li key={offer.id} className={offer.ok ? "" : "closed"}>
+            <span>{offer.label}</span>
+            <span className="offer-cost">{offer.cost}</span>
+            {offer.id === "tonight" && asking && (
+              <button disabled={busy || !evening} onClick={onTonight}>
+                {asking}
+              </button>
+            )}
+          </li>
+        ))}
+        {offers.length === 0 && <li className="closed">Nothing to spend a candle on yet.</li>}
+      </ul>
+    </section>
+  );
+}
+
+function CallOn({ called, day, busy, onCall }: { called: boolean; day?: DayView; busy: boolean; onCall: () => void }) {
+  const why = called ? "You have called on them tonight." : eveningBlock(day?.costs.call ?? 0, day);
+  return (
+    <>
+      <button disabled={busy || why !== ""} onClick={onCall}>
+        Call on them
+      </button>
+      {why && <p className="town-why">{why}</p>}
     </>
   );
 }

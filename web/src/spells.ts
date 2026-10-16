@@ -10,8 +10,10 @@ export function spellLevel(spell: GameEntry): number {
 export function learnNote(spell: GameEntry, learned: string[], gold: number, level: number): string {
   if (learned.includes(spell.id)) return "Already learned";
   if (spellLevel(spell) > level) return `Needs level ${spellLevel(spell)}`;
-  if (spell.learnCost === undefined) return "Learn this spell";
-  return spell.learnCost > gold ? `Costs ${spell.learnCost} gold` : `Learn for ${spell.learnCost} gold`;
+  // What this player pays, which the town may have cut below the spell's base cost.
+  const price = spell.learnPrice ?? spell.learnCost;
+  if (price === undefined) return "Learn this spell";
+  return price > gold ? `Costs ${price} gold` : `Learn for ${price} gold`;
 }
 
 // Cantrips need level 1, where everyone starts. Higher tiers wait for higher levels.
