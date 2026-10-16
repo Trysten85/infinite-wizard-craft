@@ -239,3 +239,59 @@ export function extraDiscoveryGold(base: number, tags: string[], paying: { perk:
   // The small amount taken off keeps a sum such as 10 x 1.1 from being rounded up past 11.
   return Math.max(1, Math.ceil(base * share - 1e-9));
 }
+
+// Enchantments. A learned spell can be cast on a building as an evening action.
+
+// Whether a spell may be cast on a building: learned, within the player's level, carrying one of
+// the building's enchant tags, and none of the blocked ones. `spell.learnLevel` is the level its
+// tier takes. One enchantment stands on a building at a time, so a new one replaces the old.
+export function enchantmentFits(spell: Pick<GameEntry, "id" | "kind" | "tags" | "learnLevel">, building: Building, learned: string[], level: number, rules: TownRules): boolean {
+  if (spell.kind !== "spell" || !learned.includes(spell.id) || (spell.learnLevel ?? 1) > level) return false;
+  if (spell.tags.some((tag) => rules.enchant.blockedTags.includes(tag))) return false;
+  return spell.tags.some((tag) => building.enchantTags.includes(tag));
+}
+
+// How many days a spell of this tier lasts on a building: more with a perk's extra days, and
+// twice as long on the night of the lantern festival.
+export function enchantmentDays(tier: number, rules: TownRules, perkDays = 0, doubled = false): number {
+  const days = rules.enchant.baseDays + rules.enchant.daysPerTier * tier + perkDays;
+  return doubled ? days * 2 : days;
+}
+
+// What a live enchantment adds to the building's quality score.
+export function enchantmentBonus(tier: number, rules: TownRules): number {
+  return rules.enchant.bonus + rules.enchant.bonusPerTier * tier;
+}
+
+// A saved enchantment is a count of days left. Each night takes one; at one left the ledger says
+// so, and it ends the night after. `daysLeft` is how many nights it still has, tonight included.
+export function enchantmentLive(daysLeft: number): boolean {
+  return daysLeft > 0;
+}
+export function enchantmentEnding(daysLeft: number): boolean {
+  return daysLeft === 1;
+}
+export function enchantmentAfterNight(daysLeft: number): number {
+  return Math.max(0, daysLeft - 1);
+}
+
+// Regulars. A person becomes one at the fondness the town sets, and stays one: the caller passes
+// whether they already were.
+export function isRegular(fondness: number, alreadyRegular: boolean, rules: TownRules): boolean {
+  return alreadyRegular || fondness >= rules.regularAt;
+}
+
+// The share a building's takings are raised by for the regulars who work it.
+export function regularTakingsShare(regulars: number, rules: TownRules): number {
+  return regulars * rules.regularTakings;
+}
+
+// The Tavern's meal costs this much, and makes tomorrow's discoveries pay this much more. The
+// lift is larger at a better Tavern (`perkLift`, as the perk gives it) and doubles at the supper.
+export function mealCost(level: number, rules: TownRules): number {
+  return rules.meal.goldPerLevel * level;
+}
+export function mealLift(rules: TownRules, perkLift?: number, doubled = false): number {
+  const lift = perkLift ?? rules.meal.lift;
+  return doubled ? lift * 2 : lift;
+}

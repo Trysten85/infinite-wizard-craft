@@ -381,3 +381,24 @@ describe("refusal codes", () => {
     expect(refused).toBe("not-evening");
   });
 });
+
+describe("the townsfolk and what they say", () => {
+  const { people, callingLines } = data.townsfolk;
+
+  it("have enough different names for every job to arrive, none with digits or marks", () => {
+    expect(people.length).toBeGreaterThanOrEqual(data.jobs.size);
+    expect(new Set(people.map((person) => person.name)).size).toBe(people.length);
+    for (const person of people) expect(person.name, person.name).not.toMatch(/[0-9!]/);
+  });
+
+  it("have a plain calling line for a job with none of its own, and each line keeps the name's place", () => {
+    expect(callingLines.default!.length).toBeGreaterThan(0);
+    for (const [job, lines] of Object.entries(callingLines)) {
+      if (job !== "default") expect(data.jobs.has(job), job).toBe(true);
+      for (const line of lines) {
+        expect(line, line).toContain("{name}");
+        expect(line, line).not.toMatch(/[0-9!]/);
+      }
+    }
+  });
+});

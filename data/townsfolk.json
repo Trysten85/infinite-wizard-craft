@@ -1,0 +1,47 @@
+{
+  "people": [
+    {"name": "Pip Thistlewood", "pronoun": "they"},
+    {"name": "Maud Crumpet", "pronoun": "she"},
+    {"name": "Hobb Tuck", "pronoun": "he"},
+    {"name": "Bryony Kettlebrook", "pronoun": "she"},
+    {"name": "Old Wen Marrow", "pronoun": "they"},
+    {"name": "Tam Pennywhistle", "pronoun": "he"},
+    {"name": "Auntie Fennel", "pronoun": "she"},
+    {"name": "Jory Lantern", "pronoun": "he"},
+    {"name": "Sorrel Hatch", "pronoun": "they"},
+    {"name": "Dilly Moss", "pronoun": "she"},
+    {"name": "Master Coble", "pronoun": "he"},
+    {"name": "Nettie Barrowfield", "pronoun": "she"},
+    {"name": "Rook Alderley", "pronoun": "they"},
+    {"name": "Wilf Dapple", "pronoun": "he"},
+    {"name": "Posy Tinderbox", "pronoun": "she"},
+    {"name": "Ambrose Quill", "pronoun": "he"},
+    {"name": "Clover Hobday", "pronoun": "they"},
+    {"name": "Granny Sedge", "pronoun": "she"},
+    {"name": "Fenn Wickham", "pronoun": "he"},
+    {"name": "Ottilie Sparrow", "pronoun": "she"},
+    {"name": "Bram Cobblestone", "pronoun": "he"},
+    {"name": "Hazel Brambling", "pronoun": "they"},
+    {"name": "Cob Inglewood", "pronoun": "he"},
+    {"name": "Mabel Applegarth", "pronoun": "she"},
+    {"name": "Tilly Rowan", "pronoun": "she"},
+    {"name": "Osric Fiddle", "pronoun": "he"},
+    {"name": "Juniper Loam", "pronoun": "they"},
+    {"name": "Perkin Spoon", "pronoun": "he"},
+    {"name": "Wren Haverlock", "pronoun": "she"},
+    {"name": "Barnaby Teasel", "pronoun": "he"}
+  ],
+  "callingLines": {
+    "default": [
+      "{name} puts the kettle on and tells you about the week.",
+      "{name} is glad of the company and says so, twice.",
+      "{name} shows you something small they have been working on."
+    ],
+    "farmer": ["{name} walks you down the rows and names every cabbage."],
+    "merchant": ["{name} lets you look at the good scales, which is a compliment."],
+    "innkeeper": ["{name} sets down a cup you did not ask for and does not charge for it."],
+    "blacksmith": ["{name} lets you work the bellows once, and watches carefully."],
+    "herbalist": ["{name} presses a sprig into your hand and tells you what it is for."],
+    "wizard": ["{name} shows you the shelf of books they have not finished, with some pride."]
+  }
+}

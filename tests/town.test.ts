@@ -35,6 +35,10 @@ import { data } from "./helpers";
 const rules: TownRules = {
   plotPrices: [0, 30, 60, 100, 150, 210, 280, 360, 450],
   deedsByLevel: [2, 3, 5, 7, 9],
+  regularAt: 6,
+  regularTakings: 0.1,
+  meal: { goldPerLevel: 5, lift: 0.2 },
+  enchant: { blockedTags: ["control"], baseDays: 3, daysPerTier: 2, bonus: 0.1, bonusPerTier: 0.05 },
   cheer: [
     { name: "Quiet", from: 0, takings: 0 },
     { name: "Pleasant", from: 4, takings: 0.1 },

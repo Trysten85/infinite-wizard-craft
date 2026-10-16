@@ -21,9 +21,9 @@ function saveMade(store: Store, id: string, extra: Partial<GameEntry> = {}): Gam
 }
 
 describe("the quest list", () => {
-  it("has forty quests, half of them main, spread over every level", () => {
-    expect(data.quests).toHaveLength(40);
-    expect(data.quests.filter((quest) => quest.track === "main")).toHaveLength(20);
+  it("has forty-six quests, twenty-six of them main, spread over every level", () => {
+    expect(data.quests).toHaveLength(46);
+    expect(data.quests.filter((quest) => quest.track === "main")).toHaveLength(26);
     expect(data.quests.filter((quest) => quest.track === "side")).toHaveLength(20);
     for (const level of levels) expect(data.quests.filter((quest) => quest.level === level).length, `level ${level}`).toBeGreaterThanOrEqual(5);
   });
@@ -155,7 +155,10 @@ describe("quest progress", () => {
     for (let index = 0; index < 5; index++) store.addLedger("ann", 0, "shop", `bought-${index}`);
     raiseTo(store, "ann", cap);
     const open = progress.getProgress("ann").quests.filter((quest) => quest.state !== "done");
-    expect(open.map((quest) => quest.id)).toEqual([]);
+    // The town quests count things this test does not set up: townsfolk, plots, buildings, and
+    // evening actions. Backend's town tests play those through, so only they may be left.
+    expect(open.map((quest) => quest.id).filter((id) => !id.startsWith("town-"))).toEqual([]);
+    expect(open.every((quest) => quest.track === "main" || !quest.id.startsWith("town-"))).toBe(true);
   });
 });
 

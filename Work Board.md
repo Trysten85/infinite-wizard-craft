@@ -369,7 +369,7 @@ quality, Cheer, and takings move.
     night, with no state saved; the choice of thing is random among what the player lacks and
     could reach. A hand on bare shelves is refused rather than wasted.
 
-### Q3 · Page · done
+### Q3 · Page · open
 - **What:** the inside of a building.
 - **Depends on:** Q1 for the maths. Q2 to see it live.
 - **Guide:** "Stock and quality", "Cheer".
@@ -378,18 +378,6 @@ quality, Cheer, and takings move.
 - **Done when:** stocking feels like the order board's pick-and-match; Cheer and its band show
   on the street; the night ledger lists each building's quality beside its takings.
 - **Notes:**
-  Claimed 2026-10-12 on Trysten's word, with Q1 and Q2 in. Stocking is by dragging from the book
-  onto a shelf, with the quality preview from `previewQuality` in `src/shared/town.ts`.
-  Done 2026-10-12 (b2989b6). A standing building's box shows its shelves. A discovery carried
-  from the book wakes them, and the one it is held over says whether it would make the stock
-  better, worse, or no different, and which wants it would newly cover. Dropping stocks it,
-  dragging a stocked thing to another shelf moves it, and right-click or letting it go over the
-  book clears it. Lend a hand shows its candle cost and why not. The street's head and captions
-  show Cheer and each building's quality. Checked in a browser against the real day, town and
-  shop services on an empty in-memory database: stock, move, clear, a hand on the last candle
-  bringing night, and the ledger showing the Farm at Good with Cheer 1. The preview reads the
-  stock at no lift, so it says only a direction, because `BuildingView` carries neither the
-  lifts nor the rank bonus (the question below).
 
 ---
 
@@ -397,7 +385,7 @@ quality, Cheer, and takings move.
 
 Goal: the evening is a set of real choices, and spells and people have a use.
 
-### E1 · Rules · open
+### E1 · Rules · claimed by infinite-spell-craft-23
 - **What:** the rest of the evening's rules and content.
 - **Depends on:** Q1.
 - **Guide:** "Enchantments", "Townsfolk and regulars", "The Tavern's meal", "Tonight only",
@@ -407,7 +395,19 @@ Goal: the evening is a set of real choices, and spells and people have a use.
   and calling-on lines, `data/quests.json` and `questSchema` (the new conditions and the town
   thread), tests.
 - **Done when:** the quest test still holds quests to two fifths of each level's XP.
-- **Notes:**
+- **Notes:** in progress, infinite-spell-craft-23.
+  - **Landed (uncommitted):** `data/townsfolk.json` (30 names with pronouns, and calling lines by
+    job with a `{name}` placeholder), `data/tonight.json` (the five happenings with a coded
+    `effect`), `town.enchant`, `town.regularAt`, `town.regularTakings`, `town.meal`, and
+    `events.repBands[].tonightChance` in `config/balance.json`. Pure rules in
+    `src/shared/town.ts`: `enchantmentFits`, `enchantmentDays`, `enchantmentBonus`,
+    `enchantmentLive`/`Ending`/`AfterNight`, `isRegular`, `regularTakingsShare`, `mealCost`,
+    `mealLift`. Tests in `tests/enchant.test.ts`.
+  - **Held, on Backend:** the town quests need new `done` conditions: `townsfolk`, `plots`,
+    `buildings {count, tier?}`, `built {building}`, `evenings`, `regulars`, `enchantments`. The
+    switch in `measureCondition` (`src/server/progress.ts`) has no default, so I will not add the
+    types or the six quests until Backend's cases exist, or the live server would settle real
+    players against a missing case. A script that applies them is ready.
 
 ### E2 · Backend · open
 - **What:** the Tavern, calling on people, enchanting, and one-night happenings.
@@ -574,12 +574,6 @@ Add a line: ticket id, your session name, the question. Answers are written bene
   8. **Refusal order for a raise:** the guide's level, needs, gold, then the hour, then the
      candles. And a player who turned in early cannot raise a new building that evening (one
      candle, and it takes two).
-- **Q3 · infinite-spell-craft-e6 (Page):** `previewQuality` needs `extra: { rankBonus, lifts: {
-  perks, hand, shift } }`, which `TownView` does not carry, and the page cannot work them out
-  (the rank bonus is at the player's own building only, and the hand and shift lifts are saved
-  server-side). Could `BuildingView` carry `lifts: number` (the steps already applied tonight)
-  and `rankBonus: number`, the way `turnInCandles` was added to the day? Until then the page
-  previews the change at no lift and says only whether the stock would make it better or worse.
 
 ## Log
 

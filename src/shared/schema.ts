@@ -153,6 +153,16 @@ export const questSchema = z.strictObject({
     z.strictObject({ type: z.literal("events"), count: countSchema }),
     // Things bought from the shop.
     z.strictObject({ type: z.literal("bought"), count: countSchema }),
+    // The town. Townsfolk who have arrived, plots owned, buildings standing (at a tier or higher),
+    // one named building standing, evening actions taken, and regulars made.
+    z.strictObject({ type: z.literal("townsfolk"), count: countSchema }),
+    z.strictObject({ type: z.literal("plots"), count: countSchema }),
+    z.strictObject({ type: z.literal("buildings"), count: countSchema, tier: z.number().int().min(1).optional() }),
+    z.strictObject({ type: z.literal("built"), building: idSchema }),
+    z.strictObject({ type: z.literal("evenings"), count: countSchema }),
+    z.strictObject({ type: z.literal("regulars"), count: countSchema }),
+    // Spells cast on a building, counting every cast.
+    z.strictObject({ type: z.literal("enchantments"), count: countSchema }),
   ]),
 });
 export type Quest = z.infer<typeof questSchema>;
@@ -483,7 +493,7 @@ export const balanceSchema = z.strictObject({
     effects: z.record(responseTypeSchema, z.strictObject({ gold: z.number(), rep: z.number().int(), fondness: z.number().int() })),
     // Lowest first. A band applies from its `from` value upward.
     repBands: z
-      .array(z.strictObject({ name: z.string(), from: z.number().int(), shopPrice: z.number(), requestPay: z.number() }))
+      .array(z.strictObject({ name: z.string(), from: z.number().int(), shopPrice: z.number(), requestPay: z.number(), tonightChance: z.number() }))
       .min(1),
     // How often a known person comes back, once the player has met enough people.
     repeatShare: z.number().min(0).max(1),
@@ -539,6 +549,15 @@ export const balanceSchema = z.strictObject({
     plotPrices: z.array(z.number().int().min(0)).min(1),
     // How many plots a player of each level may own, level 1 first.
     deedsByLevel: z.array(z.number().int().min(0)).min(1),
+    // A person is a regular from this much fondness, and then stays one. A regular who has a
+    // building of their own makes it pay this share more.
+    regularAt: z.number().int().min(1),
+    regularTakings: z.number().min(0),
+    // A meal at the Tavern costs `goldPerLevel` x level and lifts tomorrow's discoveries by `lift`.
+    meal: z.strictObject({ goldPerLevel: z.number().int().min(0), lift: z.number().min(0) }),
+    // A spell cast on a building lasts `baseDays + daysPerTier x tier` and adds `bonus +
+    // bonusPerTier x tier` to its quality score. Spells carrying a blocked tag never fit.
+    enchant: z.strictObject({ blockedTags: z.array(z.string()), baseDays: z.number().int().min(1), daysPerTier: z.number().int().min(0), bonus: z.number().min(0), bonusPerTier: z.number().min(0) }),
     // Cheer is how good life in the town is. Lowest first: a band applies from its `from` points
     // upward, and `takings` is the share its buildings' takings are raised by.
     cheer: z.array(z.strictObject({ name: z.string().min(1), from: z.number().int().min(0), takings: z.number().min(0) })).min(1),
@@ -674,6 +693,27 @@ export type DayView = {
   lastLedger: Ledger | null;
 };
 
+// What a one-night happening does, from a closed list the code knows.
+export const HAPPENING_EFFECTS = ["pedlar", "enchant-doubled", "meal-doubled", "free-call", "free-hint"] as const;
+export type HappeningEffect = (typeof HAPPENING_EFFECTS)[number];
+export const happeningSchema = z.strictObject({
+  id: idSchema,
+  // Said at noon, so that missing it is a choice, and once the player takes part.
+  name: z.string().min(1),
+  line: z.string().min(1),
+  taken: z.string().min(1),
+  effect: z.enum(HAPPENING_EFFECTS),
+});
+export type Happening = z.infer<typeof happeningSchema>;
+
+// Who arrives in town, and what they say when called on, until the model writes them. `{name}`
+// in a line is replaced with the person's name. `default` is used for a job with no lines.
+export const townsfolkSchema = z.strictObject({
+  people: z.array(z.strictObject({ name: z.string().regex(/^[A-Z][A-Za-z' -]*$/, "a name has letters only"), pronoun: z.enum(["she", "he", "they"]) })).min(1),
+  callingLines: z.record(z.string(), z.array(z.string().min(1)).min(1)).refine((lines) => "default" in lines, "callingLines needs a default"),
+});
+export type Townsfolk = z.infer<typeof townsfolkSchema>;
+
 // The plain lines the day is written in until the model writes them.
 export const dayTextSchema = z.strictObject({
   dusk: z.array(z.string().min(1)).min(1),
@@ -704,6 +744,13 @@ export type BuildingView = {
   wants: string[];
   stock: { slot: number; entry: { id: string; name: string } | null }[];
   enchantment: { spell: { id: string; name: string }; daysLeft: number } | null;
+  // What `previewQuality` needs besides the stock, so the page can show the exact quality a drop
+  // would give: steps of lift already applied tonight (lifts perks, a hand lent, a good shift),
+  // the owner's rank bonus here (0 away from their own building), and a live enchantment's
+  // bonus. Always sent; optional only until the page's fixtures carry them.
+  lifts?: number;
+  rankBonus?: number;
+  enchantBonus?: number;
   next: { gold: number; level: number; needs: NeedView[]; ready: boolean } | null;
 };
 

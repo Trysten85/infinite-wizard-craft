@@ -13,6 +13,8 @@ import {
   comboKey,
   comboSchema,
   dayTextSchema,
+  townsfolkSchema,
+  happeningSchema,
   entrySchema,
   eventSeedSchema,
   jobSchema,
@@ -34,6 +36,8 @@ import {
   type Combo,
   type ComboExample,
   type DayText,
+  type Townsfolk,
+  type Happening,
   type Entry,
   type EventSeed,
   type GameEntry,
@@ -65,6 +69,10 @@ export type GameData = {
   dayText: DayText;
   // The town's buildings, by id, in the order they are written.
   buildings: Map<string, Building>;
+  // Names for the people who arrive in town, and what they say when called on.
+  townsfolk: Townsfolk;
+  // The one-night happenings, in the order they are written.
+  happenings: Happening[];
   quests: Quest[];
   eventSeeds: EventSeed[];
   // Well-known fairy-tale creatures, objects, and wonders a magical combination may produce,
@@ -184,6 +192,8 @@ export function buildGameData(raw: {
   shiftText?: ShiftText;
   dayText?: DayText;
   buildings?: Building[];
+  townsfolk?: Townsfolk;
+  happenings?: Happening[];
   quests?: Quest[];
   eventSeeds?: EventSeed[];
   storybook?: StorybookItem[];
@@ -496,6 +506,11 @@ export function buildGameData(raw: {
       }
     }
   }
+  for (const quest of quests) {
+    if (quest.done.type === "built" && buildings.length > 0 && !buildingIds.has(quest.done.building)) {
+      problems.push(`quest "${quest.id}" asks for unknown building "${quest.done.building}"`);
+    }
+  }
   if (town.deedsByLevel.length !== balance.levels.cap) problems.push("town.deedsByLevel must have one number for each level");
   if (town.deedsByLevel.some((deeds, index) => deeds < (town.deedsByLevel[index - 1] ?? 0))) problems.push("town.deedsByLevel must never go down as the level rises");
   if (town.deedsByLevel.at(-1)! > town.plotPrices.length) problems.push("town.deedsByLevel hands out more deeds than there are plots");
@@ -503,6 +518,10 @@ export function buildGameData(raw: {
     problems.push("town.tiers must ask for levels within the cap, never lower than the tier before");
   }
 
+  if (raw.townsfolk) {
+    const names = raw.townsfolk.people.map((person) => person.name);
+    if (new Set(names).size !== names.length) problems.push("the townsfolk list names someone twice");
+  }
   if (balance.day.noon >= balance.day.length) problems.push("the day's noon must come before its length, so that there is an afternoon");
   const { qualities, ranks } = balance.shifts;
   if (qualities.some((quality, index) => quality.id !== QUALITIES[index] || quality.from < (qualities[index - 1]?.from ?? -Infinity))) {
@@ -574,6 +593,8 @@ export function buildGameData(raw: {
     jobs: new Map(jobs.map((job) => [job.id, job])),
     jobSkins: new Map(jobSkins.map((skin) => [skin.job, skin])),
     buildings: new Map(buildings.map((building) => [building.id, building])),
+    happenings: raw.happenings ?? [],
+    townsfolk: raw.townsfolk ?? { people: [{ name: "Pip Thistlewood", pronoun: "they" }], callingLines: { default: ["{name} is glad of the company."] } },
     dayText: raw.dayText ?? {
       dusk: ["Dusk."],
       turnedIn: ["You turn in early."],
@@ -625,6 +646,8 @@ export function readGameFiles(rootDir: string) {
     shiftText: readJson(join(rootDir, "data/shift-text.json"), shiftTextSchema),
     dayText: readJson(join(rootDir, "data/day-text.json"), dayTextSchema),
     buildings: readJson(join(rootDir, "data/buildings.json"), z.array(buildingSchema)),
+    townsfolk: readJson(join(rootDir, "data/townsfolk.json"), townsfolkSchema),
+    happenings: readJson(join(rootDir, "data/tonight.json"), z.array(happeningSchema)),
     quests: readJson(join(rootDir, "data/quests.json"), z.array(questSchema)),
     eventSeeds: readJson(join(rootDir, "data/event-seeds.json"), z.array(eventSeedSchema)),
     storybook: readJson(join(rootDir, "data/storybook.json"), z.array(storybookItemSchema)),
