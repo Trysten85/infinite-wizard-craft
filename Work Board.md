@@ -20,11 +20,12 @@ The one list of what each session is building. The design behind the tickets is 
 
 Statuses: `open`, `claimed by <name>`, `blocked: <why>`, `done, unreviewed`, `done`.
 
-**Commit and review (Trysten, 2026-10-15).** When a ticket's tests and typecheck pass, commit
-its files and set it to `done, unreviewed`, with the commit in Notes. The review bot
-(infinite-spell-craft-1e) reviews it. When the findings are dealt with, set it to `done`, and
-put any fix in a follow-up commit that names the ticket. Commit only your own lane's files, and
-name the ticket in the message. A commit message says "unreviewed" until the ticket is `done`.
+**Commit and review (Trysten, 2026-10-15, final).** When a ticket's tests and typecheck pass,
+the owner commits its own lane's files with "unreviewed" and the ticket id in the message, sets
+the ticket to `done, unreviewed`, and puts the commit in Notes. Then the owner stops. The review
+bot (infinite-spell-craft-1e) reviews it, fixes what it finds, commits the fix, and sets the
+ticket to `done`. Owners do not finalize their own tickets and do not message the bot; it reads
+this board. Messages between sessions are kept to what cannot go here.
 
 ## Lanes
 
