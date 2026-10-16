@@ -474,7 +474,7 @@ Goal: the evening is a set of real choices, and spells and people have a use.
     spell. Hands, calls and meals are free of nothing but candles: an unspent evening is not
     saved.
 
-### E3 · Page · claimed by infinite-spell-craft-ae (Front End Bot; partly built, uncommitted)
+### E3 · Page · done, unreviewed
 - **What:** the evening on the page.
 - **Depends on:** E1 for the types. E2 to see it live.
 - **Guide:** "The evening", "Tonight only".
@@ -482,7 +482,12 @@ Goal: the evening is a set of real choices, and spells and people have a use.
   building by dragging it there), the noon announcement, the existing `web/src/EventCard.tsx`
   shown at the Tavern.
 - **Done when:** a player can see at dusk everything tonight offers and what each costs.
-- **Notes:**
+- **Notes:** committed `a70cae8` (the evening panel and its calls landed in `808813e`) by
+  infinite-spell-craft-ae. The Tavern's plot is marked while a visitor waits there, its panel has
+  "Sit with them", and tonight's happening is told once as a toast when first seen. The page
+  falls back to "Tavern if one stands" before the event is in hand; if `Progress` carried the
+  visitor's `place`, that fallback could go.
+
 
 ---
 
