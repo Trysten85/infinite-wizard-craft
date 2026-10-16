@@ -15,6 +15,8 @@ import {
   previewQuality,
   extraDiscoveryGold,
   isStockable,
+  discountShare,
+  learnPrice,
   levelForPlot,
   needMet,
   perksAt,
@@ -33,7 +35,7 @@ import { data } from "./helpers";
 
 // Numbers pinned for the sums below, so retuning config/balance.json does not move these tests.
 const rules: TownRules = {
-  plotPrices: [0, 30, 60, 100, 150, 210, 280, 360, 450],
+  plotPrices: [10, 30, 60, 100, 150, 210, 280, 360, 450],
   deedsByLevel: [2, 3, 5, 7, 9],
   regularAt: 6,
   regularTakings: 0.1,
@@ -68,7 +70,7 @@ const reals = (...ids: string[]) => ids.map((id) => real(id));
 
 describe("plots", () => {
   it("are bought in order at rising prices, the first one free", () => {
-    expect([0, 1, 2, 8].map((index) => plotPrice(index, rules))).toEqual([0, 30, 60, 450]);
+    expect([0, 1, 2, 8].map((index) => plotPrice(index, rules))).toEqual([10, 30, 60, 450]);
     expect(plotPrice(9, rules)).toBeNull();
   });
 
@@ -85,14 +87,22 @@ describe("plots", () => {
   });
 
   it("are refused without a deed, or without the gold", () => {
-    expect(refusePlot(0, 1, 0, rules)).toBeNull();
-    expect(refusePlot(1, 1, 29, rules)).toBe("not-enough-gold");
-    expect(refusePlot(1, 1, 30, rules)).toBeNull();
+    expect(refusePlot(0, 1, 10, 1, rules)).toBeNull();
+    expect(refusePlot(0, 1, 9, 1, rules)).toBe("not-enough-gold");
+    expect(refusePlot(1, 1, 29, 1, rules)).toBe("not-enough-gold");
+    expect(refusePlot(1, 1, 30, 1, rules)).toBeNull();
     // A third plot waits for level two, however much gold there is.
-    expect(refusePlot(2, 1, 9999, rules)).toBe("no-deed");
-    expect(refusePlot(2, 2, 60, rules)).toBeNull();
+    expect(refusePlot(2, 1, 9999, 1, rules)).toBe("no-deed");
+    expect(refusePlot(2, 2, 60, 1, rules)).toBeNull();
     // The street has an end.
-    expect(refusePlot(9, 5, 9999, rules)).toBe("no-deed");
+    expect(refusePlot(9, 5, 9999, 1, rules)).toBe("no-deed");
+  });
+
+  it("wait on a first job, and only the first", () => {
+    expect(refusePlot(0, 1, 9999, 0, rules)).toBe("no-job");
+    // A save that already owns a plot is not asked for a job again.
+    expect(refusePlot(1, 1, 30, 0, rules)).toBeNull();
+    expect(plotPrice(0, rules)).toBe(10);
   });
 });
 
@@ -416,7 +426,7 @@ describe("building data that does not hold together", () => {
 describe("the town's refusal codes", () => {
   it("are codes a refusal can carry", () => {
     const codes: RuleCode[] = ["no-deed", "needs-missing", "no-shop"];
-    const fromRules: (RuleCode | null)[] = [refusePlot(2, 1, 0, rules), refuseTier(tavern, 1, { held: [], jobs: [], level: 1, gold: 0 }, rules)];
+    const fromRules: (RuleCode | null)[] = [refusePlot(2, 1, 0, 1, rules), refuseTier(tavern, 1, { held: [], jobs: [], level: 1, gold: 0 }, rules)];
     expect(fromRules).toEqual(["no-deed", "needs-missing"]);
     expect(codes).toHaveLength(3);
   });
@@ -521,5 +531,21 @@ describe("Cheer", () => {
     const band = (points: number) => cheerBand(points, rules).takings;
     expect([0, 4, 9, 15].map(band)).toEqual([0, 0.1, 0.2, 0.3]);
     expect(takingsFor(3, "good", rules, shifts, band(15))).toBe(31);
+  });
+});
+
+describe("learning discount", () => {
+  const tower = building("wizards-tower");
+
+  it("takes the tower's share off, never below 1 gold, and is nothing without one", () => {
+    expect(discountShare([], "learn-discount")).toBe(0);
+    expect(discountShare([{ building: tower, tier: 1 }], "learn-discount")).toBe(0.25);
+    // A later tier restates the perk; it is not added on top.
+    expect(discountShare([{ building: tower, tier: 3 }], "learn-discount")).toBe(0.25);
+    expect(discountShare([{ building: tower, tier: 1 }], "shop-discount")).toBe(0);
+    expect(learnPrice(20, 0)).toBe(20);
+    expect(learnPrice(20, 0.25)).toBe(15);
+    expect(learnPrice(1, 0.9)).toBe(1);
+    expect(learnPrice(0, 0.5)).toBe(0);
   });
 });

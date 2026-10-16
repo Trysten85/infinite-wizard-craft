@@ -60,7 +60,7 @@
     "tonight": { "fromDay": 4, "chance": 0.25 }
   },
   "town": {
-    "plotPrices": [0, 30, 60, 100, 150, 210, 280, 360, 450],
+    "plotPrices": [10, 30, 60, 100, 150, 210, 280, 360, 450],
     "deedsByLevel": [2, 3, 5, 7, 9],
     "regularAt": 6,
     "regularTakings": 0.1,

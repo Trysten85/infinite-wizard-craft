@@ -111,8 +111,9 @@ The server owns gold, XP, level, quests, and learned spells. They are saved per 
 - `rewards` is `{ gold, quests }`: what the player earned by that action, for toasts. Each quest in
   it is `{ id, title, gold, xp }`.
 - Every spell entry has `learnCost`, the gold it takes to learn, and `learnLevel`, the level it
-  takes, wherever the entry appears (the player's entries, a combine result, a shop slot). The
-  learn route also returns the `cost` paid.
+  takes, wherever the entry appears (the player's entries, a combine result, a shop slot). In the
+  player's own entries a spell also has `learnPrice`, what this player pays once the town's
+  learning discount is taken off; the learn route charges exactly that and returns it as `cost`.
 - Each shop slot is `{ slot, type, reason, entry, price, sold }`. `type` is `random` or `tailored`,
   and `reason` says why a tailored item was picked. The shelf is stocked afresh each morning
   (see "The day (routes)"), and a bought slot stays empty until then. The shop is earned: see
@@ -189,8 +190,7 @@ player reacts, the person says what they are after, and the player answers.
     `not-evening`.
   - `progress.eventIn` is now counted in days: 0 while today's visitor is on the way or waiting,
     1 once the player has sat with them. `eventIn: 0` with `eventReady: false` means a visitor
-    is on the way, or will be as soon as the player makes something today.
-  - Writing starts with the first thing the player makes in a day, never on opening the page.
+    is on the way. It is written in the background from the day's start, so it is ready by dusk.
   - A visitor the player does not sit with waits: the same one is at the door the next evening,
     and nobody new is written until they have been seen.
   - The candle (`day.costs.visitor`) is taken when the conversation ends, at the second beat or
@@ -294,7 +294,8 @@ The rules are plain functions in `src/shared/town.ts`, the buildings are in
 `data/buildings.json`, and the numbers are under `town` in `config/balance.json`.
 
 - **Plots** are bought in order (`plotPrice`), up to the deeds the player's level gives
-  (`deedsFor`). `refusePlot` answers `no-deed` or `not-enough-gold`.
+  (`deedsFor`). `refusePlot` answers `no-job` (the first plot waits on a first job), `no-deed`, or
+  `not-enough-gold`.
 - **A building** has a price, the tags it wants on its shelves, the tags a spell must carry to
   be cast on it, and one entry per tier. A tier lists everything the building gives at that
   tier (`perks`), named things it needs, and a townsperson who must have arrived (`needsJob`).
@@ -371,10 +372,10 @@ above.
 
 - **Townsfolk** arrive when their job is discovered, taken up or not, as a row among the
   player's people with `job` set. Until they are given names they go by their trade ("The
-  Blacksmith"). They are never the evening's visitor and do not count against the cast of
-  people met through events. A townsperson whose job has a building brings its plan.
-- **Plots** are bought in order, at any time of day. Refused with `no-deed` (the level's deeds
-  are used up) or `not-enough-gold`. The first is free, and still has to be bought.
+  Blacksmith"). They can be the evening's visitor, but do not count against the cast of
+  people met through events (`maxActivePeople`), so they never crowd out new arrivals. A townsperson whose job has a building brings its plan.
+- **Plots** are bought in order, at any time of day. Refused with `no-job` (no job yet, first plot only), `no-deed` (the level's deeds
+  are used up) or `not-enough-gold`. The first costs 10 gold, and a quest asks for it.
 - **Raising a building** needs a plot the player owns with nothing on it, the plan in hand, and
   no building of that kind standing already (all `rule`). Then, in this order: `level-too-low`,
   `needs-missing` (the sentence lists what is missing), `not-enough-gold`, `not-evening`,

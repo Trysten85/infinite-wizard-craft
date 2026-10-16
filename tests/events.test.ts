@@ -154,15 +154,11 @@ describe("the day's visitor", () => {
     return game.events.respond(player, heart.responses[0]!.type);
   }
 
-  it("is written once the day is under way, and only seen from dusk", async () => {
+  it("is written from the day's start, and only seen from dusk", async () => {
     const { writer, briefs } = recordingWriter();
     const game = newGame(1, writer);
-    // Nobody is written for a player who has only opened the page.
-    expect(game.progress.getProgress("ann")).toMatchObject({ eventReady: false, eventIn: 0 });
-    expect(await game.events.current("ann")).toEqual({ event: null });
-    expect(briefs).toHaveLength(0);
-    game.setDay("ann", { sun: 1 });
-    expect(game.progress.getProgress("ann").eventReady).toBe(true);
+    // The visitor is on the way from the first moment of the day, so it is ready by dusk.
+    expect(game.progress.getProgress("ann")).toMatchObject({ eventReady: true, eventIn: 0 });
     expect(await game.events.current("ann")).toEqual({ event: null });
     expect(briefs).toHaveLength(1);
     expect(game.store.listEvents("ann")[0]).toMatchObject({ day: 1, state: "pending" });
@@ -227,11 +223,8 @@ describe("the day's visitor", () => {
     expect(game.progress.getProgress("ann").eventReady).toBe(false);
     expect(await game.events.current("ann")).toEqual({ event: null });
     expect(arrivals()).toBe(1);
-    // Bed, and the next one is written once the next morning is under way.
+    // Bed, and the next one is written as the next morning begins.
     game.day.end("ann");
-    await game.events.current("ann");
-    expect(arrivals()).toBe(1);
-    game.setDay("ann", { sun: 1 });
     expect(game.progress.getProgress("ann").eventReady).toBe(true);
     await game.events.current("ann");
     expect(arrivals()).toBe(2);
@@ -1105,7 +1098,7 @@ describe("the event routes", () => {
     const app = createApp(game.combiner, { progress: game.progress, shop: game.shop, day: game.day, events: game.events });
     expect(await (await app.request("/api/players/ann/event")).json()).toEqual({ event: null });
     const player = (await (await app.request("/api/players/ann")).json()) as Record<string, any>;
-    expect(player.progress).toMatchObject({ rep: 0, repBand: "Fine", requests: [], hints: [], eventReady: false, eventIn: 0, day: { number: 1, phase: "morning" } });
+    expect(player.progress).toMatchObject({ rep: 0, repBand: "Fine", requests: [], hints: [], eventReady: true, eventIn: 0, day: { number: 1, phase: "morning" } });
     game.setDay("ann", { sun: 1 });
     expect(await (await app.request("/api/players/ann/event")).json()).toEqual({ event: null });
     const early = await app.request("/api/players/ann/event/respond", post({ type: "fair" }));

@@ -1,8 +1,13 @@
+import { mkdtempSync, rmSync } from "node:fs";
+import { DatabaseSync } from "node:sqlite";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { createApp } from "../src/server/app";
 import { discoveryGold, xpToReach } from "../src/server/progress";
 import { comboKey, type GameEntry, type TownView } from "../src/shared/schema";
-import { extraDiscoveryGold, takingsFor } from "../src/shared/town";
+import { openStore } from "../src/server/store";
+import { extraDiscoveryGold, learnPrice, takingsFor } from "../src/shared/town";
 import { data, newGame } from "./helpers";
 
 const rules = data.balance.town;
@@ -13,6 +18,7 @@ const building = (id: string) => data.buildings.get(id)!;
 // What an unstocked building of a tier pays for a night.
 const pays = (tier: number) => takingsFor(tier, "meh", rules, data.balance.shifts);
 const give = (game: Game, ids: string[], player = "ann") => ids.forEach((id) => game.store.addDiscovery(player, id));
+const firstJob = (game: Game, player = "ann") => give(game, [[...data.jobs.keys()][0]!], player);
 const gold = (game: Game, amount: number, player = "ann") => game.store.addLedger(player, amount, "quest", `grant-${amount}-${game.store.getGold(player)}`);
 const level = (game: Game, to: number, player = "ann") => {
   game.progress.settle(player);
@@ -76,17 +82,22 @@ describe("townsfolk", () => {
     expect(town.plans.map((plan) => plan.building).sort()).toEqual([...data.buildings.keys()].sort());
   });
 
-  it("are kept out of the cast of visitors, and their names are not given to anyone else", async () => {
-    const briefs: { takenNames: string[]; person: { returning: boolean } }[] = [];
+  it("can be the evening's visitor, are not counted against the cast, and keep their names", async () => {
+    const briefs: { takenNames: string[]; person: { returning: boolean; name?: string } }[] = [];
     const { createCannedEventWriter } = await import("../src/server/events/writer");
     const canned = createCannedEventWriter();
     const game = newGame(1, { ...canned, write: (brief) => (briefs.push(brief), canned.write(brief)) });
     give(game, [...data.jobs.keys()]);
     game.town.arrive("ann");
-    await expect(game.events.test("ann", "repeat")).rejects.toThrow(/has not met anyone/);
+    const townsfolk = game.store.listPeople("ann").map((person) => person.name);
+    // With nobody met yet, a townsperson is who comes back.
+    await game.events.test("ann", "repeat");
+    expect(briefs[0]!.person.returning).toBe(true);
+    expect(townsfolk).toContain(briefs[0]!.person.name);
+    expect(briefs[0]!.takenNames).toEqual(expect.arrayContaining(townsfolk));
+    // The visitor is not thrown away with the test event, and the street keeps all its people.
     await game.events.test("ann", "small_thief");
-    expect(briefs[0]!.person.returning).toBe(false);
-    expect(briefs[0]!.takenNames).toContain(data.townsfolk.people[0]!.name);
+    expect(game.store.listPeople("ann").filter((person) => person.job !== null)).toHaveLength(townsfolk.length);
     // A street full of townsfolk does not push the people the player has met out of the story.
     const heart = (await game.events.respond("ann", "fair")).next!;
     await game.events.respond("ann", heart.responses[0]!.type);
@@ -95,14 +106,28 @@ describe("townsfolk", () => {
 });
 
 describe("plots", () => {
-  it("are bought in order, the first for nothing, at any time of day", () => {
+  it("wait on a first job, which the first plot is bought for", () => {
     const game = newGame();
+    gold(game, 1000);
+    expect(() => game.town.buyPlot("ann")).toThrowError(expect.objectContaining({ code: "no-job" }));
+    expect(game.store.listPlots("ann")).toHaveLength(0);
+    firstJob(game);
+    const before = game.progress.getProgress("ann").gold;
+    const { rewards } = game.town.buyPlot("ann");
+    // The plot's price goes out, and the "Buy a plot" quest pays what it pays.
+    expect(game.progress.getProgress("ann").gold).toBe(before - rules.plotPrices[0]! + rewards.gold);
+    expect(game.store.getLedgerRefs("ann", "plot")).toEqual(["0"]);
+  });
+
+  it("are bought in order, at any time of day", () => {
+    const game = newGame();
+    firstJob(game);
+    gold(game, rules.plotPrices[0]!);
     expect(game.town.view("ann").plots.map((plot) => plot.owned)).toEqual(rules.plotPrices.map(() => false));
     expect(game.town.buyPlot("ann")).toMatchObject({ plot: 0 });
-    expect(game.progress.getProgress("ann")).toMatchObject({ gold: 0, day: { phase: "morning" } });
+    expect(game.progress.getProgress("ann")).toMatchObject({ day: { phase: "morning" } });
     gold(game, rules.plotPrices[1]!);
     expect(game.town.buyPlot("ann").plot).toBe(1);
-    expect(game.progress.getProgress("ann").gold).toBe(0);
     const town = game.town.view("ann");
     expect(town.plots.map((plot) => plot.owned)).toEqual(rules.plotPrices.map((_, index) => index < 2));
     expect(town.plots.map((plot) => plot.price)).toEqual(rules.plotPrices);
@@ -111,6 +136,8 @@ describe("plots", () => {
 
   it("are refused past the player's deeds, and without the gold", () => {
     const game = newGame();
+    firstJob(game);
+    gold(game, rules.plotPrices[0]!);
     expect(game.town.view("ann").deeds).toEqual({ have: rules.deedsByLevel[0], max: rules.deedsByLevel.at(-1) });
     game.town.buyPlot("ann");
     expect(() => game.town.buyPlot("ann")).toThrowError(expect.objectContaining({ code: "not-enough-gold" }));
@@ -290,6 +317,8 @@ describe("takings", () => {
 
   it("are nothing on an empty street", () => {
     const game = newGame();
+    firstJob(game);
+    gold(game, rules.plotPrices[0]!);
     game.town.buyPlot("ann");
     game.dusk("ann");
     expect(game.day.end("ann").night!.takings).toEqual([]);
@@ -441,5 +470,60 @@ describe("the town routes", () => {
 
     expect((await send("/town/build", { plot: "first", building: "smithy" })).status).toBe(400);
     expect((await send("/town/upgrade", {})).status).toBe(400);
+  });
+});
+
+describe("the learning price", () => {
+  const SPELL = "spell-fire-bolt";
+  // A player with a Wizard's Tower standing, and a spell they have discovered.
+  function withTower(): Game {
+    const game = newGame();
+    give(game, [SPELL, "spellbook"]);
+    game.store.addPlot("ann", 0);
+    game.store.setBuilding("ann", 0, "wizards-tower", 1);
+    return game;
+  }
+  const base = data.entries.get(SPELL)!.learnCost!;
+
+  it("is shown on the spell and charged exactly, so the two agree", () => {
+    const game = withTower();
+    const shown = game.combiner.listDiscovered("ann").find((entry) => entry.id === SPELL)!;
+    expect(shown.learnPrice).toBe(learnPrice(base, 0.25));
+    expect(shown.learnPrice).toBeLessThan(base);
+    level(game, 5);
+    gold(game, 500);
+    const before = game.store.getGold("ann");
+    const { cost, rewards } = game.progress.learn("ann", SPELL);
+    expect(cost).toBe(shown.learnPrice);
+    expect(game.store.getGold("ann")).toBe(before - cost + rewards.gold);
+  });
+
+  it("is the base price with no Tower", () => {
+    const game = newGame();
+    give(game, [SPELL]);
+    expect(game.combiner.listDiscovered("ann").find((entry) => entry.id === SPELL)!.learnPrice).toBe(base);
+  });
+});
+
+describe("a player saved before the town", () => {
+  it("is given the Market Stall whether or not they bought from the shop, once", () => {
+    const dir = mkdtempSync(join(tmpdir(), "stall-"));
+    const path = join(dir, "game.db");
+    try {
+      // An old save: a player who owns no plot, in a database from before the column existed.
+      openStore(path).changeStats("ann", { bonusXp: 1 });
+      const old = new DatabaseSync(path);
+      old.exec("ALTER TABLE player_stats DROP COLUMN stall_owed");
+      old.close();
+      const game = newGame(1, undefined, { store: openStore(path) });
+      const owned = () => game.town.view("ann").plots.filter((plot) => plot.building);
+      expect(owned().map((plot) => plot.building!.id)).toEqual(["market-stall"]);
+      expect(game.store.stallOwed("ann")).toBe(false);
+      // Someone who started after the town is not owed one.
+      game.store.changeStats("bea", { bonusXp: 1 });
+      expect(game.town.view("bea").plots.filter((plot) => plot.building)).toEqual([]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

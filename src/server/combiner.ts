@@ -1,8 +1,9 @@
 import { comboKey, slugify, type CombineResult, type ComboDraft, type GameEntry, type RuleCode } from "../shared/schema";
+import { learnPrice } from "../shared/town";
 import type { Blocklist } from "./blocklist";
 import { pairShare } from "./comboContext";
 import type { ComboGenerator } from "./comboGenerator";
-import { tierForDepth, xpForTier, type GameData } from "./gameData";
+import { learnCostForTier, tierForDepth, xpForTier, type GameData } from "./gameData";
 import type { Store } from "./store";
 import { canonicalName, isBanned, isOnlyIngredients, isRealName, overusedIn } from "./names";
 import { endsCleanly, tooLong } from "./voice";
@@ -81,8 +82,11 @@ export function createCombiner(deps: {
   store: Store;
   generate: ComboGenerator;
   blocklist?: Blocklist;
+  // The share the town takes off a player's learning prices, 0 to 1. With none given, spells cost
+  // their base price.
+  learnShare?: (player: string) => number;
 }) {
-  const { data, store, generate, blocklist } = deps;
+  const { data, store, generate, blocklist, learnShare } = deps;
   const rules = comboRules({ data, blocklist });
   // Two players making the same new combo at once share one model call and one result.
   const inFlight = new Map<string, Promise<GameEntry>>();
@@ -101,10 +105,19 @@ export function createCombiner(deps: {
     return [...ids];
   }
 
+  // Every spell carries `learnPrice`, what this player pays: the one number both the page shows
+  // and `learn` charges.
   function listDiscovered(player: string): GameEntry[] {
-    return discoveredIds(player)
+    const found = discoveredIds(player)
       .map(getEntry)
       .filter((entry) => entry !== undefined);
+    if (!found.some((entry) => entry.kind === "spell")) return found;
+    const share = learnShare?.(player) ?? 0;
+    return found.map((entry) =>
+      entry.kind === "spell"
+        ? { ...entry, learnPrice: learnPrice(entry.learnCost ?? learnCostForTier(entry.tier, data.balance), share) }
+        : entry,
+    );
   }
 
   async function generateEntry(key: string, a: GameEntry, b: GameEntry): Promise<GameEntry> {

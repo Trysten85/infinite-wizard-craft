@@ -37,7 +37,9 @@ export type Entry = z.infer<typeof entrySchema>;
 // before asking.
 // A model-made entry is marked `wonder` when it came from a storybook combination, so that what
 // is made from it stays in that register too.
-export type GameEntry = Entry & { depth: number; xp: number; learnCost?: number; learnLevel?: number; wonder?: boolean };
+// `learnCost` is the spell's base cost. `learnPrice` is what this player pays, once the town's
+// learning discount is taken off, and is there when the entry was built for one player.
+export type GameEntry = Entry & { depth: number; xp: number; learnCost?: number; learnPrice?: number; learnLevel?: number; wonder?: boolean };
 
 export const RESPONSE_TYPES = ["generous", "skilled", "fair", "sharp", "avoid"] as const;
 export const responseTypeSchema = z.enum(RESPONSE_TYPES);

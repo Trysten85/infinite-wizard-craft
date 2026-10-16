@@ -282,9 +282,9 @@ export function createProgress(deps: {
     const day = store.getDay(player);
     const events = store.listEvents(player);
     const waiting = events.some((event) => event.state === "pending");
-    // There is one visitor a day, from the first thing the player makes that day, and one who has
-    // not been seen yet is still the one.
-    const due = day.state.sun > 0 && events.every((event) => event.state === "resolved") && day.visitorDay < day.state.number;
+    // There is one visitor a day, written from the day's start, and one who has not been seen
+    // yet is still the one.
+    const due = events.every((event) => event.state === "resolved") && day.visitorDay < day.state.number;
     const job = jobOf(player, stats.job);
     return {
       job,
@@ -318,7 +318,8 @@ export function createProgress(deps: {
     const needed = levelForSpellTier(spell.tier, data.balance);
     const { level } = measure(player);
     if (level < needed) throw new RuleError(`${spell.name} takes level ${needed} to learn. You are level ${level}.`, "level-too-low");
-    const cost = spell.learnCost ?? learnCostForTier(spell.tier, data.balance);
+    // The price the view showed: the combiner fills it for this player, from the town they have.
+    const cost = spell.learnPrice ?? spell.learnCost ?? learnCostForTier(spell.tier, data.balance);
     const gold = store.getGold(player);
     if (cost > gold) throw new RuleError(`Learning ${spell.name} costs ${cost} gold. You have ${gold}.`, "not-enough-gold");
     store.addLedger(player, -cost, "learn", spell.id);

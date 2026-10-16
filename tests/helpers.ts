@@ -7,7 +7,8 @@ import { createProgress } from "../src/server/progress";
 import { createShifts } from "../src/server/shifts/service";
 import { createShop } from "../src/server/shop";
 import { openStore, type Store } from "../src/server/store";
-import { createTown } from "../src/server/town";
+import { discountShare } from "../src/shared/town";
+import { createTown, standingBuildings } from "../src/server/town";
 import { isEvening, type DayState } from "../src/shared/day";
 
 export const data = loadGameData(process.cwd());
@@ -29,7 +30,9 @@ export function newGame(seed = 1, writer: EventWriter = createCannedEventWriter(
   const generate = async () => {
     throw new Error("the model must not be called");
   };
-  const combiner = createCombiner({ data, store, generate });
+  // The town's learning discount is wired as the server wires it.
+  const learnShare = (player: string) => discountShare(standingBuildings(data, store, player), "learn-discount");
+  const combiner = createCombiner({ data, store, generate, learnShare });
   const progress = createProgress({ data, store, listDiscovered: combiner.listDiscovered, eventsWrittenAhead: writeAhead });
   const day = createDay({ data, store, progress, random: seeded(seed + 300) });
   const town = createTown({ data, store, progress, day, listDiscovered: combiner.listDiscovered });

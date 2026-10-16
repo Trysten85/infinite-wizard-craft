@@ -341,7 +341,7 @@ describe("three days through the routes, with the model never called", () => {
 
     // Day two. The morning has a new shelf and a new visitor on the way, and last night's ledger can be read again.
     const reloaded = await get("");
-    expect(reloaded.progress).toMatchObject({ eventReady: false, eventIn: 0, shiftReady: false, day: { lastLedger: bed.body.night } });
+    expect(reloaded.progress).toMatchObject({ eventReady: true, eventIn: 0, shiftReady: false, day: { lastLedger: bed.body.night } });
     expect((await get("/shop")).slots.map((slot: { entry: { id: string } }) => slot.entry.id)).not.toEqual(shelf);
     expect((await make(DUSK))[0]!.progress.eventReady).toBe(true);
     // This time the player crafts on, and the evening goes by without them.

@@ -360,6 +360,15 @@ export function openStore(path: string) {
     });
   }
 
+  // A player saved before the town is owed the Market Stall, whether or not they bought from the
+  // shop. Those who own no plot when this column is first added are marked, once; a player made
+  // afterwards starts at 0 and buys their first plot like anyone else.
+  if (!statColumns.includes("stall_owed")) {
+    transaction(() => {
+      db.exec("ALTER TABLE player_stats ADD COLUMN stall_owed INTEGER NOT NULL DEFAULT 0");
+      db.exec("UPDATE player_stats SET stall_owed = 1 WHERE player NOT IN (SELECT player FROM town_plots)");
+    });
+  }
   if (!statColumns.includes("enchantments")) db.exec("ALTER TABLE player_stats ADD COLUMN enchantments INTEGER NOT NULL DEFAULT 0");
   if (!statColumns.includes("evenings")) db.exec("ALTER TABLE player_stats ADD COLUMN evenings INTEGER NOT NULL DEFAULT 0");
   if (!statColumns.includes("shift_lift_day")) db.exec("ALTER TABLE player_stats ADD COLUMN shift_lift_day INTEGER NOT NULL DEFAULT 0");
@@ -856,6 +865,14 @@ export function openStore(path: string) {
     // Gives the player a plot. Returns false if they already had it.
     addPlot(player: string, plot: number): boolean {
       return db.prepare("INSERT OR IGNORE INTO town_plots (player, plot) VALUES (?, ?)").run(player, plot).changes === 1;
+    },
+
+    // Whether the player is owed the stall their save predates the town for, and settling it.
+    stallOwed(player: string): boolean {
+      return db.prepare("SELECT stall_owed FROM player_stats WHERE player = ?").get(player)?.stall_owed === 1;
+    },
+    clearStallOwed(player: string): void {
+      db.prepare("UPDATE player_stats SET stall_owed = 0 WHERE player = ?").run(player);
     },
 
     // What is on each shelf of the player's buildings.

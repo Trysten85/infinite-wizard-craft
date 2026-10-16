@@ -19,7 +19,8 @@ import { RECIPE_KEY_FILE, renderRecipeKey } from "./recipeKey";
 import { createShifts } from "./shifts/service";
 import { createShop } from "./shop";
 import { openStore } from "./store";
-import { createTown } from "./town";
+import { discountShare } from "../shared/town";
+import { createTown, standingBuildings } from "./town";
 
 const root = process.cwd();
 const port = Number(process.env.PORT ?? 3001);
@@ -54,7 +55,13 @@ const generate = createComboGenerator({
 });
 const blocklist = loadBlocklist(join(root, "Blocklist.md"));
 if (blocklist.size === 0) console.warn("Blocklist.md not found or empty: generated names are not being checked against it.");
-const combiner = createCombiner({ data, store, generate, blocklist });
+const combiner = createCombiner({
+  data,
+  store,
+  generate,
+  blocklist,
+  learnShare: (player) => discountShare(standingBuildings(data, store, player), "learn-discount"),
+});
 // Events are written whole before the player hears of them, so one is only "ready" once it exists.
 const progress = createProgress({ data, store, listDiscovered: combiner.listDiscovered, eventsWrittenAhead: true });
 const day = createDay({ data, store, progress });

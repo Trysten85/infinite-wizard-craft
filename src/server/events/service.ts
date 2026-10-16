@@ -97,9 +97,12 @@ export function createEvents(deps: {
   // Second beats that could not be written ahead, as "event:type". They are written when needed.
   const gaveUp = new Set<string>();
 
-  // The people who can come to the door: those met through events. Townsfolk have their own
-  // places to be, and are not counted against the size of the cast.
+  // The cast the size cap counts: those met through events. Townsfolk can also be the evening's
+  // visitor (see `everyoneOf`), but they are not counted against the cap, so a town full of
+  // them never crowds out new arrivals.
   const castOf = (player: string) => store.listPeople(player).filter((person) => person.job === null);
+  // Everyone who can come to the door: the cast and the townsfolk.
+  const everyoneOf = (player: string) => store.listPeople(player);
   const pendingEvent = (player: string) => store.listEvents(player).find((event) => event.state === "pending");
   // An event still being written out of sight.
   const hiddenEvent = (player: string) => store.listEvents(player).find((event) => event.state === "writing");
@@ -108,13 +111,12 @@ export function createEvents(deps: {
   // this goes by the events and not by the day the person was first seen.
   const metBefore = (player: string, event: StoredEvent) => store.listEvents(player).some((earlier) => earlier.id < event.id && earlier.personId === event.personId);
 
-  // Whether today's visitor is still to be written. There is one a day, written as soon as the
-  // player has made a start on it, so that the model is never set to work for someone who only
-  // opened the page. A visitor the player has not sat with yet waits, and nobody new is written
-  // until they have been seen.
+  // Whether today's visitor is still to be written. There is one a day, written in the background
+  // from the day's start so that they are ready by dusk. A visitor the player has not sat with yet
+  // waits, and nobody new is written until they have been seen.
   function isDue(player: string): boolean {
     const saved = store.getDay(player);
-    return saved.state.sun > 0 && saved.visitorDay < saved.state.number && store.listEvents(player).every((event) => event.state === "resolved");
+    return saved.visitorDay < saved.state.number && store.listEvents(player).every((event) => event.state === "resolved");
   }
 
   // Whether an event may be in front of the player now. The day's visitor is only seen from dusk.
@@ -229,7 +231,8 @@ export function createEvents(deps: {
     const snapshot = snapshotPlayer(data, discovered, level, job?.id ?? null);
     const history = store.listEvents(player);
     const today = day.today(player).number;
-    const people = castOf(player);
+    const people = everyoneOf(player);
+    const cast = castOf(player);
     const recent: RecentEvent[] = history.map((event) => ({ seedId: event.seedId, kind: event.kind, mood: event.mood, personId: event.personId }));
     const lastPersonId = recent.at(-1)?.personId;
 
@@ -262,7 +265,7 @@ export function createEvents(deps: {
       if (!seed) return;
       // With a full cast, a seed that allows it brings back a familiar face instead of adding one.
       const active = people.filter((person) => person.status === "active");
-      if (seed.who === "any" && active.length >= rules.maxActivePeople) {
+      if (seed.who === "any" && cast.filter((person) => person.status === "active").length >= rules.maxActivePeople) {
         returning = weightedPick(returningWeights(active, today, lastPersonId), random());
       }
     }
@@ -555,8 +558,8 @@ export function createEvents(deps: {
   }
 
   // Starts writing today's visitor, if they are still to be written, without making anyone wait
-  // for it. Call it after anything the player does: the first thing they make in a day sets it
-  // going. An event left half-written is carried on from there.
+  // for it. Call it after anything the player does, so a new day's visitor is set going as early
+  // as possible. An event left half-written is carried on from there.
   function prepare(player: string): void {
     if (pendingEvent(player)) return;
     if (writeAhead) {
@@ -577,13 +580,14 @@ export function createEvents(deps: {
   async function test(player: string, seedId?: string): Promise<{ event: EventView | null; seed: string }> {
     const known = ["repeat", ...data.eventSeeds.map((seed) => seed.id)];
     if (seedId !== undefined && !known.includes(seedId)) throw new RuleError(`There is no event seed "${seedId}". Seeds: ${known.join(", ")}.`);
-    if (seedId === "repeat" && castOf(player).length === 0) throw new RuleError("Nobody can come back yet: this player has not met anyone.");
+    if (seedId === "repeat" && everyoneOf(player).length === 0) throw new RuleError("Nobody can come back yet: this player has not met anyone.");
     return exclusively(player, async () => {
       const waiting = pendingEvent(player);
       if (waiting) {
         store.deleteEvent(waiting.id);
         const introduced = metBefore(player, waiting) ? undefined : store.listPeople(player).find((person) => person.id === waiting.personId);
-        if (introduced) store.deletePerson(introduced.id);
+        // A townsperson is never someone the visit introduced, so is never thrown away with it.
+        if (introduced && introduced.job === null) store.deletePerson(introduced.id);
       }
       // With no seed named, one is picked the usual way from those the player qualifies for.
       const standing = progress.getProgress(player);

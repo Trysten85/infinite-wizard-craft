@@ -18,7 +18,13 @@ The one list of what each session is building. The design behind the tickets is 
 6. **Do not change the design in code.** If a rule in the guide is wrong or cannot be built,
    say so under "Questions for design" and carry on with the rest.
 
-Statuses: `open`, `claimed by <name>`, `blocked: <why>`, `done`.
+Statuses: `open`, `claimed by <name>`, `blocked: <why>`, `done, unreviewed`, `done`.
+
+**Commit and review (Trysten, 2026-10-15).** When a ticket's tests and typecheck pass, commit
+its files and set it to `done, unreviewed`, with the commit in Notes. The review bot
+(infinite-spell-craft-1e) reviews it. When the findings are dealt with, set it to `done`, and
+put any fix in a follow-up commit that names the ticket. Commit only your own lane's files, and
+name the ticket in the message. A commit message says "unreviewed" until the ticket is `done`.
 
 ## Lanes
 
@@ -33,18 +39,47 @@ Statuses: `open`, `claimed by <name>`, `blocked: <why>`, `done`.
 Rules goes first in each slice, because Backend and Page build on its types. Page can start from
 the types alone.
 
-Who holds which lane, as reported on 2026-10-11 (a session name changes when a session is
+Who holds which lane, as reported on 2026-10-15 (a session name changes when a session is
 restarted, so check `ListAgents`):
 
 | Lane | Session |
 |---|---|
 | Design | not heard from since the restart (was infinite-spell-craft-0a) |
-| Rules | infinite-spell-craft-f6 (was -23) |
-| Backend | infinite-spell-craft-33 (was -7e) |
-| Page | infinite-spell-craft-48 (was -e6) |
-| Bake | infinite-spell-craft-33 (the same session that signed as `-e8` and `-7e` below) |
+| Rules, and the gameplay loop | infinite-spell-craft-90 (was -20, -f6/-23) |
+| Backend | Backend and LLM Bot (was -05, -33 / -7e) |
+| Page | Front End Bot (was -20, -48/-e6) |
+| Bake | Backend and LLM Bot (parked; was -05, -33, signed `-e8` and `-7e` below) |
+| Review | infinite-spell-craft-1e (code review: architecture and planning; reviews, does not own files) |
 
 Standing rules are in `CLAUDE.md`.
+
+### Handoff: Backend and Bake (2026-10-15)
+
+The session that held Backend and Bake (-33, earlier -7e and -e8) lost its history. A new
+session takes both lanes. infinite-spell-craft-20 holds Rules and Page (the gameplay loop), and
+will put questions for Backend under "Questions for design" with your lane's name.
+
+Where your lanes stand:
+- **Done and committed:** D2, D3, S3, Q2, E2, and seating the visitor at the Tavern (`4f6ed12`).
+  The route contract is in the README's "The town (routes)". `tests/evening.test.ts` covers
+  the evening's actions.
+- **Left over from Q2 and E2:**
+  - `learn-discount` (the Wizard's Tower's tier 1 perk) is not in force. Spell entries carry
+    one `learnCost` for everyone, so a per-player price needs a place in the view. It waits on
+    the open S3 question 7 below.
+  - Regulars and enchantments in Cheer, if E2 did not finish them. Check against Q2's note.
+- **Open questions from your lane, still unanswered:** S3 question 1 (should players saved
+  before the town keep the Shop?) and question 7 (where the learn-discount price shows).
+- **Bake (S5):** still parked on Trysten's word. New material is in the working tree, not
+  committed and not yours to commit: `Combo Review Handoff.md` (findings on the 727-pair bake:
+  attractor results, unreliable model marks, "do not run `approve 4`") and
+  `pair result model mark.txt` (the triage sheet with an empty verdict column). Read the
+  handoff before touching the bake tools, and ask Trysten before starting S5 again.
+- **Not yours, uncommitted in the tree:** the E3 page work under `web/` and `tests/webTown.test.ts`
+  (Page, -20), and edits to `Infinite Wizard Craft.md` plus `Jobs Guide.txt` and
+  `Quest Seeds Guide.md` (design material).
+
+When you start, put your session name in the lane table above in place of "open".
 
 ---
 
@@ -369,7 +404,7 @@ quality, Cheer, and takings move.
     night, with no state saved; the choice of thing is random among what the player lacks and
     could reach. A hand on bare shelves is refused rather than wasted.
 
-### Q3 · Page · open
+### Q3 · Page · claimed by infinite-spell-craft-ae (Front End Bot)
 - **What:** the inside of a building.
 - **Depends on:** Q1 for the maths. Q2 to see it live.
 - **Guide:** "Stock and quality", "Cheer".
@@ -385,7 +420,7 @@ quality, Cheer, and takings move.
 
 Goal: the evening is a set of real choices, and spells and people have a use.
 
-### E1 · Rules · claimed by infinite-spell-craft-23
+### E1 · Rules · done
 - **What:** the rest of the evening's rules and content.
 - **Depends on:** Q1.
 - **Guide:** "Enchantments", "Townsfolk and regulars", "The Tavern's meal", "Tonight only",
@@ -395,7 +430,9 @@ Goal: the evening is a set of real choices, and spells and people have a use.
   and calling-on lines, `data/quests.json` and `questSchema` (the new conditions and the town
   thread), tests.
 - **Done when:** the quest test still holds quests to two fifths of each level's XP.
-- **Notes:** in progress, infinite-spell-craft-23.
+- **Notes:** done (commit `135d2dc`), marked by infinite-spell-craft-20 after -23's history was
+  lost. Backend's quest conditions are in `measureCondition`, and the six town quests are in
+  `data/quests.json`, so the hold below is cleared.
   - **Landed (uncommitted):** `data/townsfolk.json` (30 names with pronouns, and calling lines by
     job with a `{name}` placeholder), `data/tonight.json` (the five happenings with a coded
     `effect`), `town.enchant`, `town.regularAt`, `town.regularTakings`, `town.meal`, and
@@ -436,7 +473,7 @@ Goal: the evening is a set of real choices, and spells and people have a use.
     spell. Hands, calls and meals are free of nothing but candles: an unspent evening is not
     saved.
 
-### E3 · Page · open
+### E3 · Page · claimed by infinite-spell-craft-ae (Front End Bot; partly built, uncommitted)
 - **What:** the evening on the page.
 - **Depends on:** E1 for the types. E2 to see it live.
 - **Guide:** "The evening", "Tonight only".
@@ -590,9 +627,91 @@ Add a line: ticket id, your session name, the question. Answers are written bene
   8. **Refusal order for a raise:** the guide's level, needs, gold, then the hour, then the
      candles. And a player who turned in early cannot raise a new building that evening (one
      candle, and it takes two).
+  - **Trysten, 2026-10-15 (relayed by infinite-spell-craft-90):**
+    - **D2.1, D2.3, D2.4:** agreed as built.
+    - **D2.2:** write the visitor in the background as early as possible, so it is ready by
+      dusk. This replaces "start on the first thing made". See A2.
+    - **S3.1:** yes, players saved before the town get the stall. See A3.
+    - **S3.3:** townsfolk **can** be the evening's visitor; it makes the town feel alive. This
+      reverses the Backend choice. See A2.
+    - **S3.4, S3.6, S3.8:** fine.
+    - **S3.5:** the first plot is not free any more. It costs a small price (10 gold), it
+      cannot be bought until the player has a first job, and a quest asks them to buy it. See A1.
+    - **S3.7:** agreed: a per-player learn price in the view, which the server charges. See A4.
+  - Code review bot added (Review lane, infinite-spell-craft-1e). Ask it about architecture and
+    planning before landing a ticket that changes a shared shape.
+
+## Slice 5: answers of 2026-10-15
+
+### A1 · Rules · done, unreviewed
+- **What:** the first plot costs 10 gold, needs a first job, and a quest asks for it.
+- **Depends on:** nothing. Backend passes the job count at one call site (`src/server/town.ts`).
+- **Touches:** `config/balance.json` (`town.plotPrices[0]`), `refusePlot` and the `no-job` code
+  in `src/shared/`, `data/quests.json` (`town-plot`), tests.
+- **Done when:** a plot is refused with `no-job` before a job; the price at index 0 is 10; the
+  quest settles at one plot.
+- **Notes:** done 2026-10-15 by infinite-spell-craft-90. `npm test` (777) and typecheck pass; the
+  save was backed up (`var/game.before-first-plot-2026-10-15.db`).
+  - **One edit in a Backend file,** `src/server/town.ts` `buyPlot`: it passes
+    `builder(player).jobs.length` to `refusePlot` and answers `no-job` with a sentence. Two
+    lines; Backend, please check them.
+  - **For Page (A5):** `POST /town/plots` can now answer `no-job`, and `plots[0].price` is 10.
+    `town-plot` asks for one plot, so the quest reads "Your first job earns you a place in
+    town." A save that already owns a plot is not asked for a job.
+  - **For Design:** the guide's "first plot is free" lines need changing (Town Guide.md).
+
+### A2 · Backend · done, unreviewed
+- **What:** (1) the visitor is written in the background at the start of the day; (2) townsfolk
+  can be the evening's visitor, and `maxActivePeople` does not count them so that they crowd out
+  new arrivals.
+- **Depends on:** nothing.
+- **Notes:** done 2026-10-15 by infinite-spell-craft-05 (Backend). `npm test` (782) and typecheck
+  pass. The visitor is due from the day's first moment (`isDue` and `progress` no longer need
+  `sun > 0`), so any route's `prepare` starts it writing and `eventReady` is true from dawn.
+  Townsfolk join the pool a visitor is drawn from (`everyoneOf`); only `castOf` (those met through
+  events) is counted against `maxActivePeople` and retired. The test tool never deletes a
+  townsperson. Tests in `events.test.ts` and `townService.test.ts` changed to match.
+
+### A3 · Backend · done, unreviewed
+- **What:** players saved before the town get the Market Stall, whether or not they bought from
+  the shop.
+- **Notes:** done 2026-10-15 by infinite-spell-craft-05. A one-time migration adds
+  `player_stats.stall_owed` and marks every player who owns no plot; `standingBuildings` grants
+  the stall (tier with every shelf) once and clears it. Players made after this start at 0.
+  Backed up as `var/game.before-stall-2026-10-15.db`; the migration runs on the real save at the
+  next server start. Tested on a temp database made to look pre-town.
+
+### A4 · Rules, Backend, Page · Rules and Backend done, Page open
+- **What:** a per-player learn price. Rules adds `learnPrice` to the spell view and a pure
+  function applying `learn-discount`; Backend fills it and charges exactly that price; Page shows
+  it.
+- **Depends on:** Rules first.
+- **Notes:** Backend done 2026-10-15 by infinite-spell-craft-05. `combiner.listDiscovered` fills
+  `learnPrice` on every spell for the player (new `learnShare` dep, wired in `main.ts` and in
+  `tests/helpers.ts` from `discountShare(standingBuildings(...), "learn-discount")`), and `learn`
+  charges `spell.learnPrice`, so the shown and charged price are one value. `tests/townService`
+  holds a test that they agree. Page: read `entry.learnPrice`, fall back to `learnCost`. Rules part done 2026-10-15 by infinite-spell-craft-90 (778 tests, typecheck pass).
+  - **Landed:** `GameEntry.learnPrice?: number` in `src/shared/schema.ts`; `discountShare(standing,
+    "learn-discount" | "shop-discount")` and `learnPrice(baseCost, share)` in `src/shared/town.ts`
+    (round, at least 1 gold, 0 stays 0). `shop.ts` sums the shop discount itself, and
+    `discountShare` gives the same sum, so it can replace it.
+  - **Backend:** fill `learnPrice` on every spell entry the player is shown, and have `learn` in
+    `src/server/progress.ts` charge `learnPrice(spell.learnCost ?? learnCostForTier(...), share)`,
+    so what is shown is what is taken. Test that the two agree.
+  - **Page (A5):** show `learnPrice ?? learnCost` in `web/src/spells.ts`.
+
+### A5 · Page · claimed by infinite-spell-craft-ae (Front End Bot)
+- **What:** show the first plot's gate (`no-job`) and its price; show the learn price once A4
+  lands; and fix the turn-in-early warning, which says the shift is lost when it stays open
+  until night.
+- **Notes:** (1) done, uncommitted: the street says the first plot waits on a first job and what
+  it costs, and the button is off until a job is taken (`plotNeedsJob`). (3) needed no change:
+  "Call it a day" already says nothing of orders, and a test holds that. (2) waits on A4.
 
 ## Log
 
+- 2026-10-15: Trysten installed RTK and hooked it into Claude Code globally. Command output is
+  now condensed; see the RTK rule in `CLAUDE.md` and report edge cases to Trysten.
 - 2026-10-12: design kept the Rules lane's discovery-gold shares and added one rule: the extra
   is rounded up, never less than 1 gold. The guide also takes in the Rules lane's rulings from
   S1 (what counts as "made", the order of refusals) and its count of four `knowledge` spells.

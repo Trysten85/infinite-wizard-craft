@@ -65,17 +65,19 @@ export function runBy(building: Building, tier: number): string | undefined {
 // The buildings a player has standing, in order along the street. A building the game data no
 // longer has is passed over. Everything that asks about the town asks here, so this is also
 // where a saved game from before the town is brought into it: a player who has bought from the
-// shop without owning a plot was using a shop that needed no stall, and is given the stall, on
-// their first plot, at the tier that carries every shelf they had.
+// shop without owning a plot was using a shop that needed no stall, and so is any player saved
+// before the town (`stallOwed`). They are given the stall, on their first plot, at the tier that
+// carries every shelf, bought from it or not.
 export function standingBuildings(data: GameData, store: Store, player: string): Standing[] {
   let plots = store.listPlots(player);
-  if (plots.length === 0 && store.getLedgerRefs(player, "shop").length > 0) {
+  if (plots.length === 0 && (store.stallOwed(player) || store.getLedgerRefs(player, "shop").length > 0)) {
     const stall = [...data.buildings.values()].find((building) => perksAt(building, 1).some((perk) => perk.type === "opens-shop"));
     if (stall) {
       const allShelves = stall.tiers.findIndex((tier) => tier.perks.some((perk) => perk.type === "shop-shelves")) + 1;
       store.addPlot(player, 0);
       store.setBuilding(player, 0, stall.id, allShelves || stall.tiers.length);
       plots = store.listPlots(player);
+      store.clearStallOwed(player);
     }
   }
   const built = plots.flatMap((plot) => {
@@ -386,7 +388,8 @@ export function createTown(deps: {
     const price = plotPrice(owned, rules);
     if (price === null) throw new RuleError("You own every plot on the street.");
     const { level, gold } = progress.getProgress(player);
-    const refusal = refusePlot(owned, level, gold, rules);
+    const refusal = refusePlot(owned, level, gold, builder(player).jobs.length, rules);
+    if (refusal === "no-job") throw new RuleError("A plot is for someone with a trade. Take up your first job, then come back.", refusal);
     if (refusal === "no-deed") {
       const opens = levelForPlot(owned, rules);
       throw new RuleError(`Your deeds cover ${deedsFor(level, rules)} ${deedsFor(level, rules) === 1 ? "plot" : "plots"}.${opens ? ` Level ${opens} brings the next.` : ""}`, refusal);

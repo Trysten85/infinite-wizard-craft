@@ -34,8 +34,16 @@ export function levelForPlot(index: number, rules: TownRules): number | null {
 }
 
 // Why the next plot along cannot be bought, or null if it can. Plots are bought in order, so the
-// next one is the one numbered by how many the player owns.
-export function refusePlot(owned: number, level: number, gold: number, rules: TownRules): "no-deed" | "not-enough-gold" | null {
+// next one is the one numbered by how many the player owns. The first waits on a first job, so
+// that a plot is the town's answer to someone with a trade.
+export function refusePlot(
+  owned: number,
+  level: number,
+  gold: number,
+  jobs: number,
+  rules: TownRules,
+): "no-job" | "no-deed" | "not-enough-gold" | null {
+  if (owned === 0 && jobs === 0) return "no-job";
   if (owned >= deedsFor(level, rules)) return "no-deed";
   return plotPrice(owned, rules)! > gold ? "not-enough-gold" : null;
 }
@@ -138,6 +146,22 @@ export function perksOf<T extends Perk["type"]>(
       .filter((perk): perk is Extract<Perk, { type: T }> => perk.type === type)
       .map((perk) => ({ perk, building, tier, quality })),
   );
+}
+
+// The share a price is cut by, from every standing building's perk of this type, never more
+// than all of it. The shop's discount and the learning discount are both read this way.
+export function discountShare(
+  standing: { building: Building; tier: number }[],
+  type: "shop-discount" | "learn-discount",
+): number {
+  return Math.min(1, perksOf(standing, type).reduce((total, { perk }) => total + perk.share, 0));
+}
+
+// What a player pays to learn a spell: its base cost less the learning discount, rounded, and
+// at least 1 gold unless the spell is free. The server charges exactly this and the page shows
+// exactly this, so there is one number.
+export function learnPrice(baseCost: number, share: number): number {
+  return baseCost <= 0 ? 0 : Math.max(1, Math.round(baseCost * (1 - share)));
 }
 
 // What lifts a building's quality, each in steps: another building's `lifts` perk, a hand
