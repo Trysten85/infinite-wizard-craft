@@ -670,7 +670,7 @@ Add a line: ticket id, your session name, the question. Answers are written bene
   `sun > 0`), so any route's `prepare` starts it writing and `eventReady` is true from dawn.
   Townsfolk join the pool a visitor is drawn from (`everyoneOf`); only `castOf` (those met through
   events) is counted against `maxActivePeople` and retired. The test tool never deletes a
-  townsperson. Tests in `events.test.ts` and `townService.test.ts` changed to match.
+  townsperson. Tests in `events.test.ts` and `townService.test.ts` changed to match. Commit `0a3bd36`, unreviewed.
 
 ### A3 · Backend · done, unreviewed
 - **What:** players saved before the town get the Market Stall, whether or not they bought from
@@ -679,7 +679,7 @@ Add a line: ticket id, your session name, the question. Answers are written bene
   `player_stats.stall_owed` and marks every player who owns no plot; `standingBuildings` grants
   the stall (tier with every shelf) once and clears it. Players made after this start at 0.
   Backed up as `var/game.before-stall-2026-10-15.db`; the migration runs on the real save at the
-  next server start. Tested on a temp database made to look pre-town.
+  next server start. Tested on a temp database made to look pre-town. Commit `0a3bd36`, unreviewed.
 
 ### A4 · Rules, Backend, Page · Rules and Backend done, Page open
 - **What:** a per-player learn price. Rules adds `learnPrice` to the spell view and a pure
@@ -690,7 +690,7 @@ Add a line: ticket id, your session name, the question. Answers are written bene
   `learnPrice` on every spell for the player (new `learnShare` dep, wired in `main.ts` and in
   `tests/helpers.ts` from `discountShare(standingBuildings(...), "learn-discount")`), and `learn`
   charges `spell.learnPrice`, so the shown and charged price are one value. `tests/townService`
-  holds a test that they agree. Page: read `entry.learnPrice`, fall back to `learnCost`. Rules part done 2026-10-15 by infinite-spell-craft-90 (778 tests, typecheck pass).
+  holds a test that they agree. Page: read `entry.learnPrice`, fall back to `learnCost`. Commit `0a3bd36`, unreviewed. Rules part done 2026-10-15 by infinite-spell-craft-90 (778 tests, typecheck pass).
   - **Landed:** `GameEntry.learnPrice?: number` in `src/shared/schema.ts`; `discountShare(standing,
     "learn-discount" | "shop-discount")` and `learnPrice(baseCost, share)` in `src/shared/town.ts`
     (round, at least 1 gold, 0 stays 0). `shop.ts` sums the shop discount itself, and
@@ -700,13 +700,14 @@ Add a line: ticket id, your session name, the question. Answers are written bene
     so what is shown is what is taken. Test that the two agree.
   - **Page (A5):** show `learnPrice ?? learnCost` in `web/src/spells.ts`.
 
-### A5 · Page · claimed by infinite-spell-craft-ae (Front End Bot)
+### A5 · Page · done, unreviewed
 - **What:** show the first plot's gate (`no-job`) and its price; show the learn price once A4
   lands; and fix the turn-in-early warning, which says the shift is lost when it stays open
   until night.
-- **Notes:** (1) done, uncommitted: the street says the first plot waits on a first job and what
-  it costs, and the button is off until a job is taken (`plotNeedsJob`). (3) needed no change:
-  "Call it a day" already says nothing of orders, and a test holds that. (2) waits on A4.
+- **Notes:** committed `808813e` by infinite-spell-craft-ae. The street says the first plot waits on a first job
+  and what it costs, with the button off until a job is taken (`plotNeedsJob`). The spellbook
+  shows `learnPrice` (falling back to `learnCost`). The turn-in-early copy needed no change:
+  "Call it a day" says nothing of orders, and a test holds that.
 
 ## Log
 
