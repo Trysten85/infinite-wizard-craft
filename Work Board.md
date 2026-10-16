@@ -717,6 +717,15 @@ Add a line: ticket id, your session name, the question. Answers are written bene
 
 ## Log
 
+- 2026-10-15: infinite-spell-craft-05 (Backend) added a model order writer
+  (`src/server/shifts/writer.ts`, `service.ts` `prepare`/`idle`, `store.listDoneShiftTexts`).
+  Orders were one template over four subjects, drawn with replacement, so boards repeated.
+  Now: no repeated subject on a board, and model text checked against the board and the last six
+  done orders. Not committed. **For Rules:** each job has only 4 `subjects` in
+  `data/job-skins.json` (schema minimum 3); the writer takes them as seeds and range, so more
+  subjects per job (8 to 12) would help. The plain template `orderText` is Rules' file and still
+  says "It calls for" every time; it is only the fallback now.
+
 - 2026-10-15: Trysten installed RTK and hooked it into Claude Code globally. Command output is
   now condensed; see the RTK rule in `CLAUDE.md` and report edge cases to Trysten.
 - 2026-10-12: design kept the Rules lane's discovery-gold shares and added one rule: the extra

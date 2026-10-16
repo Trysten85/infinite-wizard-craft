@@ -269,8 +269,15 @@ Saving shifts and serving them to the page is the shift service's job, described
   Master at 20. A build score is not asked for yet (`score: null`).
 - **Timing**: one shift a day, open from noon until night (`shiftOpen` in `src/shared/day.ts`).
   A shift not worked is not saved up.
-- Order and result text is plain for now, from `data/shift-text.json`. Every number is under
-  `shifts` in `config/balance.json`.
+- Result text is plain, from `data/shift-text.json`. Every number is under `shifts` in
+  `config/balance.json`.
+- Order text is written by the model (`src/server/shifts/writer.ts`), given the tags code chose
+  and a spread of example shapes, and held against the orders on the board and the last six
+  finished: it is rerolled if it opens like another, repeats most of its words, leaves out a
+  tag's words, or uses "calls for". The board is written ahead in the background (`prepare`, called
+  from the player and shift routes); `GET .../shift` waits up to 8 seconds for it. An order the
+  model cannot write keeps the plain template, so the board is always full. A plain board never
+  repeats a subject while an unused one is left.
 
 ### The day (rules)
 

@@ -1,0 +1,96 @@
+import { describe, expect, it } from "vitest";
+import { createFakeClient } from "../src/server/llm/fake";
+import { createShifts } from "../src/server/shifts/service";
+import { checkOrder, createModelOrderWriter, tooAlike, type OrderBrief, type OrderWriter } from "../src/server/shifts/writer";
+import { data, newGame, NOON } from "./helpers";
+
+const brief: OrderBrief = {
+  job: "Innkeeper",
+  flavor: "Guests, rooms, meals",
+  subject: "A quiet corner for two people who are not speaking",
+  tags: [
+    { tag: "liquid", words: "something wet" },
+    { tag: "brewing", words: "brewing" },
+  ],
+  subjects: ["A quiet corner for two people who are not speaking"],
+  others: ["A quiet corner for two people who are not speaking. It calls for energy and brewing."],
+};
+
+describe("orders that read alike", () => {
+  it("are caught by their opening and by what they say", () => {
+    const other = "A quiet corner for two people who are not speaking.";
+    expect(tooAlike("A quiet corner for someone who snores.", [other])).toMatch(/opens the same way/);
+    expect(tooAlike("Two people who are not speaking need a corner, quiet.", [other])).toMatch(/much the same/);
+    expect(tooAlike("The cellar door sticks, and the cask of something wet is behind it.", [other])).toBeNull();
+  });
+
+  it("are refused by the writer's check, which also wants every tag's words and no template phrase", () => {
+    const ok = "The cellar door sticks, and the barrel of something wet is behind it, ready for brewing.";
+    expect(checkOrder(brief, ok)).toBeNull();
+    expect(checkOrder(brief, "The cellar door sticks and a barrel waits behind it, ready for brewing.")).toMatch(/something wet/);
+    expect(checkOrder(brief, "Supper for a driver. It calls for something wet and brewing.")).toMatch(/calls for/);
+    expect(checkOrder(brief, "A quiet corner for a nervous poet, with something wet and brewing.")).toMatch(/opens the same way/);
+  });
+
+  it("make the model write again until one is different", async () => {
+    const same = "A quiet corner for two people with something wet and brewing.";
+    const fresh = "The cellar door sticks, and the barrel of something wet is behind it, ready for brewing.";
+    const client = createFakeClient([JSON.stringify({ text: same }), JSON.stringify({ text: fresh })]);
+    const writer = createModelOrderWriter({ client, log: () => {}, voice: "" });
+    expect(await writer.write(brief)).toBe(fresh);
+    expect(client.requests).toHaveLength(2);
+    expect(client.requests[1]!.prompt).toContain("rejected");
+    // The writer is shown a spread of shapes and the orders it must not repeat.
+    expect(client.requests[0]!.system).toContain("shapes orders can take");
+    expect(client.requests[0]!.prompt).toContain("It calls for energy and brewing");
+  });
+});
+
+describe("a board written ahead", () => {
+  function working() {
+    const game = newGame();
+    for (const id of ["person", "spirits", "innkeeper"]) game.store.addDiscovery("ann", id);
+    game.progress.chooseJob("ann", "innkeeper");
+    game.setDay("ann", { sun: NOON });
+    return game;
+  }
+  const withWriter = (game: ReturnType<typeof newGame>, writer: OrderWriter) =>
+    createShifts({ data, store: game.store, progress: game.progress, day: game.day, listDiscovered: game.combiner.listDiscovered, writer });
+
+  it("holds the model's words, each written against the orders before it", async () => {
+    const game = working();
+    const seen: string[][] = [];
+    let n = 0;
+    const writer: OrderWriter = { write: async (b) => (seen.push([...b.others]), `Order number ${n++} wants ${b.tags.map((t) => t.words).join(" and ")}.`) };
+    const shifts = withWriter(game, writer);
+    shifts.prepare("ann");
+    await shifts.idle("ann");
+    const board = shifts.board("ann");
+    expect(board.orders.map((order) => order.text)).toEqual([0, 1, 2].map((i) => expect.stringContaining(`Order number ${i} wants`)));
+    // Each was written knowing the ones already on the board.
+    expect(seen.map((others) => others.length)).toEqual([0, 1, 2]);
+  });
+
+  it("keeps the plain template when the model cannot write one", async () => {
+    const game = working();
+    const shifts = withWriter(game, { write: async () => { throw new Error("no model"); } });
+    shifts.prepare("ann");
+    await shifts.idle("ann");
+    const board = shifts.board("ann");
+    expect(board.orders).toHaveLength(data.balance.shifts.board);
+    expect(board.orders.every((order) => /It calls for/.test(order.text))).toBe(true);
+  });
+});
+
+describe("the plain board", () => {
+  it("never says one subject twice", () => {
+    for (let seed = 1; seed <= 30; seed++) {
+      const game = newGame(seed);
+      for (const id of ["person", "spirits", "innkeeper"]) game.store.addDiscovery("ann", id);
+      game.progress.chooseJob("ann", "innkeeper");
+      game.setDay("ann", { sun: NOON });
+      const openers = game.shifts.board("ann").orders.map((order) => order.text.split(". It calls for")[0]);
+      expect(new Set(openers).size).toBe(openers.length);
+    }
+  });
+});

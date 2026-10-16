@@ -17,6 +17,7 @@ import { createModelTurns } from "./llm/turns";
 import { createProgress } from "./progress";
 import { RECIPE_KEY_FILE, renderRecipeKey } from "./recipeKey";
 import { createShifts } from "./shifts/service";
+import { createModelOrderWriter } from "./shifts/writer";
 import { createShop } from "./shop";
 import { openStore } from "./store";
 import { discountShare } from "../shared/town";
@@ -69,7 +70,9 @@ const town = createTown({ data, store, progress, day, listDiscovered: combiner.l
 const shop = createShop({ data, store, progress, listDiscovered: combiner.listDiscovered });
 const writer = createModelEventWriter({ client: turns.inBackground(createModelClient(model, "events")), log: store.logModelCall, voice, blocklist });
 const events = createEvents({ data, store, progress, day, listDiscovered: combiner.listDiscovered, writer, writeAhead: true });
-const shifts = createShifts({ data, store, progress, day, listDiscovered: combiner.listDiscovered });
+// Orders are put into words by the model, written ahead and checked against the board.
+const orderWriter = createModelOrderWriter({ client: turns.inBackground(createModelClient(model, "events")), log: store.logModelCall, voice, blocklist });
+const shifts = createShifts({ data, store, progress, day, listDiscovered: combiner.listDiscovered, writer: orderWriter });
 const app = createApp(combiner, { progress, shop, day, town, events, shifts });
 
 serve({ fetch: app.fetch, port }, () => {

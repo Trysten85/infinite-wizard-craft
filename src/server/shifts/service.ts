@@ -7,6 +7,7 @@ import type { GameData } from "../gameData";
 import type { ProgressService } from "../progress";
 import type { Store, StoredShiftOrder } from "../store";
 import { chosenFrom, optionsFor, resultLine, stockOrder } from "./orders";
+import type { OrderWriter } from "./writer";
 
 export type ShiftService = ReturnType<typeof createShifts>;
 
@@ -20,10 +21,17 @@ export function createShifts(deps: {
   progress: ProgressService;
   day: DayService;
   listDiscovered: (player: string) => GameEntry[];
+  // Writes the words of an order. With none, orders read from the plain template. The board is
+  // written ahead, out of sight, so a player never waits on the model.
+  writer?: OrderWriter;
   // A number from 0 up to, not including, 1. Tests pass their own so shifts are repeatable.
   random?: () => number;
 }) {
-  const { data, store, progress, day, listDiscovered, random = Math.random } = deps;
+  const { data, store, progress, day, listDiscovered, writer, random = Math.random } = deps;
+  // How many finished orders a new one is held against, so a board is not a repeat of last week's.
+  const RECENT = 6;
+  // Players whose board is being written out of sight.
+  const filling = new Map<string, Promise<void>>();
   const rules = data.balance.shifts;
 
   const toOrder = (order: StoredShiftOrder): ShiftOrder => ({ id: order.id, text: order.text, tags: order.tags, tier: order.tier });
@@ -38,13 +46,75 @@ export function createShifts(deps: {
     return { job: standing.job, skin, level: standing.level, rank, options };
   }
 
-  // The open orders for a job, topped up to a full board. An open order is never dropped.
-  function ordersFor(player: string, at: NonNullable<ReturnType<typeof situation>>): StoredShiftOrder[] {
+  type Situation = NonNullable<ReturnType<typeof situation>>;
+
+  // The orders a new one must not read like: the board as it stands, and the last few finished.
+  const heldAgainst = (player: string, at: Situation, extra: string[] = []) => [
+    ...store.listOpenShiftOrders(player, at.job.id).map((order) => order.text),
+    ...extra,
+    ...store.listDoneShiftTexts(player, at.job.id, RECENT),
+  ];
+
+  // A stock order whose subject is not one already in play, so a board never says the same thing
+  // twice. When every subject is in play, any may be used.
+  function draftOrder(player: string, at: Situation, extra: string[] = []) {
+    const inPlay = heldAgainst(player, at, extra);
+    const fresh = at.skin.subjects.filter((subject) => !inPlay.some((text) => text.startsWith(subject)));
+    const skin = fresh.length > 0 ? { ...at.skin, subjects: fresh } : at.skin;
+    return stockOrder(data, skin, at.level, at.rank.id, random);
+  }
+
+  // The open orders for a job, topped up to a full board with plain-template orders. An open
+  // order is never dropped. A board written ahead is already full, so this is the fallback.
+  function ordersFor(player: string, at: Situation): StoredShiftOrder[] {
     for (let open = store.listOpenShiftOrders(player, at.job.id).length; open < rules.board; open++) {
-      const draft = stockOrder(data, at.skin, at.level, at.rank.id, random);
-      store.addShiftOrder(player, { job: at.job.id, ...draft });
+      store.addShiftOrder(player, { job: at.job.id, ...draftOrder(player, at) });
     }
     return store.listOpenShiftOrders(player, at.job.id);
+  }
+
+  // Tops the board up with orders the model has put into words. An order the model cannot write
+  // within the rules keeps the plain template, so the board is always filled.
+  async function writeBoard(player: string): Promise<void> {
+    for (;;) {
+      const at = situation(player);
+      if (!at || !writer || store.listOpenShiftOrders(player, at.job.id).length >= rules.board) return;
+      const draft = draftOrder(player, at);
+      let text = draft.text;
+      try {
+        text = await writer.write({
+          job: at.job.name,
+          flavor: at.skin.flavor,
+          subject: draft.text.split(/\.\s/)[0]!,
+          tags: draft.tags.map((tag) => ({ tag, words: data.shiftText.tagWords[tag] ?? tag })),
+          subjects: at.skin.subjects,
+          others: heldAgainst(player, at),
+        });
+      } catch (err) {
+        console.error(`Could not write an order for ${player}:`, err instanceof Error ? err.message : err);
+      }
+      // The board may have been filled while the model was working.
+      const now = situation(player);
+      if (!now || store.listOpenShiftOrders(player, now.job.id).length >= rules.board) return;
+      store.addShiftOrder(player, { job: now.job.id, tags: draft.tags, tier: draft.tier, text });
+    }
+  }
+
+  // Starts writing the player's board in the background, if a job is taken up and it is short.
+  // Call it after anything the player does.
+  function prepare(player: string): void {
+    if (!writer || filling.has(player)) return;
+    const at = situation(player);
+    if (!at || store.listOpenShiftOrders(player, at.job.id).length >= rules.board) return;
+    const job = writeBoard(player)
+      .catch((err) => console.error(`Could not write orders for ${player}:`, err instanceof Error ? err.message : err))
+      .finally(() => filling.delete(player));
+    filling.set(player, job);
+  }
+
+  // Resolves once nothing is being written out of sight for the player.
+  async function idle(player: string): Promise<void> {
+    while (filling.has(player)) await filling.get(player);
   }
 
   function board(player: string): ShiftBoard {
@@ -98,5 +168,5 @@ export function createShifts(deps: {
     return { result: { order: toOrder(order), quality: { id: quality.id, name: quality.name }, line, ...pay, rankUp }, rewards, ...day.after(player, "shift") };
   }
 
-  return { board, work };
+  return { board, work, prepare, idle };
 }

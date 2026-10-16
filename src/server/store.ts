@@ -689,6 +689,14 @@ export function openStore(path: string) {
         }));
     },
 
+    // The texts of the last few orders a player finished for one job, newest first.
+    listDoneShiftTexts(player: string, job: string, limit: number): string[] {
+      return db
+        .prepare("SELECT text FROM shift_orders WHERE player = ? AND job = ? AND state = 'done' ORDER BY id DESC LIMIT ?")
+        .all(player, job, limit)
+        .map((row) => row.text as string);
+    },
+
     finishShiftOrder(id: number): void {
       db.prepare("UPDATE shift_orders SET state = 'done' WHERE id = ?").run(id);
     },

@@ -67,6 +67,7 @@ export function createApp(
     const progress = services?.progress.getProgress(request.player);
     // Loading the page also picks up an event that was left half-written.
     services?.events?.prepare(request.player);
+    services?.shifts?.prepare(request.player);
     return c.json({ entries: combiner.listDiscovered(request.player), ...(progress && { progress, ...SAME_DAY }) });
   });
 
@@ -229,7 +230,10 @@ export function createApp(
       // The order board for the job the player has taken up, and what they may fill an order with.
       app.get("/api/players/:player/shift", async (c) => {
         const request = await read(c);
-        return request ? c.json(shifts.board(request.player)) : invalid(c);
+        if (!request) return invalid(c);
+        // A board being written ahead is given a moment to finish, so its words are the model's.
+        await Promise.race([shifts.idle(request.player), new Promise((resolve) => setTimeout(resolve, 8000))]);
+        return c.json(shifts.board(request.player));
       });
 
       // Works one order from the board with the things chosen.
@@ -239,6 +243,7 @@ export function createApp(
         try {
           const worked = shifts.work(request.player, request.body);
           events?.prepare(request.player);
+          shifts.prepare(request.player);
           return c.json({ ...worked, progress: progress.getProgress(request.player), shift: shifts.board(request.player) });
         } catch (err) {
           return refuse(c, err);
