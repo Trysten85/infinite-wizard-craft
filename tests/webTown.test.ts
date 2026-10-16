@@ -22,6 +22,9 @@ const farm: BuildingView = {
   quality: "meh",
   takings: 5,
   wants: ["plant", "animal", "liquid"],
+  lifts: 0,
+  rankBonus: 0,
+  enchantBonus: 0,
   stock: [],
   enchantment: null,
   next: {
@@ -217,15 +220,20 @@ const known = new Map([hay, milk, rock].map((entry) => [entry.id, entry]));
 
 describe("stockChange", () => {
   it("calls a thing that covers wants on a bare shelf a better stock, and names what it covers", () => {
-    expect(stockChange(shelved(null, null), known, hay, 0, shifts)).toEqual({ direction: "better", covers: ["plant", "animal"] });
+    expect(stockChange(shelved(null, null), known, hay, 0, shifts)).toEqual({
+      direction: "better",
+      covers: ["plant", "animal"],
+      from: "meh",
+      to: "good",
+    });
   });
 
   it("says a thing the building does not want makes no difference", () => {
-    expect(stockChange(shelved(null, null), known, rock, 0, shifts)).toEqual({ direction: "same", covers: [] });
+    expect(stockChange(shelved(null, null), known, rock, 0, shifts)).toMatchObject({ direction: "same", covers: [] });
   });
 
   it("calls swapping a good thing for a useless one a worse stock", () => {
-    expect(stockChange(shelved("hay", null), known, rock, 0, shifts)).toEqual({ direction: "worse", covers: [] });
+    expect(stockChange(shelved("hay", null), known, rock, 0, shifts)).toMatchObject({ direction: "worse", from: "good", to: "meh" });
   });
 
   it("does not credit a want something else on the shelves already covers", () => {
@@ -233,17 +241,42 @@ describe("stockChange", () => {
   });
 
   it("moves a thing already on the building, so it is counted once", () => {
-    const view = shelved("hay", null);
-    expect(stockChange(view, known, hay, 1, shifts)).toEqual({ direction: "same", covers: ["plant", "animal"] });
+    expect(stockChange(shelved("hay", null), known, hay, 1, shifts)).toMatchObject({ direction: "same", covers: ["plant", "animal"] });
+  });
+});
+
+describe("stockChange with the building's lifts", () => {
+  it("names both qualities, counting the lifts already applied", () => {
+    // hay covers 2 of 3 wants: Good at no lift, and one applied step makes it Great.
+    const lifted = { ...shelved(null, null), lifts: 1, rankBonus: 0 };
+    expect(stockChange(lifted, known, hay, 0, shifts)).toMatchObject({ direction: "better", from: "meh", to: "great" });
+    expect(stockChangeText(stockChange(lifted, known, hay, 0, shifts))).toBe("Better: Meh to Great. Covers plant and animal.");
+  });
+
+  it("lifts a thing that covers nothing from Meh, but never past Perfect", () => {
+    const lifted = { ...shelved(null, null), lifts: 2 };
+    expect(stockChange(lifted, known, rock, 0, shifts)).toMatchObject({ from: "meh", to: "great", direction: "better" });
+    expect(stockChange({ ...lifted, lifts: 9 }, known, rock, 0, shifts)).toMatchObject({ to: "perfect" });
+  });
+
+  it("counts the rank bonus", () => {
+    // 1 of 3 wants is Meh; with a rank bonus of 0.3 the share is enough for Good.
+    const ranked = { ...shelved(null, null), lifts: 0, rankBonus: 0.3 };
+    expect(stockChange(ranked, known, milk, 0, shifts)).toMatchObject({ from: "meh", to: "good" });
   });
 });
 
 describe("stockChangeText", () => {
-  it("says the direction and what it would cover", () => {
-    expect(stockChangeText({ direction: "better", covers: ["plant", "animal"] })).toBe("A better stock. Covers plant and animal.");
-    expect(stockChangeText({ direction: "worse", covers: [] })).toBe("A worse stock.");
-    expect(stockChangeText({ direction: "same", covers: [] })).toBe("No difference to its stock.");
-    expect(stockChangeText({ direction: "same", covers: ["liquid"] })).toBe("Covers liquid.");
+  it("says which qualities it moves between, and what it would cover", () => {
+    expect(stockChangeText({ direction: "better", covers: ["plant", "animal"], from: "meh", to: "good" })).toBe(
+      "Better: Meh to Good. Covers plant and animal.",
+    );
+    expect(stockChangeText({ direction: "worse", covers: [], from: "great", to: "good" })).toBe("Worse: Great to Good.");
+  });
+
+  it("says when the quality stays put", () => {
+    expect(stockChangeText({ direction: "same", covers: [], from: "good", to: "good" })).toBe("No difference to its stock.");
+    expect(stockChangeText({ direction: "same", covers: ["liquid"], from: "good", to: "good" })).toBe("Covers liquid.");
   });
 });
 

@@ -1,4 +1,5 @@
-import type { Building, BuildingView, DayView, GameEntry, NeedView, ShiftRules, TownView } from "../../src/shared/schema";
+import type { Building, BuildingView, DayView, GameEntry, NeedView, QualityId, ShiftRules, TownView } from "../../src/shared/schema";
+import { qualityName } from "./day";
 import { QUALITIES } from "../../src/shared/schema";
 import { buildingQuality, isStockable, type Stocked } from "../../src/shared/town";
 
@@ -98,7 +99,8 @@ export function plotText(plot: Plot, state: PlotState, town: TownView, gold: num
 // What putting a discovery on a shelf would do to a building, said in the order board's manner.
 // The page does not know the lifts or the rank bonus a building has tonight (they are the
 // server's), so both stocks are read at no lift. That is enough to say which way it would go.
-export type StockChange = { direction: "better" | "worse" | "same"; covers: string[] };
+// `from` and `to` are the building's quality before and after, with the lifts and bonuses it has tonight.
+export type StockChange = { direction: "better" | "worse" | "same"; covers: string[]; from: QualityId; to: QualityId };
 
 export function stockChange(
   building: BuildingView,
@@ -115,21 +117,32 @@ export function stockChange(
     .filter((entry): entry is GameEntry => !!entry);
   // A quality is only read from a building's wants, so that is all the stand-in needs.
   const reads = { wants: building.wants } as Building;
-  const rate = (stock: Stocked[]): number => QUALITIES.indexOf(buildingQuality(reads, building.tier, stock, {}, shifts));
-  const before = rate(now);
-  const next = rate(after);
+  // `lifts` is what is already applied tonight, so it goes in whole and no second hand is added.
+  const extra = {
+    rankBonus: building.rankBonus,
+    enchantBonus: building.enchantBonus,
+    lifts: { perks: building.lifts, hand: 0, shift: 0 },
+  };
+  const rate = (stock: Stocked[]): QualityId => buildingQuality(reads, building.tier, stock, extra, shifts);
+  const from = rate(now);
+  const to = rate(after);
+  const before = QUALITIES.indexOf(from);
+  const next = QUALITIES.indexOf(to);
   const others = new Set(after.filter((entry) => entry.id !== carried.id).flatMap((entry) => entry.tags));
   return {
     direction: next > before ? "better" : next < before ? "worse" : "same",
     covers: building.wants.filter((want) => carried.tags.includes(want) && !others.has(want)),
+    from,
+    to,
   };
 }
 
 // What a hovering discovery says about itself, over the shelf it is held above.
 export function stockChangeText(change: StockChange): string {
   const covers = change.covers.length > 0 ? ` Covers ${listed(change.covers)}.` : "";
-  if (change.direction === "better") return `A better stock.${covers}`;
-  if (change.direction === "worse") return `A worse stock.${covers}`;
+  if (change.from !== change.to) {
+    return `${change.direction === "better" ? "Better" : "Worse"}: ${qualityName(change.from)} to ${qualityName(change.to)}.${covers}`;
+  }
   return change.covers.length > 0 ? `Covers ${listed(change.covers)}.` : "No difference to its stock.";
 }
 
