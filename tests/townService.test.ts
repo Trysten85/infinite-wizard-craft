@@ -44,7 +44,8 @@ describe("townsfolk", () => {
     expect(game.town.view("ann")).toMatchObject({ townsfolk: [], plans: [] });
     give(game, ["blacksmith"]);
     const town = game.town.view("ann");
-    expect(town.townsfolk).toEqual([{ person: expect.any(Number), job: "blacksmith", name: "The Blacksmith", housed: false, fondness: 0, regular: false }]);
+    const first = data.townsfolk.people[0]!;
+    expect(town.townsfolk).toEqual([{ person: expect.any(Number), job: "blacksmith", name: first.name, housed: false, fondness: 0, regular: false }]);
     expect(town.plans).toHaveLength(1);
     expect(town.plans[0]).toMatchObject({ building: "smithy", name: "Smithy", price: building("smithy").price, candles: costs.build, ready: false });
     expect(town.plans[0]!.needs).toEqual([{ label: "Forge", met: false }, { label: "Iron", met: false }]);
@@ -52,7 +53,7 @@ describe("townsfolk", () => {
     // They arrive once, however often the street is looked at.
     game.town.view("ann");
     expect(game.store.listPeople("ann")).toHaveLength(1);
-    expect(game.store.listPeople("ann")[0]).toMatchObject({ job: "blacksmith", role: "Blacksmith", firstDay: 1 });
+    expect(game.store.listPeople("ann")[0]).toMatchObject({ job: "blacksmith", role: "Blacksmith", firstDay: 1, pronoun: first.pronoun });
   });
 
   it("arrive on the day the job was made, through the combine route", async () => {
@@ -85,7 +86,7 @@ describe("townsfolk", () => {
     await expect(game.events.test("ann", "repeat")).rejects.toThrow(/has not met anyone/);
     await game.events.test("ann", "small_thief");
     expect(briefs[0]!.person.returning).toBe(false);
-    expect(briefs[0]!.takenNames).toContain("The Blacksmith");
+    expect(briefs[0]!.takenNames).toContain(data.townsfolk.people[0]!.name);
     // A street full of townsfolk does not push the people the player has met out of the story.
     const heart = (await game.events.respond("ann", "fair")).next!;
     await game.events.respond("ann", heart.responses[0]!.type);

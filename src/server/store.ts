@@ -16,7 +16,7 @@ export type ModelCall = {
 
 // "perk" is the extra a building pays for a discovery of its kind. "plot" and "building" are
 // gold spent on the town, and "takings" what the town pays back at night.
-export type LedgerReason = "quest" | "discovery" | "learn" | "shop" | "event" | "request" | "gift" | "shift" | "perk" | "plot" | "building" | "takings";
+export type LedgerReason = "quest" | "discovery" | "learn" | "shop" | "event" | "request" | "gift" | "shift" | "perk" | "plot" | "building" | "takings" | "meal";
 
 // `bonusXp` makes up the difference when a change to the game's numbers would otherwise have
 // taken away a level the player had already reached.
@@ -36,6 +36,15 @@ export type SavedDay = {
   // that night.
   shiftLiftDay: number;
 };
+
+// A spell cast on a building. `daysLeft` counts the nights it still has, tonight included.
+export type StoredEnchantment = { plot: number; spellId: string; spellName: string; tier: number; daysLeft: number };
+
+// A meal eaten at the Tavern: tomorrow's discoveries pay `lift` more.
+export type StoredMeal = { day: number; lift: number };
+
+// A one-night happening a day carried, if any, and whether the player took part.
+export type StoredTonight = { day: number; happening: string | null; taken: boolean };
 
 // One thing on one shelf of a building. A discovery is on one shelf at a time.
 export type StoredStock = { plot: number; slot: number; entryId: string };
@@ -266,6 +275,39 @@ export function openStore(path: string) {
       day INTEGER NOT NULL,
       PRIMARY KEY (player, plot, day)
     );
+    CREATE TABLE IF NOT EXISTS town_enchants (
+      player TEXT NOT NULL,
+      plot INTEGER NOT NULL,
+      spell_id TEXT NOT NULL,
+      spell_name TEXT NOT NULL,
+      tier INTEGER NOT NULL,
+      days_left INTEGER NOT NULL,
+      PRIMARY KEY (player, plot)
+    );
+    CREATE TABLE IF NOT EXISTS town_meals (
+      player TEXT NOT NULL,
+      day INTEGER NOT NULL,
+      lift REAL NOT NULL,
+      PRIMARY KEY (player, day)
+    );
+    CREATE TABLE IF NOT EXISTS town_calls (
+      player TEXT NOT NULL,
+      person_id INTEGER NOT NULL,
+      day INTEGER NOT NULL,
+      PRIMARY KEY (player, person_id, day)
+    );
+    CREATE TABLE IF NOT EXISTS town_regulars (
+      player TEXT NOT NULL,
+      person_id INTEGER NOT NULL,
+      PRIMARY KEY (player, person_id)
+    );
+    CREATE TABLE IF NOT EXISTS town_tonight (
+      player TEXT NOT NULL,
+      day INTEGER NOT NULL,
+      happening TEXT,
+      taken INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY (player, day)
+    );
     CREATE TABLE IF NOT EXISTS model_calls (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -318,6 +360,7 @@ export function openStore(path: string) {
     });
   }
 
+  if (!statColumns.includes("enchantments")) db.exec("ALTER TABLE player_stats ADD COLUMN enchantments INTEGER NOT NULL DEFAULT 0");
   if (!statColumns.includes("evenings")) db.exec("ALTER TABLE player_stats ADD COLUMN evenings INTEGER NOT NULL DEFAULT 0");
   if (!statColumns.includes("shift_lift_day")) db.exec("ALTER TABLE player_stats ADD COLUMN shift_lift_day INTEGER NOT NULL DEFAULT 0");
 
@@ -832,6 +875,96 @@ export function openStore(path: string) {
         db.prepare("DELETE FROM town_stock WHERE player = ? AND entry_id = ?").run(player, entryId);
         db.prepare("INSERT INTO town_stock (player, plot, slot, entry_id) VALUES (?, ?, ?, ?)").run(player, plot, slot, entryId);
       });
+    },
+
+    // Enchantments standing on the player's buildings.
+    listEnchantments(player: string): StoredEnchantment[] {
+      return db
+        .prepare("SELECT plot, spell_id, spell_name, tier, days_left FROM town_enchants WHERE player = ? ORDER BY plot")
+        .all(player)
+        .map((row) => ({ plot: row.plot as number, spellId: row.spell_id as string, spellName: row.spell_name as string, tier: row.tier as number, daysLeft: row.days_left as number }));
+    },
+
+    // Casts a spell on a building, replacing any enchantment already there, and counts the cast.
+    setEnchantment(player: string, enchantment: StoredEnchantment): void {
+      transaction(() => {
+        db.prepare("INSERT OR REPLACE INTO town_enchants (player, plot, spell_id, spell_name, tier, days_left) VALUES (?, ?, ?, ?, ?, ?)").run(
+          player,
+          enchantment.plot,
+          enchantment.spellId,
+          enchantment.spellName,
+          enchantment.tier,
+          enchantment.daysLeft,
+        );
+        db.prepare("INSERT OR IGNORE INTO player_stats (player) VALUES (?)").run(player);
+        db.prepare("UPDATE player_stats SET enchantments = enchantments + 1 WHERE player = ?").run(player);
+      });
+    },
+
+    // Takes a night off an enchantment, or removes it when none is left.
+    setEnchantmentDays(player: string, plot: number, daysLeft: number): void {
+      if (daysLeft <= 0) db.prepare("DELETE FROM town_enchants WHERE player = ? AND plot = ?").run(player, plot);
+      else db.prepare("UPDATE town_enchants SET days_left = ? WHERE player = ? AND plot = ?").run(daysLeft, player, plot);
+    },
+
+    // Spells cast on buildings, ever, for the town quests.
+    countEnchantments(player: string): number {
+      const row = db.prepare("SELECT enchantments FROM player_stats WHERE player = ?").get(player);
+      return (row?.enchantments as number | undefined) ?? 0;
+    },
+
+    // The meal eaten on a day, if any.
+    getMeal(player: string, day: number): StoredMeal | undefined {
+      const row = db.prepare("SELECT day, lift FROM town_meals WHERE player = ? AND day = ?").get(player, day);
+      return row ? { day: row.day as number, lift: row.lift as number } : undefined;
+    },
+
+    addMeal(player: string, day: number, lift: number): boolean {
+      return db.prepare("INSERT OR IGNORE INTO town_meals (player, day, lift) VALUES (?, ?, ?)").run(player, day, lift).changes === 1;
+    },
+
+    // Whether the player has called on this person on this day, and notes that they have.
+    hasCall(player: string, personId: number, day: number): boolean {
+      return db.prepare("SELECT 1 FROM town_calls WHERE player = ? AND person_id = ? AND day = ?").get(player, personId, day) !== undefined;
+    },
+
+    addCall(player: string, personId: number, day: number): void {
+      db.prepare("INSERT OR IGNORE INTO town_calls (player, person_id, day) VALUES (?, ?, ?)").run(player, personId, day);
+    },
+
+    // How many calls the player has made on a day.
+    countCalls(player: string, day: number): number {
+      const row = db.prepare("SELECT COUNT(*) AS n FROM town_calls WHERE player = ? AND day = ?").get(player, day);
+      return row!.n as number;
+    },
+
+    // People who have become regulars. A regular stays one.
+    listRegulars(player: string): number[] {
+      return db.prepare("SELECT person_id FROM town_regulars WHERE player = ?").all(player).map((row) => row.person_id as number);
+    },
+
+    addRegular(player: string, personId: number): void {
+      db.prepare("INSERT OR IGNORE INTO town_regulars (player, person_id) VALUES (?, ?)").run(player, personId);
+    },
+
+    // What a day carries, if it has been looked at: a happening or none.
+    getTonight(player: string, day: number): StoredTonight | undefined {
+      const row = db.prepare("SELECT day, happening, taken FROM town_tonight WHERE player = ? AND day = ?").get(player, day);
+      return row ? { day: row.day as number, happening: (row.happening as string | null) ?? null, taken: row.taken === 1 } : undefined;
+    },
+
+    // Notes what a day carries. A day is looked at once and keeps its answer.
+    setTonight(player: string, day: number, happening: string | null): void {
+      db.prepare("INSERT OR IGNORE INTO town_tonight (player, day, happening, taken) VALUES (?, ?, ?, 0)").run(player, day, happening);
+    },
+
+    takeTonight(player: string, day: number): void {
+      db.prepare("UPDATE town_tonight SET taken = 1 WHERE player = ? AND day = ?").run(player, day);
+    },
+
+    // Gives a townsperson a name of their own, once, in place of their trade.
+    renamePerson(id: number, name: string, pronoun: Pronoun | null): void {
+      db.prepare("UPDATE people SET name = ?, pronoun = ? WHERE id = ?").run(name, pronoun, id);
     },
 
     // A hand lent at a building on a day. One a building a day.

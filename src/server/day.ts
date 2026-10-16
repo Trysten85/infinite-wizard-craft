@@ -4,7 +4,7 @@ import { RuleError } from "./combiner";
 import type { GameData } from "./gameData";
 import type { ProgressService } from "./progress";
 import type { Store } from "./store";
-import { extraCandles, nightlyPerks, standingBuildings, takingsOf, townCheer } from "./town";
+import { agedEnchantments, extraCandles, nightlyPerks, standingBuildings, takingsOf, tonightOf, townState } from "./town";
 
 export type DayService = ReturnType<typeof createDay>;
 
@@ -37,14 +37,20 @@ export function createDay(deps: {
     // Each building standing pays for the night, once, through the gold ledger, at the quality it
     // has tonight and raised by the town's Cheer. What the perks bring is added as well.
     const built = standingBuildings(data, store, player);
-    const takings = takingsOf(data, built);
+    const town = townState(data, store, player, built);
+    const takings = takingsOf(data, built, town);
     for (const row of takings) if (row.gold > 0) store.addLedger(player, row.gold, "takings", `${state.number}:${row.plot}`);
-    const cheer = townCheer(data, built);
+    const cheer = town.cheer;
     const brought = nightlyPerks(data, store, player, built, state.number, random);
+    // A one-night happening the player did not take part in is gone, and the ledger says so.
+    const tonight = tonightOf(data, store, player, random);
+    const missed = tonight.happening && !tonight.taken ? `${tonight.happening.name} came and went without you.` : null;
+    // Each enchantment takes a night off, and the ledger says when one is nearly gone.
+    const faded = agedEnchantments(store, player, built);
     // Anything owed is paid as well, so that a level reached today is counted today.
     progress.settle(player);
     const level = store.getStats(player).lastLevel;
-    const lines = [pick(text.night[fell]), pick(text.morning), pick(text.shopRestocked)];
+    const lines = [pick(text.night[fell]), ...faded, pick(text.morning), pick(text.shopRestocked)];
     if (progress.getProgress(player).job) lines.push(pick(text.newOrders));
     const ledger: Ledger = {
       day: state.number,
@@ -52,7 +58,7 @@ export function createDay(deps: {
       takings,
       cheer: built.length === 0 ? null : { points: cheer.points, band: cheer.band },
       brought,
-      missed: null,
+      missed,
       deed: level > store.getDay(player).dawnLevel,
       lines,
     };

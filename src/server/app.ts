@@ -25,6 +25,8 @@ const buildBodySchema = z.object({ plot: plotSchema, building: idSchema });
 const upgradeBodySchema = z.object({ plot: plotSchema });
 const stockBodySchema = z.object({ plot: plotSchema, slot: z.number().int().min(0), entry: idSchema.nullable() });
 const handBodySchema = z.object({ plot: plotSchema });
+const callBodySchema = z.object({ person: z.number().int().min(1) });
+const enchantBodySchema = z.object({ plot: plotSchema, spell: idSchema });
 
 // What the rules refuse comes back as { error, code }. `error` is a sentence for the player.
 function refuse(c: Context, err: unknown) {
@@ -142,6 +144,55 @@ export function createApp(
         try {
           const lent = town.hand(request.player, request.body.plot);
           return c.json({ rewards: { gold: 0, quests: [] }, ...lent, progress: progress.getProgress(request.player) });
+        } catch (err) {
+          return refuse(c, err);
+        }
+      });
+
+      // Calls on a townsperson, or anyone the player has met: one candle, once a person a night.
+      app.post("/api/players/:player/town/call", async (c) => {
+        const request = await read(c, callBodySchema);
+        if (!request) return invalid(c);
+        try {
+          const called = town.call(request.player, request.body.person);
+          return c.json({ rewards: { gold: 0, quests: [] }, ...called, progress: progress.getProgress(request.player) });
+        } catch (err) {
+          return refuse(c, err);
+        }
+      });
+
+      // A meal at the Tavern: gold and a candle. Tomorrow's discoveries pay more.
+      app.post("/api/players/:player/town/meal", async (c) => {
+        const request = await read(c);
+        if (!request) return invalid(c);
+        try {
+          const ate = town.meal(request.player);
+          return c.json({ ...ate, progress: progress.getProgress(request.player) });
+        } catch (err) {
+          return refuse(c, err);
+        }
+      });
+
+      // Casts a learned spell on a building: one candle.
+      app.post("/api/players/:player/town/enchant", async (c) => {
+        const request = await read(c, enchantBodySchema);
+        if (!request) return invalid(c);
+        try {
+          const cast = town.enchant(request.player, request.body.plot, request.body.spell);
+          return c.json({ ...cast, progress: progress.getProgress(request.player) });
+        } catch (err) {
+          return refuse(c, err);
+        }
+      });
+
+      // Takes part in tonight's happening where there is something to do: the pedlar's pack, or
+      // the stargazer's hint. No candle.
+      app.post("/api/players/:player/town/tonight", async (c) => {
+        const request = await read(c);
+        if (!request) return invalid(c);
+        try {
+          const took = town.tonight(request.player);
+          return c.json({ ...took, progress: progress.getProgress(request.player) });
         } catch (err) {
           return refuse(c, err);
         }

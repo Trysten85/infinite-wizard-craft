@@ -364,6 +364,10 @@ above.
 | `POST /api/players/:player/town/upgrade` with `{ plot }` | `{ rewards, night, dusk, progress }` |
 | `POST /api/players/:player/town/stock` with `{ plot, slot, entry }` | `{ rewards, night, dusk, progress }`. `entry: null` clears the shelf |
 | `POST /api/players/:player/town/hand` with `{ plot }` | `{ rewards, night, dusk, progress }` |
+| `POST /api/players/:player/town/call` with `{ person }` | `{ line, fondness, rewards, night, dusk, progress }` |
+| `POST /api/players/:player/town/meal` (no body) | `{ lift, cost, rewards, night, dusk, progress }` |
+| `POST /api/players/:player/town/enchant` with `{ plot, spell }` | `{ days, rewards, night, dusk, progress }` |
+| `POST /api/players/:player/town/tonight` (no body) | `{ line, entry, price, rewards, night, dusk, progress }` |
 
 - **Townsfolk** arrive when their job is discovered, taken up or not, as a row among the
   player's people with `job` set. Until they are given names they go by their trade ("The
@@ -393,11 +397,32 @@ above.
 - **Perks in force now, added:** `lifts`, `candles` (an extra evening candle, counted by
   `progress.day.candles` and by when night falls), and `rumour` and `gift` (on every `every`th
   day, at night, listed in the ledger's `brought`).
+- **Townsfolk** are named from `data/townsfolk.json`, the next name nobody the player knows
+  has, with its pronoun. A person who came before names existed is renamed once.
+- **Calling on someone** (`/town/call`): +1 Fondness, a line from `callingLines` (the job's
+  own, else the default), `day.costs.call` candle, once a person an evening. Works for people
+  met in events too. A person whose fondness reaches `town.regularAt` is a regular for good:
+  a point of Cheer, and `town.regularTakings` more takings at the building they work (a person
+  met in an event, the Tavern).
+- **A meal** (`/town/meal`, needs a Tavern): `5 x level` gold and `day.costs.meal` candle, once
+  an evening. The next day's new discoveries pay `lift` more gold and XP (ledger reason `meal`).
+- **Enchanting** (`/town/enchant`): a learned spell that fits the building (`enchantmentFits`),
+  `day.costs.enchant` candle, one a building, a new one replaces the old. It adds
+  `enchantBonus` to the quality, counts a point of Cheer, lasts `enchantmentDays`, and each
+  night takes one off: the ledger says when one day is left and when it has faded.
+- **One-night happenings** (`data/tonight.json`): rolled the first time a day is looked at, by
+  the day rules and the reputation band's `tonightChance`, never two days running, shown in
+  `progress.day.tonight` from noon. It is taken by doing what it changes (the musician's free
+  first call, the supper's doubled meal, the festival's doubled enchantment) or, for the
+  pedlar and the stargazer, by `/town/tonight` (no candle, evening only). Not taken by
+  night, it is named in the ledger's `missed`.
 - **Perks in force:** `opens-shop`, `shop-shelves` (the three tailored shelves, filled from
   the next morning), `shop-discount`, and `discovery-gold` (extra gold for a new discovery made
   by combining that carries one of the building's tags, ledger reason `perk`, included in
-  `rewards.gold`). `meals`, `enchant-days` and `learn-discount` do nothing yet.
-- **In the view,** `enchantment` is null and `regular` is false until those arrive. `plans[].ready` and `next.ready` mean the level, the
+  `rewards.gold`). `meals` and `enchant-days` work through the meal and enchanting above. `learn-discount`
+  does nothing yet.
+- **In the view,** `enchantment` and `regular` are real, and `cheer` counts regulars and
+  enchantments. `plans[].ready` and `next.ready` mean the level, the
   needs, and the gold are there; they say nothing of the hour or the candles.
 - **Saved games:** a player who had bought from the shop and owns no plot is given the Market
   Stall on plot 0 at the tier with every shelf, the first time anything asks about their town.

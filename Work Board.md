@@ -409,7 +409,7 @@ Goal: the evening is a set of real choices, and spells and people have a use.
     types or the six quests until Backend's cases exist, or the live server would settle real
     players against a missing case. A script that applies them is ready.
 
-### E2 · Backend · open
+### E2 · Backend · done
 - **What:** the Tavern, calling on people, enchanting, and one-night happenings.
 - **Depends on:** E1, Q2.
 - **Guide:** the same sections as E1, and "What the day replaces".
@@ -418,7 +418,23 @@ Goal: the evening is a set of real choices, and spells and people have a use.
   `/town/meal`, `/town/call`), the day service (announcing at noon, missing at night).
 - **Done when:** each evening action spends its candle and is refused without one; a missed
   happening is named in the ledger and an ordinary visitor is still there the next evening.
-- **Notes:**
+- **Notes:** done 2026-10-15 by infinite-spell-craft-7e (Backend). `npm test` (767) and
+  typecheck pass; the save was backed up (`var/game.before-evening-2026-10-15.db`) and the
+  work tried on a copy. Contract in the README's "The town (routes)".
+  - **For E3 (Page):** `POST /town/call { person }`, `/town/meal`, `/town/enchant { plot,
+    spell }`, `/town/tonight` all answer with `rewards`, `night`, `dusk`, `progress`, plus
+    `line`/`fondness`, `lift`/`cost`, `days`, `line`/`entry`/`price` respectively. A call is
+    once a person a night; a meal once an evening; refusals carry a sentence and a code
+    (`not-evening`, `no-candles`, `not-enough-gold`, or `rule`). `TownView.townsfolk` now has
+    real names and `regular`, buildings carry a real `enchantment` and `enchantBonus`, and
+    `progress.day.tonight` is announced at noon.
+  - **Not done:** the visitor sitting at the Tavern (no rule changes with it; the `EventView`
+    would need a `place`), and `learn-discount`.
+  - **Settled in code, for Design:** a happening is rolled when the day is first looked at,
+    and the pedlar sells the shallowest thing deeper than the player's deepest at the shop's
+    base price plus a price per depth (no Market Stall needed); the stargazer's hint prefers a
+    spell. Hands, calls and meals are free of nothing but candles: an unspent evening is not
+    saved.
 
 ### E3 · Page · open
 - **What:** the evening on the page.

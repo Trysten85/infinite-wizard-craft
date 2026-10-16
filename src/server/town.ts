@@ -1,4 +1,5 @@
-import type { Building, BuildingView, GameEntry, Ledger, NeedView, Perk, QualityId, Rewards, TownView } from "../shared/schema";
+import { tonightComes } from "../shared/day";
+import type { Building, BuildingView, GameEntry, Happening, Ledger, NeedView, Perk, QualityId, Rewards, TonightView, TownView } from "../shared/schema";
 import { rankFor } from "../shared/shifts";
 import {
   buildingQuality,
@@ -6,13 +7,23 @@ import {
   cheerPoints,
   checkNeeds,
   deedsFor,
+  enchantmentAfterNight,
+  enchantmentBonus,
+  enchantmentDays,
+  enchantmentEnding,
+  enchantmentFits,
+  enchantmentLive,
+  isRegular,
   isStockable,
   levelForPlot,
   liftsFor,
+  mealCost,
+  mealLift,
   perksAt,
   plotPrice,
   refusePlot,
   refuseTier,
+  regularTakingsShare,
   slotsAt,
   takingsFor,
   tierCost,
@@ -41,6 +52,8 @@ export type Standing = {
   lifts: number;
   rankBonus: number;
   enchantBonus: number;
+  // The spell cast on it, while it lasts.
+  enchant: { spell: { id: string; name: string }; daysLeft: number; tier: number } | null;
 };
 
 // The job that runs a building at this tier: the one that brought its plan, unless a later tier
@@ -75,6 +88,7 @@ export function standingBuildings(data: GameData, store: Store, player: string):
   const today = saved.state.number;
   const job = store.getStats(player).job;
   const shelves = store.listStock(player);
+  const enchants = store.listEnchantments(player);
   const shifts = data.balance.shifts;
   return built.map((at) => {
     const stock = shelves
@@ -93,31 +107,107 @@ export function standingBuildings(data: GameData, store: Store, player: string):
       hand: store.hasHand(player, at.plot, today) ? 1 : 0,
       shift: own && saved.shiftLiftDay === today ? 1 : 0,
     };
-    // Enchantments come with the evening's actions, so none is live yet.
-    const enchantBonus = 0;
+    const cast = enchants.find((item) => item.plot === at.plot && enchantmentLive(item.daysLeft));
+    const enchantBonus = cast ? enchantmentBonus(cast.tier, data.balance.town) : 0;
+    const enchant = cast ? { spell: { id: cast.spellId, name: cast.spellName }, daysLeft: cast.daysLeft, tier: cast.tier } : null;
     const quality = buildingQuality(at.building, at.tier, stock.map((item) => item.entry), { rankBonus, enchantBonus, lifts }, shifts);
-    return { ...at, quality, stock, lifts: lifts.perks + lifts.hand + lifts.shift, rankBonus, enchantBonus };
+    return { ...at, quality, stock, lifts: lifts.perks + lifts.hand + lifts.shift, rankBonus, enchantBonus, enchant };
   });
 }
 
-// How good life in the town is tonight, and the share it raises takings by. Regulars and
-// enchantments are none until the evening's other actions exist.
-export function townCheer(data: GameData, built: Standing[]) {
-  const points = cheerPoints(built.map((at) => at.quality), 0, 0);
+// Everyone who has become a regular: the fondness the town sets, once reached, is kept even if
+// fondness falls later. Anyone newly there is noted now.
+export function regularIds(data: GameData, store: Store, player: string): Set<number> {
+  const known = new Set(store.listRegulars(player));
+  for (const person of store.listPeople(player)) {
+    if (!known.has(person.id) && isRegular(person.fondness, false, data.balance.town)) {
+      store.addRegular(player, person.id);
+      known.add(person.id);
+    }
+  }
+  return known;
+}
+
+// How the town stands tonight: who the regulars are, how many at each building (a townsperson
+// at the building their job runs, a person met in an event at the Tavern), how many spells are
+// cast, and the Cheer that all of it comes to.
+export function townState(data: GameData, store: Store, player: string, built: Standing[]) {
+  const regulars = regularIds(data, store, player);
+  const people = store.listPeople(player).filter((person) => regulars.has(person.id));
+  const atPlot = new Map<number, number>();
+  for (const person of people) {
+    const home = built.find((at) => (person.job === null ? at.building.id === "tavern" : runBy(at.building, at.tier) === person.job));
+    if (home) atPlot.set(home.plot, (atPlot.get(home.plot) ?? 0) + 1);
+  }
+  const enchantments = built.filter((at) => at.enchant !== null).length;
+  const points = cheerPoints(built.map((at) => at.quality), regulars.size, enchantments);
+  const band = cheerBand(points, data.balance.town);
+  return { regulars, atPlot, enchantments, cheer: { points, band: band.name, share: band.takings } };
+}
+
+// How good life in the town is tonight, and the share it raises takings by.
+export function townCheer(data: GameData, built: Standing[], regulars = 0, enchantments = 0) {
+  const points = cheerPoints(built.map((at) => at.quality), regulars, enchantments);
   const band = cheerBand(points, data.balance.town);
   return { points, band: band.name, share: band.takings };
 }
 
-// What each standing building pays for the night, with the Cheer share applied.
-export function takingsOf(data: GameData, built: Standing[]) {
-  const { share } = townCheer(data, built);
+// What one building pays for the night: its tier's takings at its quality, raised by the town's
+// Cheer and by the regulars who work it.
+export function takingFor(data: GameData, at: Standing, cheerShare: number, regularsHere: number): number {
+  const rules = data.balance.town;
+  return takingsFor(at.tier, at.quality, rules, data.balance.shifts, cheerShare + regularTakingsShare(regularsHere, rules));
+}
+
+// What each standing building pays for the night.
+export function takingsOf(data: GameData, built: Standing[], state: ReturnType<typeof townState>) {
   return built.map((at) => ({
     plot: at.plot,
     building: at.building.id,
     name: at.building.name,
     quality: at.quality,
-    gold: takingsFor(at.tier, at.quality, data.balance.town, data.balance.shifts, share),
+    gold: takingFor(data, at, state.cheer.share, state.atPlot.get(at.plot) ?? 0),
   }));
+}
+
+// What tonight carries, rolled the first time the day is looked at and kept after that. A
+// happening comes with the chance the rules and the player's standing give, never two days
+// running. Pass the random source so tests can fix it.
+export function tonightOf(data: GameData, store: Store, player: string, random: () => number = Math.random): { happening: Happening | null; taken: boolean } {
+  const number = store.getDay(player).state.number;
+  let saved = store.getTonight(player, number);
+  if (!saved) {
+    const bands = data.balance.events.repBands;
+    const rep = store.getStats(player).rep;
+    const shift = (bands.findLast((band) => rep >= band.from) ?? bands[0]!).tonightChance;
+    const yesterday = store.getTonight(player, number - 1)?.happening != null;
+    const comes = data.happenings.length > 0 && tonightComes(number, yesterday, random(), data.balance.day, shift);
+    const pick = comes ? data.happenings[Math.floor(random() * data.happenings.length)]! : null;
+    store.setTonight(player, number, pick?.id ?? null);
+    saved = store.getTonight(player, number)!;
+  }
+  const happening = saved.happening ? (data.happenings.find((item) => item.id === saved!.happening) ?? null) : null;
+  return { happening, taken: saved.taken };
+}
+
+// Tonight's happening as the page is shown it. The day hides it until noon.
+export function tonightView(data: GameData, store: Store, player: string): TonightView | null {
+  const { happening, taken } = tonightOf(data, store, player);
+  return happening ? { id: happening.id, name: happening.name, line: happening.line, taken } : null;
+}
+
+// What the nights do to enchantments: each takes a night off, one with a day left is said to be
+// ending, and one with none is gone. Returns the remarks for the ledger.
+export function agedEnchantments(store: Store, player: string, built: Standing[]): string[] {
+  const lines: string[] = [];
+  for (const at of built) {
+    if (!at.enchant) continue;
+    const left = enchantmentAfterNight(at.enchant.daysLeft);
+    store.setEnchantmentDays(player, at.plot, left);
+    if (!enchantmentLive(left)) lines.push(`The ${at.enchant.spell.name} on the ${at.building.name} has faded.`);
+    else if (enchantmentEnding(left)) lines.push(`The ${at.enchant.spell.name} on the ${at.building.name} has one day left.`);
+  }
+  return lines;
 }
 
 // What the town brings when night falls, on the days its perks come round: a rumour is a hint,
@@ -184,8 +274,10 @@ export function createTown(deps: {
   progress: ProgressService;
   day: DayService;
   listDiscovered: (player: string) => GameEntry[];
+  // A number from 0 up to, not including, 1. Tests pass their own so lines are repeatable.
+  random?: () => number;
 }) {
-  const { data, store, progress, day, listDiscovered } = deps;
+  const { data, store, progress, day, listDiscovered, random = Math.random } = deps;
   const rules = data.balance.town;
   const costs = data.balance.day.costs;
   const words = townWords(data);
@@ -194,14 +286,30 @@ export function createTown(deps: {
   const standing = (player: string) => standingBuildings(data, store, player);
 
   // The townsfolk a player has. A job the player has discovered brings its townsperson, whether
-  // or not the player takes the job up: anyone not here yet arrives now. Until they are given
-  // names of their own they go by their trade.
+  // or not the player takes the job up: anyone not here yet arrives now, with the next name on
+  // the list that nobody the player knows has. One who came before names existed, and goes by
+  // their trade, is given one.
   function arrive(player: string): Person[] {
+    const taken = new Set(store.listPeople(player).map((person) => person.name));
+    const nextName = (): { name: string; pronoun: Person["pronoun"] } | undefined => {
+      const found = data.townsfolk.people.find((person) => !taken.has(person.name));
+      if (found) taken.add(found.name);
+      return found;
+    };
+    for (const person of store.listPeople(player)) {
+      const job = person.job ? data.jobs.get(person.job) : undefined;
+      if (job && person.name === `The ${job.name}`) {
+        const named = nextName();
+        if (named) store.renamePerson(person.id, named.name, named.pronoun);
+      }
+    }
     const here = new Set(store.listPeople(player).map((person) => person.job));
     const today = day.today(player).number;
     for (const entry of listDiscovered(player)) {
       const job = entry.kind === "job" && !here.has(entry.id) ? data.jobs.get(entry.id) : undefined;
-      if (job) store.addPerson(player, { name: `The ${job.name}`, role: job.name, traits: [], facts: [], job: job.id }, today);
+      if (!job) continue;
+      const named = nextName();
+      store.addPerson(player, { name: named?.name ?? `The ${job.name}`, pronoun: named?.pronoun ?? null, role: job.name, traits: [], facts: [], job: job.id }, today);
     }
     return store.listPeople(player).filter((person) => person.job !== null);
   }
@@ -215,7 +323,7 @@ export function createTown(deps: {
     return { held, jobs: arrive(player).map((person) => person.job!), level, gold };
   }
 
-  function buildingView(at: Standing, who: Builder, share: number): BuildingView {
+  function buildingView(at: Standing, who: Builder, state: ReturnType<typeof townState>): BuildingView {
     const { building, tier, quality } = at;
     const next = tier < topTier(building, rules) ? tier + 1 : null;
     return {
@@ -223,7 +331,7 @@ export function createTown(deps: {
       name: building.name,
       tier,
       quality,
-      takings: takingsFor(tier, quality, rules, data.balance.shifts, share),
+      takings: takingFor(data, at, state.cheer.share, state.atPlot.get(at.plot) ?? 0),
       lifts: at.lifts,
       rankBonus: at.rankBonus,
       enchantBonus: at.enchantBonus,
@@ -232,7 +340,7 @@ export function createTown(deps: {
         const held = at.stock.find((item) => item.slot === slot);
         return { slot, entry: held ? { id: held.entry.id, name: held.entry.name } : null };
       }),
-      enchantment: null,
+      enchantment: at.enchant ? { spell: at.enchant.spell, daysLeft: at.enchant.daysLeft } : null,
       next: next === null ? null : { ...tierCost(building, next, rules), needs: checkNeeds(building, next, who, rules, words), ready: refuseTier(building, next, who, rules) === null },
     };
   }
@@ -243,18 +351,19 @@ export function createTown(deps: {
     const owned = new Set(store.listPlots(player).map((plot) => plot.plot));
     const raised = new Set(built.map((at) => at.building.id));
     const housed = new Set(built.map((at) => runBy(at.building, at.tier)));
-    const cheer = townCheer(data, built);
+    const state = townState(data, store, player, built);
+    const cheer = state.cheer;
     return {
       plots: rules.plotPrices.map((price, index) => {
         const at = built.find((item) => item.plot === index);
-        return { index, owned: owned.has(index), price, opensAt: levelForPlot(index, rules) ?? data.balance.levels.cap, building: at ? buildingView(at, who, cheer.share) : null };
+        return { index, owned: owned.has(index), price, opensAt: levelForPlot(index, rules) ?? data.balance.levels.cap, building: at ? buildingView(at, who, state) : null };
       }),
       deeds: { have: deedsFor(who.level, rules), max: deedsFor(data.balance.levels.cap, rules) },
       cheer: { points: cheer.points, band: cheer.band },
       townsfolk: store
         .listPeople(player)
         .filter((person) => person.job !== null)
-        .map((person) => ({ person: person.id, job: person.job!, name: person.name, housed: housed.has(person.job!), fondness: person.fondness, regular: false })),
+        .map((person) => ({ person: person.id, job: person.job!, name: person.name, housed: housed.has(person.job!), fondness: person.fondness, regular: state.regulars.has(person.id) })),
       // A plan is in the player's hands once its townsperson has arrived, until it is raised.
       plans: buildings
         .filter((building) => building.job !== undefined && who.jobs.includes(building.job) && !raised.has(building.id))
@@ -362,5 +471,113 @@ export function createTown(deps: {
     return day.spend(player, costs.hand);
   }
 
-  return { view, arrive, buyPlot, build, upgrade, stock, hand, standing };
+  // Calls on someone: Fondness is up a little, and they say a line of their own. One candle, and
+  // once a person an evening. The musician's night, the first call is free and counts twice.
+  function call(player: string, personId: number): { line: string; fondness: number } & DayTurn {
+    const person = store.listPeople(player).find((item) => item.id === personId);
+    if (!person) throw new RuleError("You do not know anyone by that name.");
+    const today = day.today(player).number;
+    if (store.hasCall(player, person.id, today)) throw new RuleError(`You have already called on ${person.name} today.`);
+    const tonight = tonightOf(data, store, player);
+    const musician = tonight.happening?.effect === "free-call" && !tonight.taken && store.countCalls(player, today) === 0;
+    const cost = musician ? 0 : costs.call;
+    day.check(player, cost);
+    const gain = musician ? 2 : 1;
+    store.updatePerson(person.id, { fondness: person.fondness + gain });
+    store.addCall(player, person.id, today);
+    if (musician) store.takeTonight(player, today);
+    const lines = (person.job !== null ? data.townsfolk.callingLines[person.job] : undefined) ?? data.townsfolk.callingLines.default!;
+    const line = lines[Math.floor(random() * lines.length)]!.replaceAll("{name}", person.name);
+    regularIds(data, store, player);
+    return { line, fondness: person.fondness + gain, ...day.spend(player, cost) };
+  }
+
+  // A meal at the Tavern: gold and a candle, once an evening. Tomorrow's discoveries pay more.
+  function meal(player: string): { lift: number; cost: number; rewards: Rewards } & DayTurn {
+    const tavern = standing(player).find((at) => perksAt(at.building, at.tier).some((perk) => perk.type === "meals"));
+    if (!tavern) throw new RuleError("There is no Tavern in town to eat at.");
+    const today = day.today(player).number;
+    if (store.getMeal(player, today)) throw new RuleError("You have already eaten at the Tavern tonight.");
+    const perk = perksAt(tavern.building, tavern.tier).find((item) => item.type === "meals");
+    const { level, gold } = progress.getProgress(player);
+    const cost = mealCost(level, rules);
+    if (cost > gold) throw new RuleError(`A meal at the Tavern costs ${cost} gold. You have ${gold}.`, "not-enough-gold");
+    day.check(player, costs.meal);
+    const tonight = tonightOf(data, store, player);
+    const doubled = tonight.happening?.effect === "meal-doubled" && !tonight.taken;
+    const lift = mealLift(rules, perk?.type === "meals" ? perk.lift : undefined, doubled);
+    store.addLedger(player, -cost, "meal", `day-${today}`);
+    store.addMeal(player, today, lift);
+    if (doubled) store.takeTonight(player, today);
+    const rewards = progress.settle(player);
+    return { lift, cost, rewards, ...day.spend(player, costs.meal) };
+  }
+
+  // Casts a learned spell on a building: one candle. One enchantment a building, and a new one
+  // replaces the old.
+  function enchant(player: string, plot: number, spellId: string): { days: number; rewards: Rewards } & DayTurn {
+    const at = standing(player).find((item) => item.plot === plot);
+    if (!at) throw new RuleError("Nothing stands on that plot.");
+    const spell = listDiscovered(player).find((item) => item.id === spellId && item.kind === "spell");
+    if (!spell) throw new RuleError("You can only cast a spell you have discovered.");
+    const { level } = progress.getProgress(player);
+    if (!enchantmentFits(spell, at.building, store.getLearned(player), level, rules)) {
+      throw new RuleError(`${spell.name} will not take on the ${at.building.name}. It must be a spell you have learned and can cast, of a kind the building takes.`);
+    }
+    day.check(player, costs.enchant);
+    const tonight = tonightOf(data, store, player);
+    const doubled = tonight.happening?.effect === "enchant-doubled" && !tonight.taken;
+    const perkDays = perksGiven(standing(player), "enchant-days").reduce((total, { perk }) => total + perk.days, 0);
+    const days = enchantmentDays(spell.tier, rules, perkDays, doubled);
+    store.setEnchantment(player, { plot, spellId: spell.id, spellName: spell.name, tier: spell.tier, daysLeft: days });
+    if (doubled) store.takeTonight(player, day.today(player).number);
+    const rewards = progress.settle(player);
+    return { days, rewards, ...day.spend(player, costs.enchant) };
+  }
+
+  // Takes part in tonight's happening, where taking part is something to do: the pedlar's pack,
+  // or the stargazer's hint. Free of candles, and for the evening only. The other happenings
+  // work through the actions they change.
+  function tonight(player: string): { line: string; entry: { id: string; name: string } | null; price: number; rewards: Rewards } & DayTurn {
+    const { happening, taken } = tonightOf(data, store, player);
+    if (!happening) throw new RuleError("Nothing is happening in town tonight.");
+    if (happening.effect !== "pedlar" && happening.effect !== "free-hint") throw new RuleError(`${happening.name} is there to be enjoyed. Do what you would, and it will find you.`);
+    if (taken) throw new RuleError("You have already had your share of tonight.");
+    day.check(player, 0);
+    const have = new Set(store.getDiscoveries(player));
+    const never = new Set([...data.balance.shop.neverSells, ...data.balance.events.payoff.never]);
+    const today = day.today(player).number;
+    let entry: GameEntry | undefined;
+    let price = 0;
+    if (happening.effect === "pedlar") {
+      // Something the player lacks, two or more steps deeper than anything they have made.
+      const deepest = Math.max(0, ...listDiscovered(player).filter((item) => item.kind === "material").map((item) => item.depth));
+      const lacking = [...data.entries.values()].filter((item) => item.kind === "material" && !have.has(item.id) && !never.has(item.id));
+      entry = lacking.filter((item) => item.depth >= deepest + 2).sort((a, b) => a.depth - b.depth || a.id.localeCompare(b.id))[0] ?? lacking.filter((item) => item.depth > deepest).sort((a, b) => a.depth - b.depth || a.id.localeCompare(b.id))[0];
+      if (!entry) throw new RuleError("The pedlar has nothing you do not already have.");
+      const shop = data.balance.shop;
+      price = shop.basePrice + shop.pricePerDepth * entry.depth;
+      const { gold } = progress.getProgress(player);
+      if (price > gold) throw new RuleError(`The pedlar wants ${price} gold for the ${entry.name}. You have ${gold}.`, "not-enough-gold");
+      store.addLedger(player, -price, "shop", entry.id);
+      store.addDiscovery(player, entry.id);
+    } else {
+      // A hint toward something the player could nearly make: a spell if there is one.
+      const options = [...data.entries.values()]
+        .filter((item) => (item.kind === "spell" || item.kind === "material") && !have.has(item.id) && !never.has(item.id))
+        .map((item) => ({ item, steps: buildPath(data, item.id, have).length }))
+        .filter(({ steps }) => steps > 0 && steps <= data.balance.events.payoff.hintMaxMissingSteps);
+      const hinted = new Set(store.listHints(player).map((hint) => hint.entryId));
+      const best = options.filter(({ item }) => !hinted.has(item.id)).sort((a, b) => Number(b.item.kind === "spell") - Number(a.item.kind === "spell") || a.steps - b.steps || a.item.id.localeCompare(b.item.id))[0];
+      if (!best) throw new RuleError("The stargazer has nothing to tell you that you do not already know.");
+      entry = best.item;
+      const recipe = [...data.combos.values()].filter((item) => item.result === entry!.id).sort((a, b) => a.needs.length - b.needs.length)[0];
+      const how = recipe ? recipe.inputs.map((id) => data.entries.get(id)!.name).join(" and ") : "";
+      store.addHint(player, entry.id, how, happening.name);
+    }
+    store.takeTonight(player, today);
+    return { line: happening.taken, entry: { id: entry.id, name: entry.name }, price, rewards: progress.settle(player), night: null, dusk: null };
+  }
+
+  return { view, arrive, buyPlot, build, upgrade, stock, hand, call, meal, enchant, tonight, standing };
 }

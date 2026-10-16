@@ -4,7 +4,7 @@ import { extraDiscoveryGold } from "../shared/town";
 import { RuleError } from "./combiner";
 import { learnCostForTier, levelForSpellTier, type GameData } from "./gameData";
 import type { Store } from "./store";
-import { extraCandles, perksGiven, standingBuildings } from "./town";
+import { extraCandles, perksGiven, regularIds, standingBuildings, tonightView } from "./town";
 
 export type ProgressService = ReturnType<typeof createProgress>;
 
@@ -82,8 +82,8 @@ export function createProgress(deps: {
       townsfolk: store.listPeople(player).filter((person) => person.job !== null).length,
       plots: store.listPlots(player),
       evenings: store.countEvenings(player),
-      regulars: 0,
-      enchantments: 0,
+      regulars: regularIds(data, store, player).size,
+      enchantments: store.countEnchantments(player),
     };
   }
   type Measured = ReturnType<typeof measure>;
@@ -169,11 +169,19 @@ export function createProgress(deps: {
     const paid = new Set(store.getLedgerRefs(player, "discovery"));
     // Buildings that pay extra for discoveries of their kind, as they stand at this moment.
     const paying = perksGiven(standingBuildings(data, store, player), "discovery-gold");
+    const meal = store.getMeal(player, store.getDay(player).state.number - 1);
     for (const entry of discovered) {
       if (starting.has(entry.id) || bought.has(entry.id) || paid.has(entry.id)) continue;
       const gold = discoveryGold(entry, data.balance);
       if (!store.addLedger(player, gold, "discovery", entry.id)) continue;
       rewards.gold += gold;
+      // A meal at the Tavern last night makes today's discoveries pay more, in gold and in XP.
+      if (meal) {
+        const more = Math.ceil(gold * meal.lift - 1e-9);
+        if (more > 0 && store.addLedger(player, more, "meal", entry.id)) rewards.gold += more;
+        const moreXp = Math.ceil(entry.xp * meal.lift - 1e-9);
+        if (moreXp > 0) store.changeStats(player, { bonusXp: moreXp });
+      }
       const extra = extraDiscoveryGold(gold, entry.tags, paying);
       if (extra > 0 && store.addLedger(player, extra, "perk", entry.id)) rewards.gold += extra;
     }
@@ -282,7 +290,7 @@ export function createProgress(deps: {
       job,
       // One shift a day, from noon until night, and only once a job is taken up.
       shiftReady: shiftOpen(day.state, data.balance.day, job !== null),
-      day: dayView(day.state, data.balance.day, { lastLedger: day.lastLedger, extraCandles: extraCandles(standingBuildings(data, store, player)) }),
+      day: dayView(day.state, data.balance.day, { lastLedger: day.lastLedger, tonight: tonightView(data, store, player), extraCandles: extraCandles(standingBuildings(data, store, player)) }),
       rep: stats.rep,
       repBand: repBandFor(stats.rep, data.balance).name,
       requests: listRequestViews(player),
