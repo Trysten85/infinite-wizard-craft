@@ -6,6 +6,7 @@ import { GenerationError } from "../llm/generate";
 import { levelForSpellTier, type GameData } from "../gameData";
 import { buildPath } from "../paths";
 import { repBandFor, type ProgressService } from "../progress";
+import { standingBuildings } from "../town";
 import type { Person, Store, StoredEvent } from "../store";
 import {
   eligibleSeeds,
@@ -411,6 +412,8 @@ export function createEvents(deps: {
       kind: event.kind as EventView["kind"],
       mood: event.mood as EventView["mood"],
       person: { name: person?.name ?? "Someone", role: person?.role ?? "visitor", returning: metBefore(player, event) },
+      // The visitor sits at the Tavern once one stands, and at the door until then.
+      place: standingBuildings(data, store, player).some((at) => at.building.tiers[at.tier - 1]?.perks.some((perk) => perk.type === "meals")) ? "tavern" : "door",
       scene: beat.written.scene,
       responses: beat.types.map((type) => ({
         type,

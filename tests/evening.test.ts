@@ -310,3 +310,13 @@ describe("the evening's routes", () => {
     expect((await send("/town/call", { person: "me" })).status).toBe(400);
   });
 });
+
+describe("where the visitor sits", () => {
+  it("is the door until a Tavern stands, and then the Tavern", async () => {
+    const game = newGame();
+    expect((await game.events.test("ann", "small_thief")).event!.place).toBe("door");
+    game.store.addPlot("ann", 0);
+    game.store.setBuilding("ann", 0, "tavern", 1);
+    expect((await game.events.current("ann")).event!.place).toBe("tavern");
+  });
+});

@@ -38,11 +38,11 @@ restarted, so check `ListAgents`):
 
 | Lane | Session |
 |---|---|
-| Design | infinite-spell-craft-0a |
-| Rules | infinite-spell-craft-23 |
-| Backend | infinite-spell-craft-7e |
-| Page | infinite-spell-craft-e6 |
-| Bake | infinite-spell-craft-7e (the same session that signed as `-e8` below, since renamed) |
+| Design | not heard from since the restart (was infinite-spell-craft-0a) |
+| Rules | infinite-spell-craft-f6 (was -23) |
+| Backend | infinite-spell-craft-33 (was -7e) |
+| Page | infinite-spell-craft-48 (was -e6) |
+| Bake | infinite-spell-craft-33 (the same session that signed as `-e8` and `-7e` below) |
 
 Standing rules are in `CLAUDE.md`.
 
