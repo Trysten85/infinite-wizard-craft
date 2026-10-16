@@ -38,7 +38,8 @@ import {
   type Earned,
 } from "./api";
 import { Board, type BubbleEffect } from "./Board";
-import { visitorCue } from "./day";
+import { tonightNews, visitorCue } from "./day";
+import { visitorPlace } from "./town";
 import { besideTarget, clampToBoard, newBubbleId, parseBoard, spawnPoint, type Bubble, type Size } from "./bubbles";
 import { EntryBubble } from "./EntryBubble";
 import { EventCard, type EventEnding } from "./EventCard";
@@ -168,6 +169,8 @@ export function Workbench({ player, onLeave }: { player: string; onLeave: () => 
   const [bookBusy, setBookBusy] = useState(false);
   const bubbleEls = useRef(new Map<string, HTMLElement>());
   const spawned = useRef(0);
+  // The day tonight's happening was last announced for, so it is told once and not on every refresh.
+  const announced = useRef<number | null>(null);
   const pages = usePageTurn();
   // The level last shown, kept outside state so that requests finishing out of order agree on it.
   const shownLevel = useRef(1);
@@ -644,7 +647,17 @@ export function Workbench({ player, onLeave }: { player: string; onLeave: () => 
   const day = progress.day;
   const someoneComing = loaded && event === null && !progress.eventReady && progress.eventIn === 0 && (!day || day.phase === "evening");
   // How a visitor the player hasn't met yet is offered. One already let in can be gone back to at any time.
-  const visitor = day && event === null ? visitorCue(day) : null;
+  const seat = visitorPlace(event, town);
+  const visitor = day && event === null ? visitorCue(day, seat) : null;
+
+  // Tonight's happening is announced when it is first seen, so that missing it is a choice.
+  useEffect(() => {
+    if (!day) return;
+    const news = tonightNews(day, announced.current);
+    if (news === null) return;
+    announced.current = day.number;
+    tell("tonight-news", "Word is:", news);
+  }, [day?.number, day?.tonight?.id, day?.tonight?.taken]);
 
   // The server only says an event is ready in answer to something, so a player sitting idle
   // would never hear. While one is on its way, ask now and then until it arrives.
@@ -983,6 +996,8 @@ export function Workbench({ player, onLeave }: { player: string; onLeave: () => 
               onCall={callOnPerson}
               onMeal={haveAMeal}
               onTonight={takePart}
+              visitorPlace={seat}
+              onSit={() => (event ? setEventOpen(true) : void showEvent("waiting"))}
             />
           )}
           <div className="toasts">

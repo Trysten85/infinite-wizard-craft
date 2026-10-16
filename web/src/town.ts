@@ -200,6 +200,14 @@ export function eveningBlock(candles: number, day: DayView | undefined): string 
   return "";
 }
 
+// Where tonight's visitor sits. The server says so on the event itself; before it is in hand,
+// they are at the Tavern once one stands, as the server seats them, and at the door otherwise.
+export function visitorPlace(event: { place?: "door" | "tavern" } | null, town: TownView | null): "door" | "tavern" {
+  if (event?.place) return event.place;
+  const stands = town?.plots.some((plot) => plot.building?.id === TAVERN) ?? false;
+  return stands ? "tavern" : "door";
+}
+
 // One line of what the evening offers: what it is, what it costs, and whether it can be done now.
 export type Offer = { id: string; label: string; cost: string; ok: boolean };
 
@@ -214,7 +222,7 @@ export function eveningOffers(day: DayView, town: TownView, have: { visitor: boo
     ok: eveningBlock(candles, day) === "",
   });
   const offers: Offer[] = [];
-  if (have.visitor) offers.push(row("visitor", "Sit with tonight's visitor", day.costs.visitor));
+  if (have.visitor) offers.push(row("visitor", `Sit with tonight's visitor${visitorPlace(null, town) === "tavern" ? " at the Tavern" : ""}`, day.costs.visitor));
   if (town.townsfolk.length > have.called) offers.push(row("call", "Call on someone in town", day.costs.call));
   if (standing.some((building) => building.id === TAVERN)) offers.push(row("meal", "A meal at the Tavern, for gold", day.costs.meal));
   if (standing.some((building) => building.stock.some((shelf) => shelf.entry)))

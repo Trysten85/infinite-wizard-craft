@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { PointerEvent } from "react";
 import type { DayView, GameEntry, NeedView, ShiftRules, TownView } from "../../src/shared/schema";
-import { qualityName } from "./day";
+import { qualityName, visitorCue } from "./day";
 import { Gold } from "./Gold";
 import { Shelves } from "./Shelves";
 import { PlotArt } from "./Street";
@@ -60,6 +60,9 @@ type Props = {
   onCall: (person: number) => void;
   onMeal: () => void;
   onTonight: () => void;
+  // Where the waiting visitor sits, and opening their card.
+  visitorPlace: "door" | "tavern";
+  onSit: () => void;
 };
 
 // The town: one street, drawn side-on, with a plot picked out and described under it. It takes
@@ -99,7 +102,7 @@ export function Town(props: Props) {
                 return (
                   <li key={plot.index}>
                     <button
-                      className={`plot ${state} ${casting && plot.building ? "castable" : ""} ${props.overPlot === plot.index ? "over" : ""}`}
+                      className={`plot ${state} ${casting && plot.building ? "castable" : ""} ${props.overPlot === plot.index ? "over" : ""} ${props.visitorWaiting && props.visitorPlace === "tavern" && plot.building?.id === TAVERN ? "visitor" : ""}`}
                       data-plot={plot.building ? plot.index : undefined}
                       aria-pressed={plot.index === shown?.index}
                       onClick={() => setPicked(plot.index)}
@@ -271,6 +274,14 @@ function Standing(props: StandingProps) {
           {building.enchantment.spell.name} is cast on it, for {building.enchantment.daysLeft}{" "}
           {building.enchantment.daysLeft === 1 ? "more day" : "more days"}.
         </p>
+      )}
+      {building.id === TAVERN && props.visitorWaiting && props.visitorPlace === "tavern" && day && (
+        <>
+          <p className="town-visitor">{visitorCue(day, "tavern").text}</p>
+          <button disabled={busy || eveningBlock(day.costs.visitor, day) !== ""} onClick={props.onSit}>
+            Sit with them
+          </button>
+        </>
       )}
       {building.id === TAVERN && (
         <>

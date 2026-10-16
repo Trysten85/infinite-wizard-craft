@@ -11,6 +11,7 @@ import {
   sunShare,
   sunText,
   takingsTotal,
+  tonightNews,
   visitorCue,
   type Day,
 } from "../web/src/day";
@@ -82,6 +83,17 @@ describe("ordersClosedText", () => {
   });
 });
 
+describe("tonightNews", () => {
+  const tonight = { id: "pedlar", name: "The pedlar", line: "A pedlar sets down a pack.", taken: false };
+  it("tells the line once for a day, and not when taken or absent", () => {
+    const today = day({ ...afternoon, tonight });
+    expect(tonightNews(today, null)).toBe("A pedlar sets down a pack.");
+    expect(tonightNews(today, today.number)).toBeNull();
+    expect(tonightNews(day({ ...afternoon, tonight: { ...tonight, taken: true } }), null)).toBeNull();
+    expect(tonightNews(afternoon, null)).toBeNull();
+  });
+});
+
 describe("visitorCue", () => {
   it("holds the visitor until dusk", () => {
     expect(visitorCue(day())).toEqual({ kind: "later", text: "Someone will be at your door this evening." });
@@ -90,6 +102,12 @@ describe("visitorCue", () => {
 
   it("offers them from dusk, with the candle it takes", () => {
     expect(visitorCue(evening)).toEqual({ kind: "sit", text: "Someone is at your door. Sit with them (1 candle)." });
+  });
+
+  it("says the Tavern when the visitor sits there", () => {
+    expect(visitorCue(evening, "tavern").text).toBe("Someone is at the Tavern. Sit with them (1 candle).");
+    expect(visitorCue(afternoon, "tavern").text).toBe("Someone will be at the Tavern this evening.");
+    expect(visitorCue(day({ ...evening, candles: 0 }), "tavern").text).toContain("at the Tavern, but your candles are spent");
   });
 
   it("reads the cost from the day, and never assumes it", () => {

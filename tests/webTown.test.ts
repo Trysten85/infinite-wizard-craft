@@ -6,6 +6,7 @@ import {
   emptyPlot,
   eveningBlock,
   eveningOffers,
+  visitorPlace,
   handBlock,
   needText,
   planBlock,
@@ -363,6 +364,20 @@ describe("eveningOffers", () => {
     plans: [plan],
   });
   const ids = (offers: ReturnType<typeof eveningOffers>) => offers.map((offer) => offer.id);
+
+  it("says the visitor is at the Tavern once one stands", () => {
+    const at = eveningOffers(day(), street, { visitor: true, spells: 0, called: 1 }).find((offer) => offer.id === "visitor");
+    expect(at!.label).toBe("Sit with tonight's visitor at the Tavern");
+    const door = eveningOffers(day(), town({ plots: [], townsfolk: [], plans: [] }), { visitor: true, spells: 0, called: 0 });
+    expect(door[0]!.label).toBe("Sit with tonight's visitor");
+  });
+
+  it("finds where the visitor sits: the event's word first, then whether a Tavern stands", () => {
+    expect(visitorPlace({ place: "door" }, street)).toBe("door");
+    expect(visitorPlace(null, street)).toBe("tavern");
+    expect(visitorPlace(null, town({ plots: [], townsfolk: [], plans: [] }))).toBe("door");
+    expect(visitorPlace(null, null)).toBe("door");
+  });
 
   it("lists every evening action that has something to act on, with its cost", () => {
     const offers = eveningOffers(day(), street, { visitor: true, spells: 1, called: 0 });

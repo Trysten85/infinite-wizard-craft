@@ -2879,3 +2879,12 @@ button.plot.over {
     max-height: none;
   }
 }
+
+/* Someone is waiting at the Tavern: a lit edge on its plot. */
+button.plot.visitor {
+  box-shadow: inset 0 0 0 2px var(--accent, #e0b050);
+}
+
+.town-visitor {
+  font-style: italic;
+}

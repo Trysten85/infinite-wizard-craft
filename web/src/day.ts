@@ -48,12 +48,20 @@ export function ordersClosedText(day: Day): string {
 
 // How a waiting visitor is offered. They are only seen from dusk, and it takes a candle.
 // One the player can't see tonight is still there tomorrow, so nothing here is a loss.
-export function visitorCue(day: Day): { kind: "later" | "sit" | "spent"; text: string } {
+export function visitorCue(day: Day, place: "door" | "tavern" = "door"): { kind: "later" | "sit" | "spent"; text: string } {
   const cost = day.costs.visitor;
-  if (day.phase !== "evening") return { kind: "later", text: "Someone will be at your door this evening." };
+  const at = place === "tavern" ? "at the Tavern" : "at your door";
+  if (day.phase !== "evening") return { kind: "later", text: `Someone will be ${at} this evening.` };
   if (day.candles < cost)
-    return { kind: "spent", text: "Someone is at your door, but your candles are spent. They will be back tomorrow." };
-  return { kind: "sit", text: `Someone is at your door. Sit with them (${candles(cost)}).` };
+    return { kind: "spent", text: `Someone is ${at}, but your candles are spent. They will be back tomorrow.` };
+  return { kind: "sit", text: `Someone is ${at}. Sit with them (${candles(cost)}).` };
+}
+
+// Tonight's happening, in a line, the first time it is seen on a day. `announced` is the day it
+// was last told for. Null when there is none, the player has taken part, or it has been told.
+export function tonightNews(day: Day, announced: number | null): string | null {
+  if (!day.tonight || day.tonight.taken || announced === day.number) return null;
+  return day.tonight.line;
 }
 
 // The way to end the day that is on offer now, with what it gives up, said before it happens.
