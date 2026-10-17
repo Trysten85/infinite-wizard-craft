@@ -474,7 +474,11 @@ Goal: the evening is a set of real choices, and spells and people have a use.
     spell. Hands, calls and meals are free of nothing but candles: an unspent evening is not
     saved.
 
-### E3 · Page · done, unreviewed
+### E3 · Page · done
+- **Reviewed** by infinite-spell-craft-1e: the page named game content by id (the Tavern, and the
+  two happenings taken by asking). The view now carries `BuildingView.meals` and
+  `TonightView.action`, and the page knows no ids. Fixes in `7f40c95`; see "Review: the order
+  writer and E3".
 - **What:** the evening on the page.
 - **Depends on:** E1 for the types. E2 to see it live.
 - **Guide:** "The evening", "Tonight only".
@@ -738,6 +742,9 @@ Files touched: `src/shared/day.ts`, `src/shared/town.ts`, `src/server/{progress,
 `tests/{day,store,town,webTown}.test.ts`. A5 is reviewed below; E3 and the order writer are
 reviewed under "Review: the order writer and E3".
 
+**Reviewed and finalised so far:** A1-A4 (`1bf0c0c`), the order writer (`d6bc682`), E3 (`7f40c95`).
+Baseline on the last review: 803 tests, typecheck clean.
+
 ### A1 · the first plot's job gate
 
 - **A1-1 · fixed, a real bug.** The page disabled the Buy button on `!!progress.job` — the job
@@ -832,6 +839,82 @@ schema version · S5 `getProgress` writes and re-measures several times per requ
 query layer and a service, and the import graph is acyclic only because two imports are
 `import type` · S8 `createApp`'s optional services and 16 near-identical route bodies · S9
 `Workbench.tsx` is 1106 lines with 22+ `useState` · S10 read-named functions that write.
+
+## Review: the order writer and E3
+
+By infinite-spell-craft-1e (Review), 2026-10-17. Findings on `86cb024` (the order writer) and
+`a70cae8` (E3). Fixes in `d6bc682` and `7f40c95`; 803 tests, typecheck clean.
+
+### The order writer (`86cb024`) · reviewed, done
+
+Good module: the pure checks (`tooAlike`, `checkOrder`) sit apart from the model wrapper, it uses
+the same `reject` pattern as the other writers, and it goes through `turns.inBackground`, so it
+gives way to a player's combination as the README asks.
+
+- **O-1 · fixed, the ticket's own claim.** "No repeated subject on a board" held only for the
+  plain template. `draftOrder` kept a subject fresh with `text.startsWith(subject)`, but
+  `writeBoard` stores the **model's** prose, which does not begin with the subject — and the
+  writer is told it may invent something near it. So with a writer wired in, as `main.ts` does,
+  the dedupe was a no-op: on the model path **12 of 20 seeds repeated a subject**.
+  `tests/orderWriter.test.ts` passed because it covered the plain board only, splitting on
+  `". It calls for"` — the one path where the bug could not appear.
+  Now the subject is kept beside the order (`OrderDraft.subject`, a `shift_orders.subject`
+  column) instead of being read back out of rendered words. That also makes the guarantee hold
+  when a part-filled board is topped up around orders still open, which it never did. Two tests
+  added on the model path.
+  - **For Rules:** this is now load-bearing on `data/job-skins.json`. The innkeeper has 4
+    subjects for a 3-order board, so the dedupe has one spare. The Log's note asking for 8-12
+    subjects a job matters more than it did.
+- **O-2 · fixed with O-1.** `subject: draft.text.split(/\.\s/)[0]!` re-parsed the subject out of
+  the rendered template. Gone.
+- **O-3 · fixed, a rule giving the wrong answer.** `checkOrder` asked for its tag words with
+  `includes` and fell back to the bare tag, which is one lowercase word. So **a chair satisfied
+  "air" and a price satisfied "ice"**: an order passed the check while not asking for what the
+  board demanded. It now matches whole words, with tests for both near-misses.
+- **O-4 · fixed, on Trysten's answer.** `GET /shift` raced the model behind an inline
+  `setTimeout(…, 8000)` — a magic number in a route, an uncleared timer, and a wait that
+  contradicts "a player never waits on the model" while still handing over template words when
+  the model is slow. The board is written ahead, so the route now answers at once.
+- **O-5 · for Backend, not changed.** `main.ts` builds the order writer with
+  `createModelClient(model, "events")`, so orders take the `events` effort (`medium`) and timeout
+  (120s), up to 4 attempts. The README documents the keys as `combos`, `naming` and `events`;
+  orders are a fourth purpose with no key. These are tuning numbers, so they are yours: either
+  add an `orders` key to `config/model.json` or say in the README that orders share events'.
+- **O-6 · for Backend, not changed.** `tooAlike` divides shared words by the **smaller** order, so
+  a short order is rejected for sharing two words with a long one, costing rerolls before the
+  fallback. A measure over the union would be steadier. Worth watching with real play data.
+
+### E3 (`a70cae8`) · reviewed, done
+
+`visitorCue(day, place)` and `tonightNews(day, announced)` are pure, tested, and read the cost
+from the day rather than assuming it.
+
+- **E3-1, E3-2, E3-5 · fixed together, one root cause.** The page decided where meals are served
+  by `building.id === "tavern"` while the server decides by the `meals` perk at the building's
+  tier, and it kept `ASKED_FOR = { pedlar, stargazer }` — ids *and* their words — in a page
+  constant. Not wrong today (the Tavern carries `meals` at tier 1), but it put content and words
+  in the page, and a second place serving meals or a perk moved up a tier would have split them.
+  `BuildingView.meals` and `TonightView.action` now carry it, from a new optional `ask` on the
+  happening in `data/tonight.json`; the page drops both constants. The server's three copies of
+  the perk check became `servesMeals` in `src/shared/town.ts`.
+- **E3-6 · fixed.** `eveningOffers` guessed the seat from the town even when the visitor was in
+  hand, so its line could say "at the Tavern" while the card said the door. It takes the event now.
+- **E3-7 · comment corrected.** `announced` is a `useRef`: it survives re-renders, not a reload,
+  so a refresh does re-announce. The comment said otherwise. If telling it once per real day
+  matters, it needs storage — **a question for Design**, left alone for now.
+- **Noted, no change.** `visitorCue(day, place = "door")` is the third new rule parameter to
+  arrive with a permissive default (after `plotText`'s `hasJob = true`, removed under A1). Here
+  it is harmless, but as a habit it hides a new rule from every caller not yet updated. A new
+  parameter that carries a rule is better required, so the compiler names the call sites.
+
+### Still open from the earlier pass
+
+- **A2-2 / for Design:** a bare page load now starts model work, for both the visitor and the
+  order board (`prepare` on `GET /api/players/:player`). The condition that prevented it was
+  dropped in A2 with no note. Say so in the comment, or trigger `prepare` from the action routes.
+- **A3-1, A3-2, A4-1 · for Backend**, as written under "Review".
+- **S1-S10 · for their lanes.** Next up, on Trysten's word: **S1**, gold that can go missing
+  between `addLedger` and `addPlot`.
 
 ## Log
 
