@@ -649,8 +649,10 @@ Add a line: ticket id, your session name, the question. Answers are written bene
 
 ## Slice 5: answers of 2026-10-15
 
-### A1 · Rules · done, unreviewed
+### A1 · Rules · done
 - **What:** the first plot costs 10 gold, needs a first job, and a quest asks for it.
+- **Reviewed** by infinite-spell-craft-1e: one real bug (the page's gate asked a different
+  question from the server's) and `refusePlot` reshaped. Fixes in `1bf0c0c`; see "Review".
 - **Depends on:** nothing. Backend passes the job count at one call site (`src/server/town.ts`).
 - **Touches:** `config/balance.json` (`town.plotPrices[0]`), `refusePlot` and the `no-job` code
   in `src/shared/`, `data/quests.json` (`town-plot`), tests.
@@ -666,7 +668,10 @@ Add a line: ticket id, your session name, the question. Answers are written bene
     town." A save that already owns a plot is not asked for a job.
   - **For Design:** the guide's "first plot is free" lines need changing (Town Guide.md).
 
-### A2 · Backend · done, unreviewed
+### A2 · Backend · done
+- **Reviewed** by infinite-spell-craft-1e: the due-rule was written twice and had drifted; it is
+  now one `visitorDue` in `src/shared/day.ts` (`1bf0c0c`). One question for Design is open, under
+  "Review" — a bare page load now starts model work.
 - **What:** (1) the visitor is written in the background at the start of the day; (2) townsfolk
   can be the evening's visitor, and `maxActivePeople` does not count them so that they crowd out
   new arrivals.
@@ -678,7 +683,10 @@ Add a line: ticket id, your session name, the question. Answers are written bene
   events) is counted against `maxActivePeople` and retired. The test tool never deletes a
   townsperson. Tests in `events.test.ts` and `townService.test.ts` changed to match. Commit `0a3bd36`, unreviewed.
 
-### A3 · Backend · done, unreviewed
+### A3 · Backend · done
+- **Reviewed** by infinite-spell-craft-1e: the migration is sound. Two findings left for Backend
+  under "Review" (A3-1 the redundant shop-ledger clause, A3-2 a query that grants property); no
+  code change needed to finalise.
 - **What:** players saved before the town get the Market Stall, whether or not they bought from
   the shop.
 - **Notes:** done 2026-10-15 by infinite-spell-craft-05. A one-time migration adds
@@ -687,7 +695,10 @@ Add a line: ticket id, your session name, the question. Answers are written bene
   Backed up as `var/game.before-stall-2026-10-15.db`; the migration runs on the real save at the
   next server start. Tested on a temp database made to look pre-town. Commit `0a3bd36`, unreviewed.
 
-### A4 · Rules, Backend, Page · Rules and Backend done, Page open
+### A4 · Rules, Backend, Page · done
+- **Reviewed** by infinite-spell-craft-1e: shown and charged are one number, and `saveGenerated`
+  now drops `learnPrice` so one player's discount cannot reach the rows every player shares
+  (`1bf0c0c`). The Page part landed in A5. A4-1 is left for Backend's judgement under "Review".
 - **What:** a per-player learn price. Rules adds `learnPrice` to the spell view and a pure
   function applying `learn-discount`; Backend fills it and charges exactly that price; Page shows
   it.
@@ -714,6 +725,113 @@ Add a line: ticket id, your session name, the question. Answers are written bene
   and what it costs, with the button off until a job is taken (`plotNeedsJob`). The spellbook
   shows `learnPrice` (falling back to `learnCost`). The turn-in-early copy needed no change:
   "Call it a day" says nothing of orders, and a test holds that.
+
+## Review
+
+By infinite-spell-craft-1e (Review). Findings on `0a3bd36` (A1-A4) and `808813e` (A5). The full
+report, including ten system-level findings, is at
+`~/.claude/plans/you-are-code-review-woolly-deer.md`.
+
+**A1-A4 reviewed and finalised: the fixes are commit `1bf0c0c`** (796 tests, typecheck clean).
+Files touched: `src/shared/day.ts`, `src/shared/town.ts`, `src/server/{progress,store,town}.ts`,
+`src/server/events/service.ts`, `web/src/{Town.tsx,Workbench.tsx,town.ts}`,
+`tests/{day,store,town,webTown}.test.ts`. A5 is reviewed below; E3 and the order writer are
+reviewed under "Review: the order writer and E3".
+
+### A1 · the first plot's job gate
+
+- **A1-1 · fixed, a real bug.** The page disabled the Buy button on `!!progress.job` — the job
+  *taken up* — while `buyPlot` counts the townsfolk who have *arrived* with a job. A player who
+  discovered a job and took none up was shown "Take one up" and a dead button for a plot the
+  server would have sold. Reproduced, then fixed: `Town` derives the gate from `town.townsfolk`,
+  the same list `buyPlot` counts, so there is no prop left to pass the wrong value into. New test
+  in `tests/webTown.test.ts` ("the first plot's gate") pins the page and the server together.
+- **A1-2 · fixed (the question asked).** `refusePlot` now takes the object:
+  `refusePlot(owned, player: Pick<Builder, "jobs" | "level" | "gold">, rules)`. Five positionals
+  was past the point where an object reads better, `refuseTier` already took a `Builder`, and
+  `jobs: number` contradicted `Builder.jobs: string[]` one screen apart. The call site now reads
+  `builder(player)` once instead of calling `progress.getProgress` and then `builder()`, which
+  called it again.
+- **A1-3 · `no-job` stands, with a caveat.** The code is fine; it carried two different
+  conditions ("no job taken up" for shifts, "no trade in town" for plots). A1-1 settles the plot
+  one. If they ever diverge again, give the plot its own code — the page already branches on
+  `no-shop`, so it will branch on this.
+- **A1-4 · raised, not fixed.** `builder(player)` calls `arrive(player)`, which **writes**
+  (renames people, `addPerson` for new jobs). Counting trades to answer a yes/no question runs
+  the arrival path. See S10 in the report.
+
+### A2 · the visitor from dawn
+
+- **A2-1 · fixed.** "Is a visitor due today" was written twice and had drifted: A2 dropped
+  `sun > 0` from `events/service.ts` `isDue` and left it in `progress.ts`. (Backend unified them
+  while I was reviewing.) Now there is one rule, `visitorDue(state, visitorDay, eventStates)` in
+  `src/shared/day.ts`, asked by both, with a test in `tests/day.test.ts`.
+- **A2-2 · for Design, please answer.** Dropping `sun > 0` means a bare page load
+  (`GET /api/players/:player` → `prepare`) now starts model work. The old comment said that
+  condition existed "so that the model is never set to work for someone who only opened the
+  page". That may be the right trade for "ready by dusk", but it should be a decision: say so in
+  the comment, or trigger `prepare` only from the action routes.
+
+### A3 · the stall migration
+
+Sound: the column and its `UPDATE` run in one transaction, `town_plots.player` is `NOT NULL` so
+the `NOT IN` cannot be poisoned, and a player with no stats row reads as not owed. Two findings,
+neither fixed:
+
+- **A3-1.** The grant kept `|| store.getLedgerRefs(player, "shop").length > 0` beside the new
+  `stallOwed`. That clause can no longer fire for anyone new (buying needs an open shop, else
+  `no-shop`), so it is reachable only by the saves `stall_owed` already marks — two sources of
+  truth, and the workaround will outlive the saves it was for. Safe to drop once the migration
+  has run on the real save; I did not guess at whether it has.
+- **A3-2.** `standingBuildings` is named like a read, is called from 9 sites in 6 modules, and
+  now `addPlot`s, `setBuilding`s and `clearStallOwed`s. `main.ts:63` reaches it to price a spell,
+  so quoting a price can raise a building. See S10.
+
+### A4 · the single learn price
+
+Landed well: `listDiscovered` projects `learnPrice` onto a copy, and `learn` charges it, so shown
+and charged are one number.
+
+- **A4-2 · fixed.** `GameEntry` is both the per-player view and the row `saveGenerated` writes,
+  and nothing stopped a per-player price reaching the shared `entries` rows — one player's
+  discount, baked in for everyone, permanently. `saveGenerated` now drops `learnPrice`, with a
+  test in `tests/store.test.ts`.
+- **A4-1 · raised, deliberately not fixed.** `learnShare` is optional on `createCombiner`, so a
+  forgotten wire silently means no discount. Making it required is the right shape, but it would
+  churn ~35 call sites across eight test files in other lanes for modest gain, and
+  `tests/townService.test.ts:488` already pins shown-equals-charged through the real composition.
+  Backend's call: the residual risk is a change to `main.ts:63` alone.
+
+### A5/E3 · the page (reviewed, not yet fixed)
+
+- **E3-1.** The page decides a Tavern stands by `building.id === "tavern"`
+  (`web/src/town.ts` `TAVERN`); the server decides by the `meals` **perk**. Give a second
+  building that perk, or re-id the Tavern, and the page hides a meal the server would serve.
+  Test the perk, or have `BuildingView` carry the flag.
+- **E3-2.** `ASKED_FOR = { pedlar, stargazer }` puts two rows of `data/tonight.json` — ids *and*
+  their words — into a page constant. `TonightView` should carry the action label.
+- **E3-3 · fixed with A1-1.** `plotText`'s `hasTrade` had a permissive default (`= true`), so any
+  caller not updated silently skipped the new rule, and two tests exercised exactly those
+  4-argument calls. Now required.
+- **E3-4 · fixed with A1-2.** `plotNeedsJob` restated the server's rule in different terms.
+
+### For the lanes: ten system findings
+
+In the report, severest first. The two I would pull forward:
+
+- **S1 (Backend).** `transaction` is private to the store and runs bare `BEGIN`, so no service can
+  span one and nesting throws. Every multi-write action can half-happen: `buyPlot` does
+  `addLedger(-price)` then `addPlot`, so a throw between them spends the gold and gives no plot.
+  Same shape in `build`, `upgrade`, `meal`. Fix with `SAVEPOINT` and expose it.
+- **S3 (Backend).** 103 unchecked `row.x as string` casts, and six readers using `SELECT *` on a
+  schema that adds columns by migration. A mistyped column gives `undefined` typed as `string`.
+
+The rest: S2 `store.ts` is one 1060-line closure over seven domains · S4 migrations have no
+schema version · S5 `getProgress` writes and re-measures several times per request · S6
+`RuleError` lives in `combiner.ts` so every service imports the combiner · S7 `town.ts` is both a
+query layer and a service, and the import graph is acyclic only because two imports are
+`import type` · S8 `createApp`'s optional services and 16 near-identical route bodies · S9
+`Workbench.tsx` is 1106 lines with 22+ `useState` · S10 read-named functions that write.
 
 ## Log
 
