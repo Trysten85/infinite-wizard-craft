@@ -1,7 +1,7 @@
 [
-  {"id": "pedlar", "name": "A travelling pedlar", "line": "Word is, a pedlar comes through tonight with a pack worth a look.", "taken": "The pedlar sets down the pack and lets you pick through it.", "effect": "pedlar"},
+  {"id": "pedlar", "name": "A travelling pedlar", "line": "Word is, a pedlar comes through tonight with a pack worth a look.", "taken": "The pedlar sets down the pack and lets you pick through it.", "effect": "pedlar", "ask": "Look through the pedlar's pack"},
   {"id": "lantern-festival", "name": "The lantern festival", "line": "Word is, lanterns are going up along the street tonight.", "taken": "Every lantern on the street is lit, and whatever you enchant tonight will glow for longer.", "effect": "enchant-doubled"},
   {"id": "harvest-supper", "name": "The harvest supper", "line": "Word is, long tables are going out in the lane tonight.", "taken": "The tables are long and the bread is warm. Tomorrow will feel it.", "effect": "meal-doubled"},
   {"id": "musician", "name": "A travelling musician", "line": "Word is, someone is tuning a fiddle on the green tonight.", "taken": "The fiddle starts up, and the first person you call on is glad twice over.", "effect": "free-call"},
-  {"id": "stargazer", "name": "A stargazer", "line": "Word is, a stranger has set a brass tube up on the hill tonight.", "taken": "The stranger lets you look, and says something useful about what you were nearly making.", "effect": "free-hint"}
+  {"id": "stargazer", "name": "A stargazer", "line": "Word is, a stranger has set a brass tube up on the hill tonight.", "taken": "The stranger lets you look, and says something useful about what you were nearly making.", "effect": "free-hint", "ask": "Ask the stargazer"}
 ]

@@ -24,6 +24,7 @@ import {
   refusePlot,
   refuseTier,
   regularTakingsShare,
+  servesMeals,
   slotsAt,
   takingsFor,
   tierCost,
@@ -195,7 +196,7 @@ export function tonightOf(data: GameData, store: Store, player: string, random: 
 // Tonight's happening as the page is shown it. The day hides it until noon.
 export function tonightView(data: GameData, store: Store, player: string): TonightView | null {
   const { happening, taken } = tonightOf(data, store, player);
-  return happening ? { id: happening.id, name: happening.name, line: happening.line, taken } : null;
+  return happening ? { id: happening.id, name: happening.name, line: happening.line, taken, action: happening.ask ?? null } : null;
 }
 
 // What the nights do to enchantments: each takes a night off, one with a day left is said to be
@@ -334,6 +335,8 @@ export function createTown(deps: {
       tier,
       quality,
       takings: takingFor(data, at, state.cheer.share, state.atPlot.get(at.plot) ?? 0),
+      // Where meals are served, by the perk and not by the name, as `meal()` asks it too.
+      meals: servesMeals(building, tier),
       lifts: at.lifts,
       rankBonus: at.rankBonus,
       enchantBonus: at.enchantBonus,
@@ -499,7 +502,7 @@ export function createTown(deps: {
 
   // A meal at the Tavern: gold and a candle, once an evening. Tomorrow's discoveries pay more.
   function meal(player: string): { lift: number; cost: number; rewards: Rewards } & DayTurn {
-    const tavern = standing(player).find((at) => perksAt(at.building, at.tier).some((perk) => perk.type === "meals"));
+    const tavern = standing(player).find((at) => servesMeals(at.building, at.tier));
     if (!tavern) throw new RuleError("There is no Tavern in town to eat at.");
     const today = day.today(player).number;
     if (store.getMeal(player, today)) throw new RuleError("You have already eaten at the Tavern tonight.");

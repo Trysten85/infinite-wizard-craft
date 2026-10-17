@@ -17,7 +17,7 @@ import {
   plotStates,
   plotNeedsJob,
   plotText,
-  TAVERN,
+  servesMeals,
   tonightAction,
   upgradeBlock,
 } from "./town";
@@ -103,7 +103,7 @@ export function Town(props: Props) {
                 return (
                   <li key={plot.index}>
                     <button
-                      className={`plot ${state} ${casting && plot.building ? "castable" : ""} ${props.overPlot === plot.index ? "over" : ""} ${props.visitorWaiting && props.visitorPlace === "tavern" && plot.building?.id === TAVERN ? "visitor" : ""}`}
+                      className={`plot ${state} ${casting && plot.building ? "castable" : ""} ${props.overPlot === plot.index ? "over" : ""} ${props.visitorWaiting && props.visitorPlace === "tavern" && servesMeals(plot.building) ? "visitor" : ""}`}
                       data-plot={plot.building ? plot.index : undefined}
                       aria-pressed={plot.index === shown?.index}
                       onClick={() => setPicked(plot.index)}
@@ -138,7 +138,12 @@ export function Town(props: Props) {
           {day && (
             <Evening
               day={day}
-              offers={eveningOffers(day, town, { visitor: props.visitorWaiting, spells: props.spells, called: props.called.size })}
+              offers={eveningOffers(day, town, {
+                visitor: props.visitorWaiting,
+                spells: props.spells,
+                called: props.called.size,
+                event: { place: props.visitorPlace },
+              })}
               casting={casting}
               busy={busy}
               onTonight={props.onTonight}
@@ -276,7 +281,7 @@ function Standing(props: StandingProps) {
           {building.enchantment.daysLeft === 1 ? "more day" : "more days"}.
         </p>
       )}
-      {building.id === TAVERN && props.visitorWaiting && props.visitorPlace === "tavern" && day && (
+      {servesMeals(building) && props.visitorWaiting && props.visitorPlace === "tavern" && day && (
         <>
           <p className="town-visitor">{visitorCue(day, "tavern").text}</p>
           <button disabled={busy || eveningBlock(day.costs.visitor, day) !== ""} onClick={props.onSit}>
@@ -284,7 +289,7 @@ function Standing(props: StandingProps) {
           </button>
         </>
       )}
-      {building.id === TAVERN && (
+      {servesMeals(building) && (
         <>
           <button disabled={busy || eveningBlock(day?.costs.meal ?? 0, day) !== ""} onClick={props.onMeal}>
             Have a meal

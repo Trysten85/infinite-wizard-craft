@@ -134,6 +134,12 @@ export function perksAt(building: Building, tier: number): Perk[] {
   return building.tiers[tier - 1]?.perks ?? [];
 }
 
+// Whether meals are served here at this tier. Where a meal can be had, the evening's visitor sits
+// and the page offers the meal, so all three ask this one question rather than name the Tavern.
+export function servesMeals(building: Building, tier: number): boolean {
+  return perksAt(building, tier).some((perk) => perk.type === "meals");
+}
+
 // Every perk of one type across the buildings standing, each with the building it comes from
 // and, when the building carries one, the quality it has tonight.
 export function perksOf<T extends Perk["type"]>(

@@ -303,7 +303,7 @@ describe("a one-night happening", () => {
   });
 
   it("is announced at noon, and kept from the page until then", () => {
-    const pedlar: TonightView = { id: "pedlar", name: "A pedlar", line: "Word is, a pedlar comes through tonight.", taken: false };
+    const pedlar: TonightView = { id: "pedlar", name: "A pedlar", line: "Word is, a pedlar comes through tonight.", taken: false, action: "Look through the pedlar's pack" };
     expect([3, 4, 10].map((sun) => tonightAnnounced(at(sun), rules))).toEqual([false, true, true]);
     expect(dayView(at(3), rules, { tonight: pedlar }).tonight).toBeNull();
     expect(dayView(at(4), rules, { tonight: pedlar }).tonight).toEqual(pedlar);

@@ -84,7 +84,7 @@ describe("ordersClosedText", () => {
 });
 
 describe("tonightNews", () => {
-  const tonight = { id: "pedlar", name: "The pedlar", line: "A pedlar sets down a pack.", taken: false };
+  const tonight = { id: "pedlar", name: "The pedlar", line: "A pedlar sets down a pack.", taken: false, action: "Look through the pedlar's pack" };
   it("tells the line once for a day, and not when taken or absent", () => {
     const today = day({ ...afternoon, tonight });
     expect(tonightNews(today, null)).toBe("A pedlar sets down a pack.");

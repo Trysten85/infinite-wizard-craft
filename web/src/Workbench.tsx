@@ -169,7 +169,8 @@ export function Workbench({ player, onLeave }: { player: string; onLeave: () => 
   const [bookBusy, setBookBusy] = useState(false);
   const bubbleEls = useRef(new Map<string, HTMLElement>());
   const spawned = useRef(0);
-  // The day tonight's happening was last announced for, so it is told once and not on every refresh.
+  // The day tonight's happening was last announced for, so it is told once a day and not on every
+  // re-render. A ref lives as long as the page is open, so reloading tells it again.
   const announced = useRef<number | null>(null);
   const pages = usePageTurn();
   // The level last shown, kept outside state so that requests finishing out of order agree on it.

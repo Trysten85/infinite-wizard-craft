@@ -26,6 +26,7 @@ const farm: BuildingView = {
   tier: 1,
   quality: "meh",
   takings: 5,
+  meals: false,
   wants: ["plant", "animal", "liquid"],
   lifts: 0,
   rankBonus: 0,
@@ -366,13 +367,26 @@ describe("eveningBlock", () => {
 });
 
 describe("tonightAction", () => {
-  const tonight = (id: string, taken = false) => ({ id, name: id, line: "", taken });
-  it("offers asking for the pedlar and the stargazer only, and only until taken", () => {
-    expect(tonightAction(tonight("pedlar"))).toBe("Look through the pedlar's pack");
-    expect(tonightAction(tonight("stargazer"))).toBe("Ask the stargazer");
-    expect(tonightAction(tonight("musician"))).toBeNull();
-    expect(tonightAction(tonight("pedlar", true))).toBeNull();
+  const tonight = (id: string, action: string | null, taken = false) => ({ id, name: id, line: "", taken, action });
+  // The words are the happening's own, from the data, so the page offers whatever arrives and
+  // knows no happening by its id.
+  it("offers whatever asking is called, and only until taken", () => {
+    expect(tonightAction(tonight("pedlar", "Look through the pedlar's pack"))).toBe("Look through the pedlar's pack");
+    expect(tonightAction(tonight("stargazer", "Ask the stargazer"))).toBe("Ask the stargazer");
+    // A happening that works through whatever the player would do anyway sends no action.
+    expect(tonightAction(tonight("musician", null))).toBeNull();
+    expect(tonightAction(tonight("pedlar", "Look through the pedlar's pack", true))).toBeNull();
     expect(tonightAction(null)).toBeNull();
+    // A new happening with an `ask` needs no page change to be offered.
+    expect(tonightAction(tonight("coachman", "Flag the coach down"))).toBe("Flag the coach down");
+  });
+
+  it("matches what the data says, so the two cannot drift", () => {
+    for (const happening of data.happenings) {
+      expect(tonightAction({ id: happening.id, name: happening.name, line: happening.line, taken: false, action: happening.ask ?? null })).toBe(
+        happening.ask ?? null,
+      );
+    }
   });
 });
 
@@ -381,6 +395,7 @@ describe("eveningOffers", () => {
     ...farm,
     id: "tavern",
     name: "Tavern",
+    meals: true,
     stock: [{ slot: 0, entry: { id: "hay", name: "hay" } }],
     next: null,
   };
@@ -435,9 +450,37 @@ describe("eveningOffers", () => {
   });
 
   it("includes tonight's happening only when it is taken by asking", () => {
-    const withPedlar = day({ tonight: { id: "pedlar", name: "A travelling pedlar", line: "", taken: false } });
+    const withPedlar = day({ tonight: { id: "pedlar", name: "A travelling pedlar", line: "", taken: false, action: "Look through the pedlar's pack" } });
     expect(ids(eveningOffers(withPedlar, street, { visitor: false, spells: 0, called: 1 }))).toContain("tonight");
-    const musician = day({ tonight: { id: "musician", name: "A musician", line: "", taken: false } });
+    const musician = day({ tonight: { id: "musician", name: "A musician", line: "", taken: false, action: null } });
     expect(ids(eveningOffers(musician, street, { visitor: false, spells: 0, called: 1 }))).not.toContain("tonight");
+  });
+});
+
+// The server decides where meals are served by the `meals` perk, so the page must go by the view's
+// flag and not by the Tavern's name: a second place that serves them is offered without a change
+// here, and a Tavern whose perk moved up a tier is not offered too early.
+describe("a building that serves meals", () => {
+  // Nothing here is called "tavern": the server decides by the `meals` perk and says so on the
+  // view, so a second place that serves them is offered without a change to the page.
+  const inn: BuildingView = { ...farm, id: "roadside-inn", name: "Roadside Inn", meals: true, next: null };
+  const streetOf = (building: BuildingView) => town({ plots: [{ index: 0, owned: true, price: 0, opensAt: 1, building }], townsfolk: [], plans: [] });
+  const offered = (building: BuildingView) =>
+    eveningOffers(day(), streetOf(building), { visitor: false, spells: 0, called: 1 }).map((offer) => offer.id);
+
+  it("is offered by its perk and not by its name", () => {
+    expect(offered(inn)).toContain("meal");
+    expect(visitorPlace(null, streetOf(inn))).toBe("tavern");
+  });
+
+  it("is not offered when the perk is not there, whatever it is called", () => {
+    const dry = { ...inn, meals: false };
+    expect(offered(dry)).not.toContain("meal");
+    expect(visitorPlace(null, streetOf(dry))).toBe("door");
+  });
+
+  it("seats the visitor where the event says, once they are in hand", () => {
+    expect(visitorPlace({ place: "tavern" }, streetOf({ ...inn, meals: false }))).toBe("tavern");
+    expect(visitorPlace({ place: "door" }, streetOf(inn))).toBe("door");
   });
 });

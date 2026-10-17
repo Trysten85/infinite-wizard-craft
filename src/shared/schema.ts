@@ -652,7 +652,10 @@ export const NIGHT_REASONS = ["last-candle", "bed", "midnight-oil"] as const;
 export type NightReason = (typeof NIGHT_REASONS)[number];
 
 // A one-night happening, once it has been announced. `taken` is set when the player took part.
-export type TonightView = { id: string; name: string; line: string; taken: boolean };
+// `action` is what asking to take part is called, for a happening that is taken by asking, and
+// null for one that works through whatever the player would do anyway. The page shows the button
+// for whatever `action` arrives, so it never needs to know a happening by its id.
+export type TonightView = { id: string; name: string; line: string; taken: boolean; action: string | null };
 
 // What the night's ledger shows, in the order it shows it.
 export type Ledger = {
@@ -708,6 +711,9 @@ export const happeningSchema = z.strictObject({
   line: z.string().min(1),
   taken: z.string().min(1),
   effect: z.enum(HAPPENING_EFFECTS),
+  // What asking to take part is called, for a happening the player takes by asking. Left out for
+  // one that works through what the player would do anyway, and then there is nothing to ask for.
+  ask: z.string().min(1).optional(),
 });
 export type Happening = z.infer<typeof happeningSchema>;
 
@@ -746,6 +752,9 @@ export type BuildingView = {
   quality: QualityId;
   // What it will pay tonight.
   takings: number;
+  // It serves meals at this tier, so a meal can be had here and the evening's visitor sits here.
+  // The server goes by the `meals` perk and says so here, so the page never names a building by id.
+  meals: boolean;
   wants: string[];
   stock: { slot: number; entry: { id: string; name: string } | null }[];
   enchantment: { spell: { id: string; name: string }; daysLeft: number } | null;

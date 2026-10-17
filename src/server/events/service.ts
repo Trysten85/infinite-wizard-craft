@@ -1,4 +1,5 @@
 import { isEvening, visitorDue } from "../../shared/day";
+import { servesMeals } from "../../shared/town";
 import { RESPONSE_TYPES, type EventOutcome, type EventSeed, type EventView, type GameEntry, type HintView, type RequestView, type ResponseType, type Rewards, type Stakes } from "../../shared/schema";
 import { RuleError } from "../combiner";
 import type { DayService, DayTurn } from "../day";
@@ -416,7 +417,7 @@ export function createEvents(deps: {
       mood: event.mood as EventView["mood"],
       person: { name: person?.name ?? "Someone", role: person?.role ?? "visitor", returning: metBefore(player, event) },
       // The visitor sits at the Tavern once one stands, and at the door until then.
-      place: standingBuildings(data, store, player).some((at) => at.building.tiers[at.tier - 1]?.perks.some((perk) => perk.type === "meals")) ? "tavern" : "door",
+      place: standingBuildings(data, store, player).some((at) => servesMeals(at.building, at.tier)) ? "tavern" : "door",
       scene: beat.written.scene,
       responses: beat.types.map((type) => ({
         type,
