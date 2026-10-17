@@ -1,5 +1,5 @@
 import type { Balance, GameEntry, PlayerProgress, Quest, QuestProgress, RequestView, Rewards } from "../shared/schema";
-import { dayView, shiftOpen } from "../shared/day";
+import { dayView, shiftOpen, visitorDue } from "../shared/day";
 import { extraDiscoveryGold } from "../shared/town";
 import { RuleError } from "./combiner";
 import { learnCostForTier, levelForSpellTier, type GameData } from "./gameData";
@@ -283,8 +283,9 @@ export function createProgress(deps: {
     const events = store.listEvents(player);
     const waiting = events.some((event) => event.state === "pending");
     // There is one visitor a day, written from the day's start, and one who has not been seen
-    // yet is still the one.
-    const due = events.every((event) => event.state === "resolved") && day.visitorDay < day.state.number;
+    // yet is still the one. The rule itself is `visitorDue`, which the events service asks too,
+    // so the two can no longer drift apart.
+    const due = visitorDue(day.state, day.visitorDay, events.map((event) => event.state));
     const job = jobOf(player, stats.job);
     return {
       job,

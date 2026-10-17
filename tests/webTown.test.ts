@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { BuildingView, DayView, GameEntry, TownView } from "../src/shared/schema";
-import { data } from "./helpers";
+import { data, newGame } from "./helpers";
 import {
   canStock,
   emptyPlot,
@@ -129,22 +129,51 @@ describe("plotCaption", () => {
 describe("plotText", () => {
   const street = town();
   it("says what the next plot costs, and how much gold is still short", () => {
-    expect(plotText(street.plots[2]!, "for-sale", street, 80)).toBe("The next plot along, for 60 gold.");
-    expect(plotText(street.plots[2]!, "for-sale", street, 45)).toBe("The next plot along, for 60 gold. You need 15 more.");
+    expect(plotText(street.plots[2]!, "for-sale", street, 80, true)).toBe("The next plot along, for 60 gold.");
+    expect(plotText(street.plots[2]!, "for-sale", street, 45, true)).toBe("The next plot along, for 60 gold. You need 15 more.");
   });
 
-  it("says the first plot waits on a first job, and what it costs", () => {
+  it("says the first plot waits on a trade in town, and what it costs", () => {
     const first = { index: 0, owned: false, price: 10, opensAt: 1, building: null };
     expect(plotNeedsJob(first, "for-sale", false)).toBe(true);
     expect(plotNeedsJob(first, "for-sale", true)).toBe(false);
     expect(plotNeedsJob(street.plots[2]!, "for-sale", false)).toBe(false);
     expect(plotText(first, "for-sale", street, 50, false)).toBe(
-      "Your first job earns you a place in town. Take one up, and this plot is 10 gold.",
+      "Your first job earns you a place in town. Discover one, and this plot is 10 gold.",
     );
   });
 
   it("says which level opens a plot past the player's deeds", () => {
-    expect(plotText(street.plots[3]!, "locked", street, 0)).toBe("Your deeds cover 3 plots. Level 2 brings a deed for this one.");
+    expect(plotText(street.plots[3]!, "locked", street, 0, true)).toBe("Your deeds cover 3 plots. Level 2 brings a deed for this one.");
+  });
+});
+
+// The page's gate and the server's refusal must answer alike, or the player is shown a plot
+// they cannot buy, or refused one they can. The page reads `town.townsfolk`, which is the list
+// `buyPlot` counts; reading the job the player has taken up instead was wrong, because a job
+// discovered brings a townsperson without any job being taken up.
+describe("the first plot's gate", () => {
+  const gate = (town: TownView) => plotNeedsJob(town.plots[0]!, plotStates(town, 1)[0]!, town.townsfolk.length > 0);
+
+  it("holds the plot shut before any job, as the server does", () => {
+    const game = newGame();
+    game.store.addLedger("ann", 500, "quest", "shut");
+    const town = game.town.view("ann");
+    expect(town.townsfolk).toHaveLength(0);
+    expect(gate(town)).toBe(true);
+    expect(() => game.town.buyPlot("ann")).toThrowError(expect.objectContaining({ code: "no-job" }));
+  });
+
+  it("opens it once a job is discovered, though none has been taken up", () => {
+    const game = newGame();
+    game.store.addLedger("ann", 500, "quest", "open");
+    game.store.addDiscovery("ann", [...data.jobs.keys()][0]!);
+    const town = game.town.view("ann");
+    // No job taken up: this is what the page used to read, and why it disabled the button.
+    expect(game.progress.getProgress("ann").job).toBeNull();
+    expect(town.townsfolk).toHaveLength(1);
+    expect(gate(town)).toBe(false);
+    expect(game.town.buyPlot("ann")).toMatchObject({ plot: 0 });
   });
 });
 

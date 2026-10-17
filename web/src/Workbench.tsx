@@ -974,7 +974,6 @@ export function Workbench({ player, onLeave }: { player: string; onLeave: () => 
               level={progress.level}
               day={day}
               busy={townBusy}
-              hasJob={!!progress.job}
               onBuyPlot={() => build(() => buyPlot(player))}
               onRaise={(plot, building) => build(() => raiseBuilding(player, plot, building))}
               onUpgrade={(plot) => build(() => upgradeBuilding(player, plot))}

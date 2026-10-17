@@ -1,4 +1,4 @@
-import { isEvening } from "../../shared/day";
+import { isEvening, visitorDue } from "../../shared/day";
 import { RESPONSE_TYPES, type EventOutcome, type EventSeed, type EventView, type GameEntry, type HintView, type RequestView, type ResponseType, type Rewards, type Stakes } from "../../shared/schema";
 import { RuleError } from "../combiner";
 import type { DayService, DayTurn } from "../day";
@@ -116,7 +116,7 @@ export function createEvents(deps: {
   // waits, and nobody new is written until they have been seen.
   function isDue(player: string): boolean {
     const saved = store.getDay(player);
-    return saved.visitorDay < saved.state.number && store.listEvents(player).every((event) => event.state === "resolved");
+    return visitorDue(saved.state, saved.visitorDay, store.listEvents(player).map((event) => event.state));
   }
 
   // Whether an event may be in front of the player now. The day's visitor is only seen from dusk.

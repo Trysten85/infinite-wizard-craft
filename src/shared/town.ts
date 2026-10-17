@@ -35,17 +35,16 @@ export function levelForPlot(index: number, rules: TownRules): number | null {
 
 // Why the next plot along cannot be bought, or null if it can. Plots are bought in order, so the
 // next one is the one numbered by how many the player owns. The first waits on a first job, so
-// that a plot is the town's answer to someone with a trade.
+// that a plot is the town's answer to someone with a trade: `jobs` is the trades that have
+// arrived in town, and one of them is enough. A save that already owns a plot is never asked.
 export function refusePlot(
   owned: number,
-  level: number,
-  gold: number,
-  jobs: number,
+  player: Pick<Builder, "jobs" | "level" | "gold">,
   rules: TownRules,
 ): "no-job" | "no-deed" | "not-enough-gold" | null {
-  if (owned === 0 && jobs === 0) return "no-job";
-  if (owned >= deedsFor(level, rules)) return "no-deed";
-  return plotPrice(owned, rules)! > gold ? "not-enough-gold" : null;
+  if (owned === 0 && player.jobs.length === 0) return "no-job";
+  if (owned >= deedsFor(player.level, rules)) return "no-deed";
+  return plotPrice(owned, rules)! > player.gold ? "not-enough-gold" : null;
 }
 
 // What may sit on a building's shelves, and so what its made needs count: materials and spells.

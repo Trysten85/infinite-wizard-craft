@@ -387,14 +387,16 @@ export function createTown(deps: {
     const owned = store.listPlots(player).length;
     const price = plotPrice(owned, rules);
     if (price === null) throw new RuleError("You own every plot on the street.");
-    const { level, gold } = progress.getProgress(player);
-    const refusal = refusePlot(owned, level, gold, builder(player).jobs.length, rules);
-    if (refusal === "no-job") throw new RuleError("A plot is for someone with a trade. Take up your first job, then come back.", refusal);
+    // Everything the rules ask about the buyer, read once: their trades, level and gold.
+    const who = builder(player);
+    const refusal = refusePlot(owned, who, rules);
+    if (refusal === "no-job") throw new RuleError("A plot is for someone with a trade. Discover your first job, then come back.", refusal);
     if (refusal === "no-deed") {
       const opens = levelForPlot(owned, rules);
-      throw new RuleError(`Your deeds cover ${deedsFor(level, rules)} ${deedsFor(level, rules) === 1 ? "plot" : "plots"}.${opens ? ` Level ${opens} brings the next.` : ""}`, refusal);
+      const deeds = deedsFor(who.level, rules);
+      throw new RuleError(`Your deeds cover ${deeds} ${deeds === 1 ? "plot" : "plots"}.${opens ? ` Level ${opens} brings the next.` : ""}`, refusal);
     }
-    if (refusal === "not-enough-gold") throw new RuleError(`The next plot costs ${price} gold. You have ${gold}.`, refusal);
+    if (refusal === "not-enough-gold") throw new RuleError(`The next plot costs ${price} gold. You have ${who.gold}.`, refusal);
     if (price > 0) store.addLedger(player, -price, "plot", String(owned));
     store.addPlot(player, owned);
     return { plot: owned, rewards: progress.settle(player) };

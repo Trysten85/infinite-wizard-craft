@@ -95,19 +95,20 @@ export function upgradeBlock(next: NonNullable<BuildingView["next"]>, gold: numb
 }
 
 // What a plot is, in a sentence, for a plot with no building on it.
-// The first plot needs a first job, which the server holds to (`no-job`); `hasJob` lets the page
-// say so before the player tries.
-export function plotNeedsJob(plot: Plot, state: PlotState, hasJob: boolean): boolean {
-  return state === "for-sale" && plot.index === 0 && !hasJob;
+// The first plot needs a trade in town, which the server holds to (`no-job`). The server counts
+// the townsfolk who have arrived with a job, so `hasTrade` is `town.townsfolk.length > 0` and
+// not whichever job the player has taken up: a job discovered is already enough.
+export function plotNeedsJob(plot: Plot, state: PlotState, hasTrade: boolean): boolean {
+  return state === "for-sale" && plot.index === 0 && !hasTrade;
 }
 
-export function plotText(plot: Plot, state: PlotState, town: TownView, gold: number, hasJob = true): string {
+export function plotText(plot: Plot, state: PlotState, town: TownView, gold: number, hasTrade: boolean): string {
   if (state === "empty") return "An empty plot of yours. Raise one of your plans on it.";
   if (state === "locked")
     return `Your deeds cover ${count(town.deeds.have, "plot", "plots")}. Level ${plot.opensAt} brings a deed for this one.`;
   if (state === "later") return "Plots are bought in order along the street. This one comes later.";
-  if (plotNeedsJob(plot, state, hasJob))
-    return `Your first job earns you a place in town. Take one up, and this plot is ${plot.price} gold.`;
+  if (plotNeedsJob(plot, state, hasTrade))
+    return `Your first job earns you a place in town. Discover one, and this plot is ${plot.price} gold.`;
   if (plot.price === 0) return "The next plot along, and it is free.";
   return gold < plot.price
     ? `The next plot along, for ${plot.price} gold. You need ${plot.price - gold} more.`

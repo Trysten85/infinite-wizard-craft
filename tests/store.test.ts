@@ -67,6 +67,17 @@ describe("deleting a cached combo", () => {
   });
 });
 
+describe("a saved entry", () => {
+  // Every player reads these rows, so a price worked out for one player must not reach them.
+  // `listDiscovered` puts `learnPrice` on the copy it hands out; the stored row keeps the base.
+  it("keeps the base learn cost and drops one player's learn price", () => {
+    const spell: GameEntry = { ...generated("spell-ember"), kind: "spell", learnCost: 40, learnPrice: 30 };
+    store.saveGenerated("fire+air", "fire", "air", spell);
+    expect(store.getEntry("spell-ember")).toMatchObject({ learnCost: 40 });
+    expect(store.getEntry("spell-ember")!.learnPrice).toBeUndefined();
+  });
+});
+
 describe("discoveries", () => {
   it("are recorded once per player", () => {
     expect(store.addDiscovery("ann", "light")).toBe(true);

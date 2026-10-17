@@ -87,21 +87,23 @@ describe("plots", () => {
   });
 
   it("are refused without a deed, or without the gold", () => {
-    expect(refusePlot(0, 1, 10, 1, rules)).toBeNull();
-    expect(refusePlot(0, 1, 9, 1, rules)).toBe("not-enough-gold");
-    expect(refusePlot(1, 1, 29, 1, rules)).toBe("not-enough-gold");
-    expect(refusePlot(1, 1, 30, 1, rules)).toBeNull();
+    // What the buyer brings: the trades in town, their level and their gold.
+    const buyer = (level: number, gold: number, jobs = ["farmer"]) => ({ jobs, level, gold });
+    expect(refusePlot(0, buyer(1, 10), rules)).toBeNull();
+    expect(refusePlot(0, buyer(1, 9), rules)).toBe("not-enough-gold");
+    expect(refusePlot(1, buyer(1, 29), rules)).toBe("not-enough-gold");
+    expect(refusePlot(1, buyer(1, 30), rules)).toBeNull();
     // A third plot waits for level two, however much gold there is.
-    expect(refusePlot(2, 1, 9999, 1, rules)).toBe("no-deed");
-    expect(refusePlot(2, 2, 60, 1, rules)).toBeNull();
+    expect(refusePlot(2, buyer(1, 9999), rules)).toBe("no-deed");
+    expect(refusePlot(2, buyer(2, 60), rules)).toBeNull();
     // The street has an end.
-    expect(refusePlot(9, 5, 9999, 1, rules)).toBe("no-deed");
+    expect(refusePlot(9, buyer(5, 9999), rules)).toBe("no-deed");
   });
 
   it("wait on a first job, and only the first", () => {
-    expect(refusePlot(0, 1, 9999, 0, rules)).toBe("no-job");
+    expect(refusePlot(0, { jobs: [], level: 1, gold: 9999 }, rules)).toBe("no-job");
     // A save that already owns a plot is not asked for a job again.
-    expect(refusePlot(1, 1, 30, 0, rules)).toBeNull();
+    expect(refusePlot(1, { jobs: [], level: 1, gold: 30 }, rules)).toBeNull();
     expect(plotPrice(0, rules)).toBe(10);
   });
 });
@@ -426,7 +428,10 @@ describe("building data that does not hold together", () => {
 describe("the town's refusal codes", () => {
   it("are codes a refusal can carry", () => {
     const codes: RuleCode[] = ["no-deed", "needs-missing", "no-shop"];
-    const fromRules: (RuleCode | null)[] = [refusePlot(2, 1, 0, 1, rules), refuseTier(tavern, 1, { held: [], jobs: [], level: 1, gold: 0 }, rules)];
+    const fromRules: (RuleCode | null)[] = [
+      refusePlot(2, { jobs: ["farmer"], level: 1, gold: 0 }, rules),
+      refuseTier(tavern, 1, { held: [], jobs: [], level: 1, gold: 0 }, rules),
+    ];
     expect(fromRules).toEqual(["no-deed", "needs-missing"]);
     expect(codes).toHaveLength(3);
   });

@@ -62,6 +62,15 @@ export function shiftOpen(state: DayState, rules: DayRules, hasJob: boolean): bo
   return hasJob && state.sun >= rules.noon && !state.shiftDone;
 }
 
+// One visitor a day: today's has not been sat with, and nothing earlier is still open. `visitorDay`
+// is the last day the player finished with one, and `eventStates` the state of each of their
+// events. The server writes the visitor out of sight and only shows them from dusk, which is the
+// day's business and not this. Both the events service and the player's standing ask here, so
+// there is one answer.
+export function visitorDue(state: DayState, visitorDay: number, eventStates: string[]): boolean {
+  return visitorDay < state.number && eventStates.every((event) => event === "resolved");
+}
+
 // From noon the player may call it a day. From dusk that is going to bed instead.
 export function canTurnIn(state: DayState, rules: DayRules): boolean {
   return phaseFor(state.sun, rules) === "afternoon";

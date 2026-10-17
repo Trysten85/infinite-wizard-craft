@@ -21,6 +21,7 @@ import {
   tonightAnnounced,
   tonightComes,
   turnIn,
+  visitorDue,
   type DayAction,
   type DayState,
 } from "../src/shared/day";
@@ -68,6 +69,21 @@ describe("the sun", () => {
     expect(isEvening(late, rules)).toBe(true);
     // A shift worked late in the afternoon cannot push the sun past dusk either.
     expect(afterAction(at(9), "shift", rules).sun).toBe(10);
+  });
+});
+
+describe("the day's visitor", () => {
+  it("is due once a day, and not while one is still unresolved", () => {
+    // Dawn of day 2, having finished with day 1's visitor.
+    const today = { ...at(0), number: 2 };
+    expect(visitorDue(today, 1, ["resolved"])).toBe(true);
+    // Today's has been sat with: nobody else comes today.
+    expect(visitorDue(today, 2, ["resolved"])).toBe(false);
+    // One still waiting or half-written holds the next back, however many days have passed.
+    expect(visitorDue(today, 1, ["resolved", "pending"])).toBe(false);
+    expect(visitorDue(today, 1, ["writing"])).toBe(false);
+    // A player who has met nobody is owed their first.
+    expect(visitorDue(at(0), 0, [])).toBe(true);
   });
 });
 

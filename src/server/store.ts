@@ -416,11 +416,14 @@ export function openStore(path: string) {
 
     // Saves a generated combo. An existing entry with the same id is kept, so its text never changes.
     // `missingTag` is the model's hint that the vocabulary lacked a word; it is kept for human review.
+    // Every player shares these rows, so `learnPrice` is dropped: it is one player's price, worked
+    // out for them by `listDiscovered`, and writing it here would charge everyone their discount.
     saveGenerated(key: string, a: string, b: string, entry: GameEntry, missingTag?: string | null): void {
+      const { learnPrice: _price, ...shared } = entry;
       transaction(() => {
         const inserted = db
           .prepare("INSERT OR IGNORE INTO entries (id, json) VALUES (?, ?)")
-          .run(entry.id, JSON.stringify(entry));
+          .run(entry.id, JSON.stringify(shared));
         if (inserted.changes === 1 && missingTag) {
           db.prepare("INSERT INTO tag_reviews (entry_id, suggestion) VALUES (?, ?)").run(entry.id, missingTag);
         }

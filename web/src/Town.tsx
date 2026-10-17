@@ -37,8 +37,6 @@ type Props = {
   // True while something is being bought or raised.
   busy: boolean;
   onBuyPlot: () => void;
-  // Whether the player has taken up a job. The first plot waits on one.
-  hasJob: boolean;
   onRaise: (plot: number, building: string) => void;
   onUpgrade: (plot: number) => void;
   onLeave: () => void;
@@ -80,6 +78,9 @@ export function Town(props: Props) {
   const shownState = shown ? states[shown.index]! : null;
   // A plan goes on the picked plot if that is empty, and otherwise on the first empty one.
   const site = shown && shownState === "empty" ? shown : free;
+  // The first plot waits on a trade in town. This is the same list the server counts, so the
+  // page offers the plot exactly when buying it would be allowed.
+  const hasTrade = (town?.townsfolk.length ?? 0) > 0;
 
   return (
     <section className="town" aria-label="The town">
@@ -151,9 +152,9 @@ export function Town(props: Props) {
               shownState && (
                 <>
                   <h3>Plot {shown.index + 1}</h3>
-                  <p>{plotText(shown, shownState, town, gold, props.hasJob)}</p>
+                  <p>{plotText(shown, shownState, town, gold, hasTrade)}</p>
                   {shownState === "for-sale" && (
-                    <button disabled={busy || gold < shown.price || plotNeedsJob(shown, shownState, props.hasJob)} onClick={onBuyPlot}>
+                    <button disabled={busy || gold < shown.price || plotNeedsJob(shown, shownState, hasTrade)} onClick={onBuyPlot}>
                       {shown.price === 0 ? "Claim this plot" : "Buy this plot"}
                       {shown.price > 0 && <Gold amount={shown.price} />}
                     </button>
