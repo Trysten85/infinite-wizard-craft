@@ -71,13 +71,21 @@ export function tooAlike(text: string, others: string[], share = 0.5): string | 
 }
 
 // Everything an order must satisfy that a schema cannot express. Returns the reason it fails, or null.
+// Whether the order says this phrase as words of its own, and not inside longer ones: "air" is
+// not asked for by a chair, nor "ice" by a price.
+function saysWords(text: string, phrase: string): boolean {
+  const wanted = words(phrase);
+  if (wanted.length === 0) return false;
+  const said = words(text);
+  return said.some((_, at) => wanted.every((word, step) => said[at + step] === word));
+}
+
 export function checkOrder(
   brief: OrderBrief,
   text: string,
   checks: { blocklist?: Blocklist; voiceCheck?: (text: string) => string | null } = {},
 ): string | null {
-  const lower = text.toLowerCase();
-  const missing = brief.tags.filter(({ tag, words: phrase }) => !lower.includes(phrase.toLowerCase()) && !lower.includes(tag.toLowerCase()));
+  const missing = brief.tags.filter(({ tag, words: phrase }) => !saysWords(text, phrase) && !saysWords(text, tag));
   if (missing.length > 0) {
     return `It must use these words as plain parts of the sentence: ${missing.map((item) => `"${item.words}"`).join(", ")}.`;
   }

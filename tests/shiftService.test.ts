@@ -292,7 +292,7 @@ describe("a saved game from before shifts", () => {
     const path = join(dir, "game.db");
     const first = openStore(path);
     first.changeStats("ann", { rep: 3 });
-    const orderId = first.addShiftOrder("ann", { job: "blacksmith", tags: ["metal", "forging"], tier: 0, text: "A hinge." });
+    const orderId = first.addShiftOrder("ann", { job: "blacksmith", tags: ["metal", "forging"], tier: 0, subject: "A hinge", text: "A hinge." });
     first.addShift("ann", { job: "blacksmith", orderTags: ["metal"], inputs: ["staple:scrap-iron", "staple:hammer"], quality: "good", line: "It does the job.", gold: 10, xp: 10, rep: 0 });
     first.close();
     const second = openStore(path);

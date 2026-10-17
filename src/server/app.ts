@@ -228,12 +228,11 @@ export function createApp(
 
     if (shifts) {
       // The order board for the job the player has taken up, and what they may fill an order with.
+      // The board is written ahead, out of sight, so this never waits on the model: whatever is
+      // written shows now, and an order still in the plain template is the model's by the next look.
       app.get("/api/players/:player/shift", async (c) => {
         const request = await read(c);
-        if (!request) return invalid(c);
-        // A board being written ahead is given a moment to finish, so its words are the model's.
-        await Promise.race([shifts.idle(request.player), new Promise((resolve) => setTimeout(resolve, 8000))]);
-        return c.json(shifts.board(request.player));
+        return request ? c.json(shifts.board(request.player)) : invalid(c);
       });
 
       // Works one order from the board with the things chosen.

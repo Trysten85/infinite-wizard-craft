@@ -57,9 +57,11 @@ export function createShifts(deps: {
 
   // A stock order whose subject is not one already in play, so a board never says the same thing
   // twice. When every subject is in play, any may be used.
-  function draftOrder(player: string, at: Situation, extra: string[] = []) {
-    const inPlay = heldAgainst(player, at, extra);
-    const fresh = at.skin.subjects.filter((subject) => !inPlay.some((text) => text.startsWith(subject)));
+  // The subjects in play are read from the orders themselves, not from their words: the model
+  // rewrites an order in its own voice, so its text says nothing reliable about its subject.
+  function draftOrder(player: string, at: Situation, alsoUsed: string[] = []) {
+    const inPlay = new Set([...store.listOpenShiftOrders(player, at.job.id).map((order) => order.subject), ...alsoUsed]);
+    const fresh = at.skin.subjects.filter((subject) => !inPlay.has(subject));
     const skin = fresh.length > 0 ? { ...at.skin, subjects: fresh } : at.skin;
     return stockOrder(data, skin, at.level, at.rank.id, random);
   }
@@ -85,7 +87,7 @@ export function createShifts(deps: {
         text = await writer.write({
           job: at.job.name,
           flavor: at.skin.flavor,
-          subject: draft.text.split(/\.\s/)[0]!,
+          subject: draft.subject,
           tags: draft.tags.map((tag) => ({ tag, words: data.shiftText.tagWords[tag] ?? tag })),
           subjects: at.skin.subjects,
           others: heldAgainst(player, at),
@@ -96,7 +98,7 @@ export function createShifts(deps: {
       // The board may have been filled while the model was working.
       const now = situation(player);
       if (!now || store.listOpenShiftOrders(player, now.job.id).length >= rules.board) return;
-      store.addShiftOrder(player, { job: now.job.id, tags: draft.tags, tier: draft.tier, text });
+      store.addShiftOrder(player, { job: now.job.id, tags: draft.tags, tier: draft.tier, subject: draft.subject, text });
     }
   }
 

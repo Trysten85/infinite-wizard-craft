@@ -94,3 +94,59 @@ describe("the plain board", () => {
     }
   });
 });
+
+// A subject has to be kept beside the order, because the model's words say nothing about it: the
+// writer is told it may invent something near the subject, and these ones never name it at all.
+// Reading the subject back out of the text held only for the plain template.
+describe("a board the model wrote", () => {
+  it("still says one subject apiece, and keeps each order's subject", async () => {
+    for (let seed = 1; seed <= 20; seed++) {
+      const game = newGame(seed);
+      for (const id of ["person", "spirits", "innkeeper"]) game.store.addDiscovery("ann", id);
+      game.progress.chooseJob("ann", "innkeeper");
+      game.setDay("ann", { sun: NOON });
+      // Words of the model's own, which never contain the subject they were drafted from.
+      let n = 0;
+      const shifts = createShifts({
+        data,
+        store: game.store,
+        progress: game.progress,
+        day: game.day,
+        listDiscovered: game.combiner.listDiscovered,
+        writer: { write: async (b) => `Something quite else, the ${n++}th of its kind, wanting ${b.tags.map((t) => t.words).join(" and ")}.` },
+      });
+      shifts.prepare("ann");
+      await shifts.idle("ann");
+      expect(shifts.board("ann").orders).toHaveLength(data.balance.shifts.board);
+      const subjects = game.store.listOpenShiftOrders("ann", "innkeeper").map((order) => order.subject);
+      expect(subjects.every((subject) => subject !== "")).toBe(true);
+      expect(new Set(subjects).size).toBe(subjects.length);
+    }
+  });
+
+  it("tops a part-filled board up without repeating a subject still on it", async () => {
+    const game = newGame();
+    for (const id of ["person", "spirits", "innkeeper"]) game.store.addDiscovery("ann", id);
+    game.progress.chooseJob("ann", "innkeeper");
+    game.setDay("ann", { sun: NOON });
+    // One order filled, so the board is topped up around the two still open.
+    const board = game.shifts.board("ann");
+    game.store.finishShiftOrder(board.orders[0]!.id);
+    const after = game.shifts.board("ann").orders;
+    expect(after).toHaveLength(data.balance.shifts.board);
+    const subjects = game.store.listOpenShiftOrders("ann", "innkeeper").map((order) => order.subject);
+    expect(new Set(subjects).size).toBe(subjects.length);
+  });
+});
+
+describe("the words an order must use", () => {
+  it("are its own words, not ones hidden inside longer ones", () => {
+    const air: OrderBrief = { ...brief, tags: [{ tag: "air", words: "a breath of air" }], others: [] };
+    // A chair is not a breath of air, and a price is not ice.
+    expect(checkOrder(air, "The chair by the window wobbles and nobody will own up to it.")).toMatch(/a breath of air/);
+    expect(checkOrder(air, "The window will not shut and the room wants a breath of air.")).toBeNull();
+    const ice: OrderBrief = { ...brief, tags: [{ tag: "ice", words: "ice" }], others: [] };
+    expect(checkOrder(ice, "Nobody can agree on the price, and the cellar is too warm.")).toMatch(/"ice"/);
+    expect(checkOrder(ice, "The cellar is too warm and the cream wants ice.")).toBeNull();
+  });
+});

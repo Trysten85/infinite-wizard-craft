@@ -49,8 +49,10 @@ export type StoredTonight = { day: number; happening: string | null; taken: bool
 // One thing on one shelf of a building. A discovery is on one shelf at a time.
 export type StoredStock = { plot: number; slot: number; entryId: string };
 
-// An order on a player's board, for one job. It stays until it is filled.
-export type StoredShiftOrder = { id: number; job: string; tags: string[]; tier: number; text: string; state: "open" | "done" };
+// An order on a player's board, for one job. It stays until it is filled. `subject` is what it is
+// about, kept apart from the text because the model writes the text in its own words. An order
+// saved before subjects were kept has none.
+export type StoredShiftOrder = { id: number; job: string; tags: string[]; tier: number; subject: string; text: string; state: "open" | "done" };
 // One shift worked, for the log.
 export type StoredShift = {
   id: number;
@@ -373,6 +375,11 @@ export function openStore(path: string) {
   if (!statColumns.includes("evenings")) db.exec("ALTER TABLE player_stats ADD COLUMN evenings INTEGER NOT NULL DEFAULT 0");
   if (!statColumns.includes("shift_lift_day")) db.exec("ALTER TABLE player_stats ADD COLUMN shift_lift_day INTEGER NOT NULL DEFAULT 0");
 
+  // An order keeps what it is about beside its text, so that a board written by the model can
+  // still be held to one subject apiece. Orders saved before this have none.
+  const orderColumns = db.prepare("PRAGMA table_info(shift_orders)").all().map((row) => row.name as string);
+  if (!orderColumns.includes("subject")) db.exec("ALTER TABLE shift_orders ADD COLUMN subject TEXT");
+
   function transaction<T>(fn: () => T): T {
     db.exec("BEGIN");
     try {
@@ -670,23 +677,25 @@ export function openStore(path: string) {
       db.prepare("UPDATE player_stats SET visitor_day = ? WHERE player = ?").run(day, player);
     },
 
-    addShiftOrder(player: string, order: Pick<StoredShiftOrder, "job" | "tags" | "tier" | "text">): number {
+    addShiftOrder(player: string, order: Pick<StoredShiftOrder, "job" | "tags" | "tier" | "subject" | "text">): number {
       const result = db
-        .prepare("INSERT INTO shift_orders (player, job, tags, tier, text) VALUES (?, ?, ?, ?, ?)")
-        .run(player, order.job, JSON.stringify(order.tags), order.tier, order.text);
+        .prepare("INSERT INTO shift_orders (player, job, tags, tier, subject, text) VALUES (?, ?, ?, ?, ?, ?)")
+        .run(player, order.job, JSON.stringify(order.tags), order.tier, order.subject, order.text);
       return Number(result.lastInsertRowid);
     },
 
     // A player's orders for one job that are still waiting to be filled, oldest first.
     listOpenShiftOrders(player: string, job: string): StoredShiftOrder[] {
       return db
-        .prepare("SELECT * FROM shift_orders WHERE player = ? AND job = ? AND state = 'open' ORDER BY id")
+        .prepare("SELECT id, job, tags, tier, subject, text FROM shift_orders WHERE player = ? AND job = ? AND state = 'open' ORDER BY id")
         .all(player, job)
         .map((row) => ({
           id: row.id as number,
           job: row.job as string,
           tags: JSON.parse(row.tags as string) as string[],
           tier: row.tier as number,
+          // Orders saved before subjects were kept have none, and are about nothing in particular.
+          subject: (row.subject as string | null) ?? "",
           text: row.text as string,
           state: "open" as const,
         }));

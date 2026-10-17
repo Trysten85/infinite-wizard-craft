@@ -5,8 +5,10 @@ import { levelForSpellTier, type GameData } from "../gameData";
 // is worked out from the game data and what the player has. Nothing is saved or paid out: the
 // shift service does that, and src/shared/shifts.ts judges the result.
 
-// An order before it is saved: what it asks for, how demanding it is, and how it reads.
-export type OrderDraft = { tags: string[]; tier: number; text: string };
+// An order before it is saved: what it asks for, how demanding it is, and how it reads. The
+// `subject` is what it is about, kept beside the text: the model rewrites the text in its own
+// words, so the subject is the only way to tell afterwards what an order was about.
+export type OrderDraft = { tags: string[]; tier: number; subject: string; text: string };
 
 const STAPLE_PREFIX = "staple:";
 
@@ -66,7 +68,8 @@ export function stockOrder(data: GameData, skin: JobSkin, level: number, rank: R
   }
   const top = orderTierFor(level, data);
   const tier = Math.max(0, top - (random() < 0.5 ? 1 : 0));
-  return { tags, tier, text: orderText(pickOne(skin.subjects, random), tags, data.shiftText) };
+  const subject = pickOne(skin.subjects, random);
+  return { tags, tier, subject, text: orderText(subject, tags, data.shiftText) };
 }
 
 // What the player may put in each slot: the job's own staples for their rank, then whatever of
