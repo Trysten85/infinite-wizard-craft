@@ -1,0 +1,82 @@
+Infinite Wizard Craft: Jobs, Work Shifts, and Ranks v0.1 (DRAFT, cozy)
+
+Jobs now produce something. Each job has a work shift (a short pick-and-match loop) and a rank track. This replaces "job = a score label." Tone follows voice.md. Every number is a placeholder for the config file. No timers, no real-time skill, and nothing a player can lose permanently.
+
+What the code owns and what the AI owns
+Code owns	AI owns
+Orders (tags, tier, reward), the choices offered, quality, rewards, ranks	Order wording, the customer, and the result line
+Which inputs fit which tags	Flavor for each job's skin
+
+The AI never decides quality or rewards.
+
+The work shift
+Order board. The board shows 2-3 orders. Sources: stock orders (the code builds one from the job's wanted tags and the player's tier), customer orders (from event and quest seeds), and quest steps (Make, Serve, and Tend objectives are completed through shifts).
+Choose how. The player picks 1 input from each of 2-3 slots, drawn from their inventory, tags, and known spells:
+Base (what it's made from)
+Method (how it's done)
+Touch (optional flourish: a spell, a rare material, a signature tag)
+Code resolves. Each order lists required tags and a tier. Quality is computed from tag match, input tier versus order tier, and rank, plus a small variance.
+AI writes 1-2 lines about how it went.
+Rewards and log. The code pays out and logs the shift to the interaction history. A Perfect or Meh result can raise related event seeds.
+Quality (cozy rules)
+Tier	Meaning	Gold	XP	Rep
+Meh	Works, but not great	x0.6	x0.6	0
+Good	Does the job	x1.0	x1.0	0
+Great	Customer smiles	x1.4	x1.3	+1
+Perfect	Worth talking about	x1.8	x1.6	+2 (and sometimes a perk)
+Match score = share of the order's required tags covered by the chosen inputs, plus a bonus when input tier meets the order tier, plus a rank bonus.
+Variance: at most one step up or down, rolled by the code. It never drops below Meh. There is no "ruined" result: a bad shift is just Meh with a funny line.
+Players can preview a rough quality range before confirming (e.g., "likely Good to Great") so choices feel like a puzzle, not a gamble.
+No wasted shifts: a Meh result still pays, and the ingredients used are never lost without a clear warning.
+Pacing (no clock)
+
+Changed 2026-10-11: the game now has days, moved by the player's own discoveries, with one shift a day from noon. There are still no timers. `Town Guide.md` replaces the paragraph below.
+
+There are no in-game days, daily slots, deadlines, or timers. The player takes a shift whenever they want, and nothing waits on or expires from time passing. The board refreshes with new orders each time an order is completed, and a refresh never removes an order the player is still working on.
+
+Job skins (same engine, different flavor)
+Job	Base	Method	Touch	Order flavor
+Tea shop owner	Leaf or herb	Steep, blend, or brew	Honey, spell, rare petal	Customers' moods, regulars' favorites
+Farmer	Seed or animal	Plant, tend, or harvest	Water charm, compost trick	Seasons, markets, enormous vegetables
+Blacksmith	Metal	Heat, hammer, or quench	Rune, alloy	Hinges, tools, gates, gear
+Gray-market dealer	Goods	Stock, haggle, or pitch	A free sample, a wink	Odd requests and rare finds (invented, harmless; uses only the contraband and underground flavor tags)
+Potion brewer	Herb or reagent	Mix, distill, or age	Spell	Tonics for ordinary troubles
+Enchanter	Item	Bind, etch, or soak	Spell, rare material	Gear that needs a little extra
+Court mage	Document or topic	Advise, draft, or ceremony	Spell, protocol	Paperwork and polite advice
+Ranger / forager	Terrain	Track, gather, or map	Tool, charm	Finds, trails, rare materials
+Combat mage (optional)	Spell	Contract style (lanterns, wards, repairs)	Flourish	Spell-for-hire jobs, nothing violent
+
+New jobs only need a skin entry in the data file: three slot names, a few inputs with tags, and an order flavor.
+
+Pairing jobs
+The main job's shift runs at full value. A secondary job's shifts run at half value, matching the score rule.
+Synergy: if the player's secondary job supplies a matching input (an enchanter's rune for a smith's hinge), a Touch option appears that would not otherwise exist. Synergies are data entries, not code.
+Ranks
+
+Ranks come from shifts completed and score, not a second XP number.
+
+Rank	Needs (draft)	Unlocks
+Apprentice	Start	Stock orders, basic recipes
+Journeyman	15 shifts, score at least 40%	Bigger orders, a new method, 2 recipes, a small price bonus
+Master	40 shifts, score at least 70%	Rare orders, the Touch slot gets a second option, a signature recipe, a lasting perk, job-specific quest and event seeds
+No decay. Ranks stay once earned.
+Perks are small and data-driven: a price bonus, a recurring customer, a free starter ingredient with each shift, extra order slots.
+Level still gates spells. Rank gates job content. They are separate on purpose.
+Switching main job keeps each job's rank; rank applies when the job is active.
+How it connects to the rest
+Quests: Make, Serve, and Tend steps run through the shift. The quest's tag requirements become the order's required tags.
+Events: about 1 in 4 shifts may trigger an event seed (a customer returns, an inspector appears). Perfect shifts raise opportunity and social seeds, and Meh shifts raise mishap and comic ones.
+Score: shifts do not change score directly, but the inputs and recipes you unlock do.
+Shop Rep: Great and Perfect results move Rep. Rep bands change order volume and prices, as defined in the events doc.
+Interaction history: every shift writes a short record (job, order tags, inputs, quality, line). Repeat visits can refer back to it.
+Rules for the AI writer
+Write the order (customer and request in 1-2 sentences) and the result (1-2 lines) from the data the code provides. Stay in voice.md.
+The order text must name every required tag in plain words. Do not add requirements.
+Never write numbers or mention quality tier names.
+No injury, cruelty, real people, real drugs, or explicit content. Gray-market goods are invented and harmless.
+Notes for Claude Code
+Jobs, skins, inputs, ranks, perks, and synergies live in data files. Quality multipliers, thresholds, and slots live in the config file.
+Build the shift as a pure function: (order, chosen inputs, rank, seed) -> quality. Test it hard: tag coverage, tier match, rank bonus, variance bounds, floor at Meh.
+Add the preview range function and test that it brackets the real result.
+Validate AI text with a schema and a critic pass for tags named, tone, and no numbers. Use a stub AI first.
+Tests: order generation by job, slot rules, rewards by quality, rank progression, secondary job half value, synergy options, no-decay, and event triggers.
