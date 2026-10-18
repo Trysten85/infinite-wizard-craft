@@ -48,7 +48,8 @@ committed and puts the SHA in the ticket's Notes.
 
 | Ticket | Files | Tests/typecheck | What landed, and what review changed |
 |---|---|---|---|
-| Process: RTK and the commit chain (no ticket) | `CLAUDE.md`, `Work Board.md` (this paragraph, step 4, this table, the Log line), `.claude/settings.json`, `.claude/hooks/git-guard.py` | No code touched. The hook script was pipe-tested on 30 commands: history writes are refused for other sessions and allowed for the sentinel id, while reads, `rtk git status` and `echo "git commit"` pass. | Two changes. **RTK:** Trysten hooked RTK into Claude Code globally on 2026-10-15, so Bash output is now condensed. `CLAUDE.md` gains a rule saying what can go wrong and to rerun with `rtk bypass <cmd>`. **One committer:** commits had come from every owner and from the review bot. Now owners and the review bot leave files in the tree, and the commit bot commits from this table. Written rules alone won't hold, because running sessions keep the old `CLAUDE.md` in context until restarted. So a project PreToolUse hook enforces it, keyed on the commit bot's session id. That id lives in a gitignored file only Trysten writes, because every session reads the same project settings. The deny list goes beyond the paste's ten commands: `pull`, `am`, `rm`, `mv`, `checkout`, `restore`, `switch`, `clean`, `update-ref`, and `commit-tree` either write history or discard other sessions' uncommitted work in the shared tree. |
+
+Nothing waiting. The last row was committed on 2026-10-18; see the Log.
 
 ## Lanes
 
@@ -941,6 +942,18 @@ from the day rather than assuming it.
 
 ## Log
 
+- 2026-10-18: the commit bot cleared the backlog that had built up in the tree, as six commits:
+  `2aabf29` the RTK rule, `7a95015` the commit chain and its hook, `b4960b0` the design map's
+  cozy tone override and the parked law system, `e1c57fc` the jobs and quest-seed drafts,
+  `2463bcd` the bake review and its triage sheet, `54e1ba8` a new `Process.md` saying how this
+  project is built and what a commit here looks like. Commits from now on carry no co-author
+  trailer; earlier ones keep theirs, since rewriting them would change every SHA this board
+  cites. Two things for the lanes: **an RTK edge case** for the list in `CLAUDE.md` -- `git add
+  -n .` returns nothing at all through the filter and ten lines under `rtk bypass` -- and
+  **`Infinite Wizard Craft.md` points at three docs that are not in the tree**
+  (`fantasy-cozy-direction.md`, `fantasy-data-checklist.md`, `fantasy-tag-vocabulary.md`), which
+  look like `Tag Guide.md` and `Infinite Wizard Craft Phase Guide.md` after a rename. Naming is
+  Trysten's call, so they were left alone.
 - 2026-10-17: Trysten's commit chain (2026-10-16) is in: owner → review bot → commit bot, with
   a "Ready to commit" table, and a Bash hook that refuses history-writing git commands from any
   session but the commit bot. The commit bot claims itself as described under "Commit and review".
