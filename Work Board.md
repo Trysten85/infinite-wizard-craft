@@ -12,7 +12,7 @@ The one list of what each session is building. The design behind the tickets is 
 3. **Check "Depends on".** A ticket whose dependencies are not `done` can still be started from
    the shapes sketched in the guide, but say so in its Notes.
 4. **When finished,** set the status to `done`, and add one Notes line saying what landed and
-   anything the next lane needs to know. If Trysten had you commit, add the commit.
+   anything the next lane needs to know. You do not commit; see "Commit and review" below.
 5. **A question about the design** goes under "Questions for design" at the bottom, with the
    ticket id. The design session answers there and updates the guide.
 6. **Do not change the design in code.** If a rule in the guide is wrong or cannot be built,
@@ -20,12 +20,35 @@ The one list of what each session is building. The design behind the tickets is 
 
 Statuses: `open`, `claimed by <name>`, `blocked: <why>`, `done, unreviewed`, `done`.
 
-**Commit and review (Trysten, 2026-10-15, final).** When a ticket's tests and typecheck pass,
-the owner commits its own lane's files with "unreviewed" and the ticket id in the message, sets
-the ticket to `done, unreviewed`, and puts the commit in Notes. Then the owner stops. The review
-bot (infinite-spell-craft-1e) reviews it, fixes what it finds, commits the fix, and sets the
-ticket to `done`. Owners do not finalize their own tickets and do not message the bot; it reads
-this board. Messages between sessions are kept to what cannot go here.
+**Commit and review (Trysten, 2026-10-16, final).** Nobody commits but the commit bot.
+
+- **Owner:** tests and typecheck pass → status `done, unreviewed` → one Notes line (what landed,
+  which files) → stop.
+- **Review bot (infinite-spell-craft-1e):** reviews, fixes what it finds in the working tree,
+  then adds a row under "Ready to commit" below and stops. It no longer commits.
+- **Commit bot:** checks the tree is quiet, re-runs tests and typecheck, stages exactly the listed
+  files, writes the message, commits, sets the ticket to `done` with the SHA in Notes, and
+  clears the row.
+
+Owners do not finalize their own tickets and do not message the bots; they read this board.
+Messages between sessions are kept to what cannot go here.
+
+A Bash hook (`.claude/hooks/git-guard.py`) refuses `git commit`, `add`, `merge`, `rebase`,
+`reset`, `revert`, `cherry-pick`, `stash`, `tag`, `push`, `pull`, `am`, `rm`, `mv`, `checkout`,
+`restore`, `switch`, `clean`, `update-ref`, and `commit-tree` from every session except the one
+whose id is in `var/commit-bot-session`. **To claim or re-claim it after the commit bot
+restarts:** the commit bot runs `git add -n .`. The refusal prints its session id, and Trysten
+runs this in his own terminal (not through Claude):
+`echo <session id> > "/home/trysten/Documents/Infinite Spell Craft/var/commit-bot-session"`
+
+## Ready to commit
+
+The commit bot owns every commit and takes work only from this table. It removes a row once
+committed and puts the SHA in the ticket's Notes.
+
+| Ticket | Files | Tests/typecheck | What landed, and what review changed |
+|---|---|---|---|
+| Process: RTK and the commit chain (no ticket) | `CLAUDE.md`, `Work Board.md` (this paragraph, step 4, this table, the Log line), `.claude/settings.json`, `.claude/hooks/git-guard.py` | No code touched. The hook script was pipe-tested on 30 commands: history writes are refused for other sessions and allowed for the sentinel id, while reads, `rtk git status` and `echo "git commit"` pass. | Two changes. **RTK:** Trysten hooked RTK into Claude Code globally on 2026-10-15, so Bash output is now condensed. `CLAUDE.md` gains a rule saying what can go wrong and to rerun with `rtk bypass <cmd>`. **One committer:** commits had come from every owner and from the review bot. Now owners and the review bot leave files in the tree, and the commit bot commits from this table. Written rules alone won't hold, because running sessions keep the old `CLAUDE.md` in context until restarted. So a project PreToolUse hook enforces it, keyed on the commit bot's session id. That id lives in a gitignored file only Trysten writes, because every session reads the same project settings. The deny list goes beyond the paste's ten commands: `pull`, `am`, `rm`, `mv`, `checkout`, `restore`, `switch`, `clean`, `update-ref`, and `commit-tree` either write history or discard other sessions' uncommitted work in the shared tree. |
 
 ## Lanes
 
@@ -918,6 +941,9 @@ from the day rather than assuming it.
 
 ## Log
 
+- 2026-10-17: Trysten's commit chain (2026-10-16) is in: owner → review bot → commit bot, with
+  a "Ready to commit" table, and a Bash hook that refuses history-writing git commands from any
+  session but the commit bot. The commit bot claims itself as described under "Commit and review".
 - 2026-10-15: infinite-spell-craft-05 (Backend) added a model order writer
   (`src/server/shifts/writer.ts`, `service.ts` `prepare`/`idle`, `store.listDoneShiftTexts`).
   Orders were one template over four subjects, drawn with replacement, so boards repeated.

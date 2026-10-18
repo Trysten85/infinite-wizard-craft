@@ -17,7 +17,12 @@ Several Claude sessions work in this one working tree at the same time. Before s
   ticket done.
 - **Stay in your lane's files.** When you must touch a shared file, make small exact edits so
   another session's lines are not overwritten.
-- **Do not commit another session's work.** Check `git status` first, and ask Trysten.
+- **You do not commit. Ever.** One session (the commit bot) owns every commit. Finish your
+  ticket, make `npm test` and `npm run typecheck` pass, leave the files in the tree, and set the
+  ticket to `done, unreviewed` with a Notes line saying what landed and which files. Then stop.
+  Do not run `git commit`, `add`, `merge`, `rebase`, `reset`, or `stash`. A Bash hook
+  (`.claude/hooks/git-guard.py`) refuses those and the other commands that write history or
+  discard work in the tree. Reads (`status`, `diff`, `log`, `show`) stay open.
 - **The dev server reloads rule changes onto the real save.** Back up `var/game.db` before
   changing progression, and try new rules on a copy with a made-up player.
 - **Source nvm before `npm` or `tsx`.** The system Node is too old to run the server.
