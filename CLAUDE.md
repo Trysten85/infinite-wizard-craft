@@ -22,3 +22,8 @@ Several Claude sessions work in this one working tree at the same time. Before s
   changing progression, and try new rules on a copy with a made-up player.
 - **Source nvm before `npm` or `tsx`.** The system Node is too old to run the server.
 - Questions about the design go under "Questions for design" in `Work Board.md`.
+- **Shell output goes through RTK**, a token filter hooked on Bash (installed 2026-10-15). It
+  condenses `git`, `grep`, `find`, `ls`, and test output. Watch for edge cases: truncated or
+  grouped `grep` and `git diff` output, test runs that show only failures, piped or chained
+  commands, and output you must parse exactly. If a result is empty, garbled, or contradicts its
+  exit code, rerun it as `rtk bypass <cmd>` before trusting it, and report the case to Trysten.
