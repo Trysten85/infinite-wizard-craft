@@ -1,7 +1,12 @@
 # Infinite Wizard Craft (working title): Design Map v0.1
 
 ## Handoff notes for Claude Code (read first)
-This doc is the design source of truth. `fantasy-data-checklist.md` is the build order. Build **Phase 1 only** first, then stop and check in. Every number in here is a placeholder to tune, and anything marked DRAFT or listed under Open questions is not final.
+This doc is the design source of truth. `fantasy-data-checklist.md` is the build order, and `fantasy-tag-vocabulary.md` is the closed list of allowed tags. Build **Phase 1 only** first, then stop and check in. Every number in here is a placeholder to tune, and anything marked DRAFT or listed under Open questions is not final.
+
+**TONE OVERRIDE:** the game is now lighthearted and cozy, with jokes and serious depth underneath, and non-violent play is fully supported. Read `fantasy-cozy-direction.md` first. Wherever this doc says "dark", "gritty", or "church-run", the cozy doc wins.
+
+### Out of scope for v1
+The law system (law levels, licenses, contraband, heat, law-change events, Find a New Home), the build-your-own-tower idea, and designed cities. The design notes are parked in this doc. Don't build any of it until the core game works. (Changed 2026-10-11: in-game days and a town the player builds are now in scope. `Town Guide.md` is the design, and `Work Board.md` the tickets.)
 
 ### Rules of the build
 1. **Code owns rules; the AI writes words.** XP, level, score, unlocks, law checks, and combo validity are computed in code. The model writes names, descriptions, and flavor, and judges borderline combos.
@@ -39,7 +44,7 @@ The model interface in rule 4 makes swapping easy.
 Original fantasy world. No canon to guard, so no lookalike checker. The engine is the same one designed for the Cradle fan project (alchemy combining, tags, a progression system, cache, critic), so it can be swapped between data layers later.
 
 ## Core idea
-Start with a spellbook. Combine elements and materials to discover new spells, items, and jobs. Level up to reach stronger magic. Join guilds, pick jobs, craft your own gear. The AI writes names, flavor, spell variants, and random events scaled to your build. Code owns rules and numbers.
+Start with a spellbook. Combine elements and materials to discover new spells, items, and jobs. Level up to reach stronger magic. Join guilds, pick jobs, craft your own gear. The tone is cozy and funny, and no one has to fight: you can run a tea shop, farm, forge, or deal in gray-market oddities as deeply as you could be a battle mage. The AI writes names, flavor, spell variants, and random events scaled to your build. Code owns rules and numbers.
 
 ## Shared fields (every entry in every category)
 - Tags (fire, healing, forging, living, mineral, rare...)
@@ -120,7 +125,8 @@ Schools are the **verbs** of magic (how you shape it). Elements and materials ar
 
 Notes:
 - Cantrips are element + school with no components (see Combo structure and scaling).
-- Legal sensitivity is a starting draft for the law table; tune it per law level.
+- The legal sensitivity column is for the deferred law system and isn't used in v1.
+- The example tags in the last column are illustrative. The closed list of allowed tags is in `fantasy-tag-vocabulary.md`, and every spell's tags come from that list.
 - Base elements (the nouns) are defined in "Base elements" above.
 
 ## Spell focus and discovery (DRAFT)
@@ -145,7 +151,7 @@ The first focus is the player's first big discovery, built from ordinary combos.
 - The recipe decides the type, and the type decides the starting school.
 - Better focuses need deeper materials and a magic job, the same depth rule as spells.
 
-### Focus and the law
+### Focus and the law (DEFERRED, not in v1)
 The focus is the regulated object. A **licensed focus** is registered and stamped by the church or a guild. An **unregistered focus** is contraband: it works the same, but carrying it adds heat. This ties the focus directly into the license, underground, and heat systems.
 
 ### Discovering classes
@@ -157,18 +163,20 @@ The focus is the regulated object. A **licensed focus** is registered and stampe
 A small quest system that doubles as the tutorial. Keep it light.
 
 - **Code owns** each quest's objective (tag-based, such as "make a material with tag X" or "cast a cantrip"), its tier, and its reward (gold and XP). **The AI writes** the flavor text and the quest-giver's voice.
-- **Gold** pays for trade, licenses, and the shortcuts already in the design.
+- **Gold** pays for trade and the shortcuts already in the design.
 - **XP** is the single progression number (see "XP, levels, and score"). Quests and first-time discoveries award it, and level gates which spells you can cast.
 
 ### Tutorial chain (placeholder, 5-6 steps)
 1. Combine two elements (learn the core loop)
 2. Craft your first focus (the Earth + Life = Tree chain)
 3. Cast your first cantrip (Element + School through the focus)
-4. Register your focus for a license, or keep it hidden and take heat (teaches the law system)
+4. Earn enough XP to reach level 2 (teaches XP and levels)
 5. Gather or craft a component for a higher spell (teaches material depth)
 6. Receive your first class hint (a locked silhouette in the journal)
 
 Each step pays a small gold and XP reward and teaches one system. After the tutorial, the same quest templates generate repeatable quests scaled to the player's level.
+
+As built: 40 hand-written quests in `data/quests.json`, 20 main and 20 side, spread over levels 1 to 5. The tutorial chain above is the start of the main quests.
 
 ## Combo structure and scaling
 
@@ -227,7 +235,7 @@ One progression number (XP) and one quality number (score). This replaces the ea
 - **XP comes from** quests and first-time discoveries ("crafts"): a new element or material combo, a new spell, a new focus, a new job, joining a guild, and so on. Each discovery pays XP once, so exploring is rewarded and repeating the same combo isn't.
 - **Higher-tier discoveries pay more XP.**
 - **Level comes from total XP** (placeholder curve: each level needs more XP than the last).
-- **Level gates casting, not owning.** A spell of tier N needs level N to cast (cantrips at level 1; Fireball is tier 3, so it needs level 3). Acquiring a spell is gated by routes (see "Ways to unlock a higher-tier spell"), so a player can hold a spell they can't cast yet. It shows greyed out in the spellbook with its required level, which gives them something to work toward.
+- **Level gates learning and casting, not owning.** Each spell tier needs a level (as built: cantrips at level 1, tier 1 at level 2, tier 2 at level 3, tier 3 at level 5, so Fireball needs level 5). Acquiring a spell is gated by routes (see "Ways to unlock a higher-tier spell"), so a player can hold a spell they can't cast yet. It shows greyed out in the spellbook with its required level, which gives them something to work toward.
 - **Code owns** the XP table, the level curve, and the spell-tier-to-level rule. The AI never decides XP or level.
 - Level is the ceiling. There is no separate points total.
 
@@ -235,7 +243,7 @@ One progression number (XP) and one quality number (score). This replaces the ea
 Level says what you *can* cast. Score says how well your build does its job.
 - **Code computes it from tags.** Each job entry lists the tags a good build for that job has (a combat mage wants damage, energy, and control spells; a potion brewer wants brewing recipes and a rich material set). Your castable spells, gear, and focus are compared against your job's wanted tags.
 - **Main job counts fully, secondary job counts half.** Dabbling in a second job adds a little and opens crossover builds.
-- **Example:** a combat mage with no good combat spells at their level scores low. A combat mage with a strong set of combat spells and gear scores high. Two characters at the same level can have very different scores.
+- **Example:** a combat mage with no good combat spells at their level scores low. A combat mage with a strong set of combat spells and gear scores high. A tea shop owner with a rich set of brews and a good kettle scores just as high. Two characters at the same level can have very different scores, and no job is weighted above another.
 - **Possible uses (to decide):** guild admission and rank, event success odds, class title quality, quality of crafted items, bragging rights.
 - Guilds, licenses, heritage, familiars, and gear matter through the resources they give and through score, not through a separate points total.
 
@@ -246,7 +254,7 @@ Level says what you *can* cast. Score says how well your build does its job.
 Two kinds, split by whether the job needs magic to exist.
 
 - **Magic jobs (live in Magic):** enchanter, potion brewer, magic advisor / court mage, wizard, sorcerer. Require magic tags (a known spell or school).
-- **Non-magic jobs (live in People and civilization):** blacksmith, carpenter, farmer, merchant, hunter, and more. Require no magic.
+- **Non-magic jobs (live in People and civilization):** blacksmith, tea shop owner, farmer, gray-market dealer, carpenter, merchant, ranger/forager, and more. Require no magic. See `fantasy-cozy-direction.md` for wanted tags and the dealer's light stand-in for the parked law system.
 
 A main job counts fully toward your score; secondary jobs count half. Each job lists the tags a good build for it has. Jobs are goal nodes defined by tag requirements, not fixed recipes (for example, an enchanter needs a magic tag, a material tag, and a crafting tool), so many routes lead to each.
 
@@ -255,8 +263,10 @@ A main job counts fully toward your score; secondary jobs count half. Each job l
 ## Guilds
 Tiered like small to large organizations. Bigger guilds give more resources and standing but add obligations or restrictions.
 
-## Setting: regulated magic
-Dark, gritty, church-run, industrializing world. Magic exists but is strictly regulated. Licensed practitioners (court mages, approved alchemists) operate under many rules; unlicensed practice is heresy. Underground guilds exist. Light gameplay system: few numbers, choices with costs.
+## Setting: regulated magic (DEFERRED, not in v1)
+Everything under this heading is parked for later. For v1 the tone is cozy (see `fantasy-cozy-direction.md`), so the dark, church-run tone below is NOT used. Don't build law levels, licenses, heat, or law-change events. The notes stay here in case a darker mode is wanted later. (The gray-market dealer uses only the `contraband` and `underground` flavor tags, with no law mechanics.)
+
+Original parked setting, dark, gritty, church-run, industrializing world. Magic exists but is strictly regulated. Licensed practitioners (court mages, approved alchemists) operate under many rules; unlicensed practice is heresy. Underground guilds exist. Light gameplay system: few numbers, choices with costs.
 
 ### Law levels (code-owned, one for your home)
 Your home has a law level. There are no hand-designed cities in v1; the law level is just a setting the code tracks, and the AI describes the place in flavor text when needed. Draft levels: **Open, Licensed, Restricted, Banned**. A law table defines what each level allows: which schools are legal, which jobs need a license, which materials are contraband, and what the penalties are.
@@ -291,7 +301,7 @@ An abstract choice, not a designed city. The player leaves for a place with a di
 A long-term option for players who want independence: build a tower and focus on growing more powerful. Needs its own rules (cost, materials, upgrades, risks), so it comes after the core phases.
 
 ## Random events
-The AI writes events using your build, level, job, guild, and inventory. Code decides the stakes, difficulty, and rewards from your level. The AI writes only the scene. Log events so later ones stay consistent with your story.
+The AI writes events using your build, level, job, guild, and inventory. Code decides the stakes, difficulty, and rewards from your level. The AI writes only the scene. Events are cozy: customers with odd requests, festivals, goose problems, comic setbacks. No injury or death, and no event requires combat. Log events so later ones stay consistent with your story.
 
 ## Spells and the D&D 5e SRD
 - The 5e System Reference Document is released under CC-BY-4.0. SRD spells (Fireball, Mending, and others) can be used with the required attribution. Check versions (5.1 and 5.2 have separate license texts) and take the text from the official release.
@@ -345,4 +355,4 @@ Concepts are open; real people, brands, and real-world content are not.
 8. (Resolved in draft) Life and Light unlock through the early chain in "Base elements", which also drives the tutorial.
 9. (Resolved in draft) XP and points are merged: XP drives level, level gates casting, and a separate score measures build quality.
 10. What should score actually affect (guild admission and rank, event odds, item quality, bragging rights)?
-11. Level cap and XP curve: how many levels, and does spell tier map 1:1 to level?
+11. Level cap is 5 for v1. (Resolved in draft) Spell tiers need levels 1, 2, 3, 5, and the XP curve aims at about five hours to level 5, with quests paying two fifths of it. See `npm run pace`.
