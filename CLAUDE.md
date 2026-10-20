@@ -28,6 +28,9 @@ Several Claude sessions work in this one working tree at the same time. Before s
 - **Source nvm before `npm` or `tsx`.** The system Node is too old to run the server.
 - **Keep the top of `Work Board.md` ("At a glance") current, in plain words.** Trysten reads that
   section only. Ticket codes (N3a, A4, B5) are for sessions, and never stand alone there.
+- **Keep things swappable ("Candle Gate", `Process.md`).** Code names say what a thing does, not
+  what the fiction calls it; player-facing words live in one data file or constant; no timing or
+  number in code; renames start from a green commit and go through the typecheck.
 - Questions about the design go under "Questions for design" in `Work Board.md`.
 - **Shell output goes through RTK**, a token filter hooked on Bash (installed 2026-10-15). It
   condenses `git`, `grep`, `find`, `ls`, and test output. Watch for edge cases: truncated or

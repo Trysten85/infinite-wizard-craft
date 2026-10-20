@@ -111,6 +111,26 @@ to commits by SHA.
   was fixed, or was deliberately not fixed and why.
 - A **reason** goes in the commit message. The board says what landed; the commit says why.
 
+## Keep things swappable ("Candle Gate")
+
+In October 2026 the evening's budget was called "candles" in the code as well as on the page.
+Changing the word took a sweep through about 430 places in every lane. These rules are so that
+never happens again.
+
+- **Code names say what a thing does, not what the fiction calls it.** `time`, not `candles`.
+  Player-facing words and icons live in one place: a `data/*-text.json` file, or one constant
+  per page file. Renaming a thing for players should mean editing one line.
+- **One source of truth per rule.** The page reads the rules the server sends (`day.access`,
+  `day.limits`) and never works one out from a number.
+- **No timing or number in code.** Every day offset, count, and chance is in
+  `config/balance.json`. For fast testing, `config/balance.fast.json` overlays it when the
+  server or a tool runs with `BALANCE=fast`.
+- **Renames:** write the name map first, start from a green commit, change the shared types,
+  and let `npm run typecheck` find every break. Never do a blind find-and-replace, because real
+  things in the game can share the word (there is a Candle item).
+- **Prefer small swappable pieces:** data checked by a schema over prose, ids over sentences, and
+  one function per rule.
+
 ## Things that bite
 
 - **Source nvm before `npm` or `tsx`.** The system Node is too old to run the server.
