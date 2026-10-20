@@ -1,0 +1,996 @@
+[
+ {
+  "key": "air+air",
+  "inputs": [
+   "air",
+   "air"
+  ],
+  "result": "Wind",
+  "tags": [
+   "utility",
+   "energy"
+  ],
+  "status": "approved",
+  "source": "assistant_read_user_cleared"
+ },
+ {
+  "key": "animal+forge",
+  "inputs": [
+   "animal",
+   "forge"
+  ],
+  "result": "Horseshoe",
+  "tags": [
+   "utility",
+   "forging"
+  ],
+  "status": "approved",
+  "source": "assistant_read_user_cleared"
+ },
+ {
+  "key": "animal+wilds",
+  "inputs": [
+   "animal",
+   "wilds"
+  ],
+  "result": "Wildlife",
+  "tags": [
+   "animal",
+   "plant"
+  ],
+  "status": "approved",
+  "source": "assistant_read_user_cleared"
+ },
+ {
+  "key": "bat-guano+bat-guano",
+  "inputs": [
+   "bat-guano",
+   "bat-guano"
+  ],
+  "result": "Fertilizer",
+  "tags": [
+   "utility",
+   "animal",
+   "reagent"
+  ],
+  "status": "approved",
+  "source": "assistant_read_user_cleared"
+ },
+ {
+  "key": "blood+crystal",
+  "inputs": [
+   "blood",
+   "crystal"
+  ],
+  "result": "Ruby",
+  "tags": [
+   "mineral"
+  ],
+  "status": "approved",
+  "source": "assistant_read_user_cleared"
+ },
+ {
+  "key": "bone-dust+bone-dust",
+  "inputs": [
+   "bone-dust",
+   "bone-dust"
+  ],
+  "result": "Bone meal",
+  "tags": [
+   "utility",
+   "reagent",
+   "animal"
+  ],
+  "status": "approved",
+  "source": "assistant_read_user_cleared"
+ },
+ {
+  "key": "crystal+food",
+  "inputs": [
+   "crystal",
+   "food"
+  ],
+  "result": "Sugar",
+  "tags": [
+   "mineral",
+   "reagent"
+  ],
+  "status": "approved",
+  "source": "assistant_read_user_cleared"
+ },
+ {
+  "key": "crystal+tea",
+  "inputs": [
+   "crystal",
+   "tea"
+  ],
+  "result": "Iced tea",
+  "tags": [
+   "brewing",
+   "liquid"
+  ],
+  "status": "approved",
+  "source": "assistant_read_user_cleared"
+ },
+ {
+  "key": "animal+earth",
+  "inputs": [
+   "earth",
+   "animal"
+  ],
+  "result": "Burrow",
+  "tags": [
+   "utility",
+   "animal"
+  ],
+  "status": "approved",
+  "source": "assistant_read_user_cleared"
+ },
+ {
+  "key": "blood+earth",
+  "inputs": [
+   "earth",
+   "blood"
+  ],
+  "result": "Red clay",
+  "tags": [
+   "mineral",
+   "reagent"
+  ],
+  "status": "approved",
+  "source": "assistant_read_user_cleared"
+ },
+ {
+  "key": "earth+earth",
+  "inputs": [
+   "earth",
+   "earth"
+  ],
+  "result": "Soil",
+  "tags": [
+   "mineral",
+   "utility"
+  ],
+  "status": "approved",
+  "source": "assistant_read_user_cleared"
+ },
+ {
+  "key": "earth+forge",
+  "inputs": [
+   "earth",
+   "forge"
+  ],
+  "result": "Kiln",
+  "tags": [
+   "mineral",
+   "industrial"
+  ],
+  "status": "approved",
+  "source": "assistant_read_user_cleared"
+ },
+ {
+  "key": "earth+iron",
+  "inputs": [
+   "earth",
+   "iron"
+  ],
+  "result": "Ore",
+  "tags": [
+   "metal",
+   "mineral",
+   "reagent"
+  ],
+  "status": "approved",
+  "source": "assistant_read_user_cleared"
+ },
+ {
+  "key": "crown+feather",
+  "inputs": [
+   "feather",
+   "crown"
+  ],
+  "result": "Peacock",
+  "tags": [
+   "animal"
+  ],
+  "status": "approved",
+  "source": "assistant_read_user_cleared"
+ },
+ {
+  "key": "fire+fire",
+  "inputs": [
+   "fire",
+   "fire"
+  ],
+  "result": "Campfire",
+  "tags": [
+   "utility",
+   "energy"
+  ],
+  "status": "approved",
+  "source": "assistant_read_user_cleared"
+ },
+ {
+  "key": "fire+smoke",
+  "inputs": [
+   "fire",
+   "smoke"
+  ],
+  "result": "Bonfire",
+  "tags": [
+   "utility",
+   "energy",
+   "area"
+  ],
+  "status": "approved",
+  "source": "assistant_read_user_cleared"
+ },
+ {
+  "key": "crown+food",
+  "inputs": [
+   "food",
+   "crown"
+  ],
+  "result": "Crown roast",
+  "tags": [
+   "utility",
+   "enchanting"
+  ],
+  "status": "approved",
+  "source": "assistant_read_user_cleared"
+ },
+ {
+  "key": "food+herb",
+  "inputs": [
+   "food",
+   "herb"
+  ],
+  "result": "Salad",
+  "tags": [
+   "plant",
+   "utility"
+  ],
+  "status": "approved",
+  "source": "assistant_read_user_cleared"
+ },
+ {
+  "key": "food+person",
+  "inputs": [
+   "food",
+   "person"
+  ],
+  "result": "Meal",
+  "tags": [
+   "utility"
+  ],
+  "status": "approved",
+  "source": "assistant_read_user_cleared"
+ },
+ {
+  "key": "forge+forge",
+  "inputs": [
+   "forge",
+   "forge"
+  ],
+  "result": "Foundry",
+  "tags": [
+   "forging",
+   "industrial",
+   "utility"
+  ],
+  "status": "approved",
+  "source": "assistant_read_user_cleared"
+ },
+ {
+  "key": "blood+glass",
+  "inputs": [
+   "glass",
+   "blood"
+  ],
+  "result": "Vial",
+  "tags": [
+   "utility",
+   "liquid"
+  ],
+  "status": "approved",
+  "source": "assistant_read_user_cleared"
+ },
+ {
+  "key": "crown+glass",
+  "inputs": [
+   "glass",
+   "crown"
+  ],
+  "result": "Crown glass",
+  "tags": [
+   "utility"
+  ],
+  "status": "approved",
+  "source": "assistant_read_user_cleared"
+ },
+ {
+  "key": "crystal+glass",
+  "inputs": [
+   "glass",
+   "crystal"
+  ],
+  "result": "Crystal glass",
+  "tags": [
+   "mineral",
+   "utility"
+  ],
+  "status": "approved",
+  "source": "assistant_read_user_cleared"
+ },
+ {
+  "key": "glass+person",
+  "inputs": [
+   "glass",
+   "person"
+  ],
+  "result": "Glazier",
+  "tags": [
+   "utility",
+   "industrial"
+  ],
+  "status": "approved",
+  "source": "assistant_read_user_cleared"
+ },
+ {
+  "key": "crown+gold",
+  "inputs": [
+   "gold",
+   "crown"
+  ],
+  "result": "Gold crown",
+  "tags": [
+   "metal",
+   "forging",
+   "court"
+  ],
+  "status": "approved",
+  "source": "assistant_read_user_cleared"
+ },
+ {
+  "key": "gold+gold",
+  "inputs": [
+   "gold",
+   "gold"
+  ],
+  "result": "Treasure",
+  "tags": [
+   "metal",
+   "utility"
+  ],
+  "status": "approved",
+  "source": "assistant_read_user_cleared"
+ },
+ {
+  "key": "gold+spellbook",
+  "inputs": [
+   "gold",
+   "spellbook"
+  ],
+  "result": "Golden tome",
+  "tags": [
+   "enchanting",
+   "knowledge"
+  ],
+  "status": "approved",
+  "source": "assistant_read_user_cleared"
+ },
+ {
+  "key": "herb+wilds",
+  "inputs": [
+   "herb",
+   "wilds"
+  ],
+  "result": "Wild Herb",
+  "tags": [
+   "plant",
+   "reagent"
+  ],
+  "status": "approved",
+  "source": "assistant_read_user_cleared"
+ },
+ {
+  "key": "iron+iron",
+  "inputs": [
+   "iron",
+   "iron"
+  ],
+  "result": "Chain",
+  "tags": [
+   "metal",
+   "forging",
+   "utility"
+  ],
+  "status": "approved",
+  "source": "assistant_read_user_cleared"
+ },
+ {
+  "key": "life+life",
+  "inputs": [
+   "life",
+   "life"
+  ],
+  "result": "Family",
+  "tags": [
+   "healing",
+   "enchanting"
+  ],
+  "status": "approved",
+  "source": "assistant_read_user_cleared"
+ },
+ {
+  "key": "light+light",
+  "inputs": [
+   "light",
+   "light"
+  ],
+  "result": "Sun",
+  "tags": [
+   "utility",
+   "energy"
+  ],
+  "status": "approved",
+  "source": "assistant_read_user_cleared"
+ },
+ {
+  "key": "light+tea",
+  "inputs": [
+   "light",
+   "tea"
+  ],
+  "result": "Sun tea",
+  "tags": [
+   "brewing",
+   "utility"
+  ],
+  "status": "approved",
+  "source": "assistant_read_user_cleared"
+ },
+ {
+  "key": "metal+sulfur",
+  "inputs": [
+   "metal",
+   "sulfur"
+  ],
+  "result": "Pyrite",
+  "tags": [
+   "mineral",
+   "reagent",
+   "utility"
+  ],
+  "status": "approved",
+  "source": "assistant_read_user_cleared"
+ },
+ {
+  "key": "metal+wilds",
+  "inputs": [
+   "metal",
+   "wilds"
+  ],
+  "result": "Ironwood",
+  "tags": [
+   "plant",
+   "utility"
+  ],
+  "status": "approved",
+  "source": "assistant_read_user_cleared"
+ },
+ {
+  "key": "mud+mud",
+  "inputs": [
+   "mud",
+   "mud"
+  ],
+  "result": "Clay",
+  "tags": [
+   "mineral",
+   "forging",
+   "utility"
+  ],
+  "status": "approved",
+  "source": "assistant_read_user_cleared"
+ },
+ {
+  "key": "mud+rotted-leaves",
+  "inputs": [
+   "mud",
+   "rotted-leaves"
+  ],
+  "result": "Humus",
+  "tags": [
+   "mineral",
+   "plant",
+   "utility"
+  ],
+  "status": "approved",
+  "source": "assistant_read_user_cleared"
+ },
+ {
+  "key": "rotted-leaves+wilds",
+  "inputs": [
+   "rotted-leaves",
+   "wilds"
+  ],
+  "result": "Forest floor",
+  "tags": [
+   "plant",
+   "utility"
+  ],
+  "status": "approved",
+  "source": "assistant_read_user_cleared"
+ },
+ {
+  "key": "crystal+salt",
+  "inputs": [
+   "salt",
+   "crystal"
+  ],
+  "result": "Salt crystal",
+  "tags": [
+   "mineral"
+  ],
+  "status": "approved",
+  "source": "assistant_read_user_cleared"
+ },
+ {
+  "key": "food+salt",
+  "inputs": [
+   "salt",
+   "food"
+  ],
+  "result": "Seasoning",
+  "tags": [
+   "utility"
+  ],
+  "status": "approved",
+  "source": "assistant_read_user_cleared"
+ },
+ {
+  "key": "herb+salt",
+  "inputs": [
+   "salt",
+   "herb"
+  ],
+  "result": "Herb salt",
+  "tags": [
+   "utility",
+   "plant",
+   "mineral"
+  ],
+  "status": "approved",
+  "source": "assistant_read_user_cleared"
+ },
+ {
+  "key": "crystal+sand",
+  "inputs": [
+   "sand",
+   "crystal"
+  ],
+  "result": "Quartz",
+  "tags": [
+   "mineral",
+   "reagent"
+  ],
+  "status": "approved",
+  "source": "assistant_read_user_cleared"
+ },
+ {
+  "key": "sand+wilds",
+  "inputs": [
+   "sand",
+   "wilds"
+  ],
+  "result": "Oasis",
+  "tags": [
+   "utility",
+   "plant",
+   "mineral"
+  ],
+  "status": "approved",
+  "source": "assistant_read_user_cleared"
+ },
+ {
+  "key": "feather+shadow",
+  "inputs": [
+   "shadow",
+   "feather"
+  ],
+  "result": "Blackbird",
+  "tags": [
+   "control"
+  ],
+  "status": "approved",
+  "source": "assistant_read_user_cleared"
+ },
+ {
+  "key": "silver+sulfur",
+  "inputs": [
+   "silver",
+   "sulfur"
+  ],
+  "result": "Tarnish",
+  "tags": [
+   "mineral",
+   "utility"
+  ],
+  "status": "approved",
+  "source": "assistant_read_user_cleared"
+ },
+ {
+  "key": "animal+smoke",
+  "inputs": [
+   "smoke",
+   "animal"
+  ],
+  "result": "Smoked meat",
+  "tags": [
+   "transform"
+  ],
+  "status": "approved",
+  "source": "assistant_read_user_cleared"
+ },
+ {
+  "key": "crystal+smoke",
+  "inputs": [
+   "smoke",
+   "crystal"
+  ],
+  "result": "Quartz",
+  "tags": [
+   "mineral"
+  ],
+  "status": "approved",
+  "source": "assistant_read_user_cleared"
+ },
+ {
+  "key": "smoke+tea",
+  "inputs": [
+   "smoke",
+   "tea"
+  ],
+  "result": "Smoked tea",
+  "tags": [
+   "brewing",
+   "plant"
+  ],
+  "status": "approved",
+  "source": "assistant_read_user_cleared"
+ },
+ {
+  "key": "person+sound",
+  "inputs": [
+   "sound",
+   "person"
+  ],
+  "result": "Singer",
+  "tags": [
+   "utility"
+  ],
+  "status": "approved",
+  "source": "assistant_read_user_cleared"
+ },
+ {
+  "key": "crystal+spirits",
+  "inputs": [
+   "spirits",
+   "crystal"
+  ],
+  "result": "Chalice",
+  "tags": [
+   "utility",
+   "mineral"
+  ],
+  "status": "approved",
+  "source": "assistant_read_user_cleared"
+ },
+ {
+  "key": "food+spirits",
+  "inputs": [
+   "spirits",
+   "food"
+  ],
+  "result": "Marinade",
+  "tags": [
+   "liquid",
+   "utility"
+  ],
+  "status": "approved",
+  "source": "assistant_read_user_cleared"
+ },
+ {
+  "key": "food+steam",
+  "inputs": [
+   "steam",
+   "food"
+  ],
+  "result": "Dumpling",
+  "tags": [
+   "utility",
+   "transform"
+  ],
+  "status": "approved",
+  "source": "assistant_read_user_cleared"
+ },
+ {
+  "key": "sound+steam",
+  "inputs": [
+   "steam",
+   "sound"
+  ],
+  "result": "Whistle",
+  "tags": [
+   "utility"
+  ],
+  "status": "approved",
+  "source": "assistant_read_user_cleared"
+ },
+ {
+  "key": "crown+tree",
+  "inputs": [
+   "tree",
+   "crown"
+  ],
+  "result": "Wooden crown",
+  "tags": [
+   "plant"
+  ],
+  "status": "approved",
+  "source": "assistant_read_user_cleared"
+ },
+ {
+  "key": "glass+tree",
+  "inputs": [
+   "tree",
+   "glass"
+  ],
+  "result": "Greenhouse",
+  "tags": [
+   "utility",
+   "plant"
+  ],
+  "status": "approved",
+  "source": "assistant_read_user_cleared"
+ },
+ {
+  "key": "tree+wilds",
+  "inputs": [
+   "tree",
+   "wilds"
+  ],
+  "result": "Jungle",
+  "tags": [
+   "plant"
+  ],
+  "status": "approved",
+  "source": "assistant_read_user_cleared"
+ },
+ {
+  "key": "person+water",
+  "inputs": [
+   "water",
+   "person"
+  ],
+  "result": "Bath",
+  "tags": [
+   "utility",
+   "liquid"
+  ],
+  "status": "approved",
+  "source": "assistant_read_user_cleared"
+ },
+ {
+  "key": "rotted-leaves+water",
+  "inputs": [
+   "water",
+   "rotted-leaves"
+  ],
+  "result": "Swamp",
+  "tags": [
+   "liquid",
+   "plant"
+  ],
+  "status": "approved",
+  "source": "assistant_read_user_cleared"
+ },
+ {
+  "key": "sound+water",
+  "inputs": [
+   "water",
+   "sound"
+  ],
+  "result": "Splash",
+  "tags": [
+   "utility",
+   "liquid"
+  ],
+  "status": "approved",
+  "source": "assistant_read_user_cleared"
+ },
+ {
+  "key": "water+water",
+  "inputs": [
+   "water",
+   "water"
+  ],
+  "result": "Lake",
+  "tags": [
+   "liquid",
+   "utility"
+  ],
+  "status": "approved",
+  "source": "assistant_read_user_cleared"
+ },
+ {
+  "key": "water+wilds",
+  "inputs": [
+   "water",
+   "wilds"
+  ],
+  "result": "Wetland",
+  "tags": [
+   "utility",
+   "plant",
+   "liquid"
+  ],
+  "status": "approved",
+  "source": "assistant_read_user_cleared"
+ },
+ {
+  "key": "crown+wilds",
+  "inputs": [
+   "wilds",
+   "crown"
+  ],
+  "result": "Canopy",
+  "tags": [
+   "plant",
+   "utility"
+  ],
+  "status": "approved",
+  "source": "assistant_read_user_cleared"
+ },
+ {
+  "key": "metal+person",
+  "inputs": [
+   "metal",
+   "person"
+  ],
+  "result": "Armor",
+  "tags": [],
+  "status": "approved",
+  "source": "user",
+  "note": "tags to be assigned"
+ },
+ {
+  "key": "earth+mud",
+  "inputs": [
+   "earth",
+   "mud"
+  ],
+  "result": "Clay",
+  "tags": [],
+  "status": "approved",
+  "source": "user",
+  "note": "tags to be assigned"
+ },
+ {
+  "key": "feather+water",
+  "inputs": [
+   "water",
+   "feather"
+  ],
+  "result": "Fowl",
+  "tags": [],
+  "status": "approved",
+  "source": "user",
+  "note": "consider Waterfowl"
+ },
+ {
+  "key": "death+smoke",
+  "inputs": [
+   "death",
+   "smoke"
+  ],
+  "result": "Sickly Fog",
+  "tags": [],
+  "status": "approved",
+  "source": "user",
+  "note": "tags to be assigned"
+ },
+ {
+  "key": "feather+fire",
+  "inputs": [
+   "fire",
+   "feather"
+  ],
+  "result": "Phoenix",
+  "tags": [],
+  "status": "approved",
+  "source": "user",
+  "note": "tags to be assigned; duplicate result Phoenix on fire+feather and blood+feather, pick alternative for one"
+ },
+ {
+  "key": "sulfur+wilds",
+  "inputs": [
+   "sulfur",
+   "wilds"
+  ],
+  "result": "Wildfire",
+  "tags": [],
+  "status": "approved",
+  "source": "user",
+  "note": "tags to be assigned"
+ },
+ {
+  "key": "gold+silver",
+  "inputs": [
+   "silver",
+   "gold"
+  ],
+  "result": "Bank",
+  "tags": [],
+  "status": "approved",
+  "source": "user",
+  "note": "tags to be assigned"
+ },
+ {
+  "key": "blood+feather",
+  "inputs": [
+   "blood",
+   "feather"
+  ],
+  "result": "Phoenix",
+  "tags": [],
+  "status": "approved",
+  "source": "user",
+  "note": "tags to be assigned; duplicate result Phoenix on fire+feather and blood+feather, pick alternative for one"
+ },
+ {
+  "key": "earth+smoke",
+  "inputs": [
+   "earth",
+   "smoke"
+  ],
+  "result": null,
+  "tags": [],
+  "status": "needs_alternatives",
+  "source": "user"
+ },
+ {
+  "key": "metal+smoke",
+  "inputs": [
+   "metal",
+   "smoke"
+  ],
+  "result": null,
+  "tags": [],
+  "status": "needs_alternatives",
+  "source": "user"
+ },
+ {
+  "key": "sand+spirits",
+  "inputs": [
+   "sand",
+   "spirits"
+  ],
+  "result": null,
+  "tags": [],
+  "status": "needs_alternatives",
+  "source": "user"
+ },
+ {
+  "key": "iron+spirits",
+  "inputs": [
+   "iron",
+   "spirits"
+  ],
+  "result": null,
+  "tags": [],
+  "status": "needs_alternatives",
+  "source": "user"
+ }
+]

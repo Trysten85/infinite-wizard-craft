@@ -1,5 +1,5 @@
 import { BAKE_FAILURES, comboKey, slugify, type BakedCombo, type BakeFailure } from "../shared/schema";
-import { isBanned, isOnlyIngredients, isRealName, overusedIn, type Banned } from "./names";
+import { isBanned, isOnlyIngredients, isRealName, overusedIn, wordsOfName, type Banned } from "./names";
 import { countSentences } from "./voice";
 
 // The review file for baked pairs: one row a pair, flagged by code, with a suggested verdict and
@@ -56,6 +56,22 @@ export type TriageContext = {
   nameOf: (id: string) => string;
 };
 
+// Whether the model's reason for a result mentions both ingredients. A reason that speaks of
+// only one is a sign the result is that ingredient's favourite answer. A reason that is empty is
+// not judged here: "unmarked" says so.
+export function namesBoth(reason: string, a: string, b: string): boolean {
+  if (reason.trim() === "") return true;
+  const text = reason.toLowerCase();
+  const mentions = (name: string) => wordsOfName(name).filter((word) => word.length >= 3).some((word) => text.includes(word.slice(0, Math.max(3, word.length - 1))));
+  return mentions(a) && mentions(b);
+}
+
+// The flags that mean a row should be written again before anyone sees it. The others only
+// help a reviewer decide what to read first.
+export function isHardFlag(flag: string): boolean {
+  return ["after the age of steam", "not a real word", "only says what went in", "reason names only one ingredient", "too long", "worn-out words"].includes(flag) || /^used \d+ times$/.test(flag);
+}
+
 // What code can see is wrong with a row, without anyone's opinion.
 export function flagsFor(row: BakedCombo, uses: number, context: TriageContext): string[] {
   const [a, b] = row.inputs.map(context.nameOf) as [string, string];
@@ -65,6 +81,9 @@ export function flagsFor(row: BakedCombo, uses: number, context: TriageContext):
   if (context.words.size > 0 && !isRealName(row.name, context.words, context.vouched)) flags.push("not a real word");
   if (isOnlyIngredients(row.name, a, b)) flags.push("only says what went in");
   if (row.sense !== null && row.sense <= 2) flags.push("low mark");
+  else if (row.sense === 3) flags.push("middling mark");
+  if (row.tags.length === 0) flags.push("no tags");
+  if (!namesBoth(row.reason, a, b)) flags.push("reason names only one ingredient");
   if (row.sense === null) flags.push("unmarked");
   if (overusedIn(row.description, context.overused)) flags.push("worn-out words");
   if (countSentences(row.description) > context.maxSentences) flags.push("too long");
@@ -163,7 +182,14 @@ export function acceptanceChecks(rows: BakedCombo[], context: Pick<TriageContext
   const live = rows.filter((row) => row.status !== "rejected" && row.status !== "nothing");
   const uses = nameUses(rows);
   const worn = live.filter((row) => overusedIn(row.description, context.overused)).length;
+  // The two pairs the spec holds a round to: Water + Salt is Saltwater, and Steam + Salt is not Sea.
+  const result = (key: string) => {
+    const row = rows.find((item) => comboKey(...item.inputs) === key && item.status !== "rejected" && item.status !== "nothing");
+    return row ? slugify(row.correction ?? row.name) : null;
+  };
   return {
+    saltwater: result("salt+water") === "saltwater",
+    steamSaltNotSea: result("salt+steam") !== "sea",
     rows: live.length,
     overCap: [...uses].filter(([, count]) => count > context.nameCap).sort((x, y) => y[1] - x[1]),
     banned: live.filter((row) => isBanned(row.correction ?? row.name, context.banned)).length,

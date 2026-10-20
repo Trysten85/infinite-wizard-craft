@@ -1,3 +1,4 @@
+import { shopOpen } from "../shared/day";
 import type { GameEntry, Rewards, ShopSlot, ShopView } from "../shared/schema";
 import { RuleError } from "./combiner";
 import { levelForSpellTier, type GameData } from "./gameData";
@@ -196,17 +197,21 @@ export function createShop(deps: {
 
   // Buying is a shortcut: the player gets the entry as if they had made it. It pays XP, not gold.
   function buy(player: string, slotNumber: number): { entry: GameEntry; rewards: Rewards } {
-    const slot = view(player).slots.find((item) => item.slot === slotNumber);
-    if (!slot) throw new RuleError("There is nothing on that shelf.");
-    if (slot.sold) throw new RuleError(`${slot.entry.name} is no longer for sale.`, "sold-out");
-    const { gold } = progress.getProgress(player);
-    if (slot.price > gold) {
-      throw new RuleError(`${slot.entry.name} costs ${slot.price} gold. You have ${gold}.`, "not-enough-gold");
-    }
-    store.addLedger(player, -slot.price, "shop", slot.entry.id);
-    store.addDiscovery(player, slot.entry.id);
-    store.markSold(player, slot.slot);
-    return { entry: slot.entry, rewards: progress.settle(player) };
+    return store.atomically(() => {
+      // The shelf can be looked at any time; it is sold from only until dusk.
+      if (!shopOpen(store.getDay(player).state, data.balance.day)) throw new RuleError("The shop is shut for the night. It opens again in the morning.", "shop-closed");
+      const slot = view(player).slots.find((item) => item.slot === slotNumber);
+      if (!slot) throw new RuleError("There is nothing on that shelf.");
+      if (slot.sold) throw new RuleError(`${slot.entry.name} is no longer for sale.`, "sold-out");
+      const { gold } = progress.getProgress(player);
+      if (slot.price > gold) {
+        throw new RuleError(`${slot.entry.name} costs ${slot.price} gold. You have ${gold}.`, "not-enough-gold");
+      }
+      store.addLedger(player, -slot.price, "shop", slot.entry.id);
+      store.addDiscovery(player, slot.entry.id);
+      store.markSold(player, slot.slot);
+      return { entry: slot.entry, rewards: progress.settle(player) };
+    });
   }
 
   return { view, buy };

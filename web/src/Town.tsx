@@ -284,18 +284,18 @@ function Standing(props: StandingProps) {
       {servesMeals(building) && props.visitorWaiting && props.visitorPlace === "tavern" && day && (
         <>
           <p className="town-visitor">{visitorCue(day, "tavern").text}</p>
-          <button disabled={busy || eveningBlock(day.costs.visitor, day) !== ""} onClick={props.onSit}>
+          <button disabled={busy || eveningBlock("visitor", day) !== ""} onClick={props.onSit}>
             Sit with them
           </button>
         </>
       )}
       {servesMeals(building) && (
         <>
-          <button disabled={busy || eveningBlock(day?.costs.meal ?? 0, day) !== ""} onClick={props.onMeal}>
+          <button disabled={busy || eveningBlock("meal", day) !== ""} onClick={props.onMeal}>
             Have a meal
           </button>
           <p className="town-none">
-            {eveningBlock(day?.costs.meal ?? 0, day) || "Costs gold by your level. Tomorrow's discoveries pay more."}
+            {eveningBlock("meal", day) || "Costs gold by your level. Tomorrow's discoveries pay more."}
           </p>
         </>
       )}
@@ -316,7 +316,7 @@ function Standing(props: StandingProps) {
   );
 }
 
-// The evening at a glance: how many candles are left, and each thing tonight offers with what it
+// The evening at a glance: how much time is left, and each thing tonight offers with what it
 // costs. A carried spell says where it can go. Tonight's happening is announced here from noon.
 function Evening({
   day,
@@ -338,7 +338,7 @@ function Evening({
       <h3>{evening ? "This evening" : "This evening, from dusk"}</h3>
       {evening && (
         <p className="town-none">
-          {day.candles} of {day.candlesMax} {day.candlesMax === 1 ? "candle" : "candles"} left.
+          You have {day.time} of {day.timeMax} ⌛ left.
         </p>
       )}
       {day.tonight && (
@@ -359,14 +359,14 @@ function Evening({
             )}
           </li>
         ))}
-        {offers.length === 0 && <li className="closed">Nothing to spend a candle on yet.</li>}
+        {offers.length === 0 && <li className="closed">Nothing to spend ⌛ on yet.</li>}
       </ul>
     </section>
   );
 }
 
 function CallOn({ called, day, busy, onCall }: { called: boolean; day?: DayView; busy: boolean; onCall: () => void }) {
-  const why = called ? "You have called on them tonight." : eveningBlock(day?.costs.call ?? 0, day);
+  const why = called ? "You have called on them tonight." : eveningBlock("call", day);
   return (
     <>
       <button disabled={busy || why !== ""} onClick={onCall}>

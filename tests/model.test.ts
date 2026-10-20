@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { readModelConfig } from "../src/server/llm/config";
+import { readModelConfig, settingsFor } from "../src/server/llm/config";
 import { createModelTurns } from "../src/server/llm/turns";
 import type { LlmCompletion, LlmRequest } from "../src/server/llm/types";
 
@@ -21,6 +21,16 @@ describe("the model settings", () => {
     const config = readModelConfig(root, { OLLAMA_MODEL: "gemma3:12b", OLLAMA_URL: "http://192.168.56.1:9999" });
     expect(config).toMatchObject({ model: "gemma3:12b", url: "http://192.168.56.1:9999", effort: { combos: null, naming: null, events: null } });
     expect(readModelConfig(root, { OLLAMA_MODEL: "gpt-oss:20b" }).effort.events).toBe("medium");
+  });
+
+  it("give the order board the events settings unless it has its own", () => {
+    const config = readModelConfig(root, {});
+    const events = settingsFor(config, "events");
+    expect(settingsFor({ ...config, effort: { ...config.effort, orders: undefined }, timeoutSeconds: { ...config.timeoutSeconds, orders: undefined } }, "orders")).toEqual(events);
+    expect(settingsFor({ ...config, effort: { ...config.effort, orders: "low" }, timeoutSeconds: { ...config.timeoutSeconds, orders: 30 } }, "orders")).toEqual({ think: "low", timeoutMs: 30_000 });
+    // A model that does not reason is sent no effort for orders either.
+    expect(settingsFor(readModelConfig(root, { OLLAMA_MODEL: "gemma3:12b" }), "orders").think).toBeUndefined();
+    expect(settingsFor(config, "naming").timeoutMs).toBe(settingsFor(config, "combos").timeoutMs);
   });
 });
 

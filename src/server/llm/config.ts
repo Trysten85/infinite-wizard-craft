@@ -8,7 +8,9 @@ import type { LlmClient } from "./types";
 // so it gets less thinking. An event is written out of sight, so it can take longer.
 // "naming" is the one call in a combination that decides what the thing is. It has its own effort
 // level because that is where thinking harder pays, and the rest of a combination is quick work.
-export type ModelJob = "combos" | "naming" | "events";
+// "orders" is the order board, written ahead out of sight like events. Its keys are optional and
+// fall back to the events ones.
+export type ModelJob = "combos" | "naming" | "events" | "orders";
 
 const effortSchema = z.enum(["low", "medium", "high"]);
 const modelConfigSchema = z.strictObject({
@@ -16,10 +18,10 @@ const modelConfigSchema = z.strictObject({
   url: z.url(),
   model: z.string().min(1),
   // How hard a reasoning model thinks for each job. Null for a model that does not reason.
-  effort: z.strictObject({ combos: effortSchema.nullable(), naming: effortSchema.nullable(), events: effortSchema.nullable() }),
+  effort: z.strictObject({ combos: effortSchema.nullable(), naming: effortSchema.nullable(), events: effortSchema.nullable(), orders: effortSchema.nullable().optional() }),
   // How long Ollama keeps the model loaded after a call, so the next one does not wait for it.
   keepAlive: z.string().min(1),
-  timeoutSeconds: z.strictObject({ combos: z.number().positive(), events: z.number().positive() }),
+  timeoutSeconds: z.strictObject({ combos: z.number().positive(), events: z.number().positive(), orders: z.number().positive().optional() }),
   // How writing done out of sight gives way to a call a player is waiting on. See turns.ts.
   background: z.strictObject({ quietSeconds: z.number().min(0), giveWayTimes: z.number().int().min(0) }),
   // How the overnight bake (npm run bake) shares the PC. See src/server/bakePace.ts.
@@ -48,16 +50,17 @@ export function readModelConfig(root: string, env: Record<string, string | undef
     ...file,
     url: env.OLLAMA_URL || file.url,
     model,
-    effort: model === file.model ? file.effort : { combos: null, naming: null, events: null },
+    effort: model === file.model ? file.effort : { combos: null, naming: null, events: null, orders: null },
   };
 }
 
+// The effort and timeout for a job. Orders take the events ones unless they have their own.
+export function settingsFor(config: ModelConfig, job: ModelJob): { think: "low" | "medium" | "high" | undefined; timeoutMs: number } {
+  const effort = job === "orders" ? (config.effort.orders === undefined ? config.effort.events : config.effort.orders) : config.effort[job];
+  const seconds = job === "orders" ? (config.timeoutSeconds.orders ?? config.timeoutSeconds.events) : config.timeoutSeconds[job === "events" ? "events" : "combos"];
+  return { think: effort ?? undefined, timeoutMs: seconds * 1000 };
+}
+
 export function createModelClient(config: ModelConfig, job: ModelJob): LlmClient {
-  return createOllamaClient({
-    baseUrl: config.url,
-    model: config.model,
-    think: config.effort[job] ?? undefined,
-    keepAlive: config.keepAlive,
-    timeoutMs: config.timeoutSeconds[job === "events" ? "events" : "combos"] * 1000,
-  });
+  return createOllamaClient({ baseUrl: config.url, model: config.model, keepAlive: config.keepAlive, ...settingsFor(config, job) });
 }

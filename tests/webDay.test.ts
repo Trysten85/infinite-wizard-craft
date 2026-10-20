@@ -23,12 +23,14 @@ function day(changes: Partial<Day> = {}): Day {
     length: 10,
     noon: 4,
     phase: "morning",
-    candles: 3,
-    candlesMax: 3,
+    time: 3,
+    timeMax: 3,
     nightIn: null,
     canTurnIn: false,
-    turnInCandles: 1,
+    turnInTime: 1,
     costs: { visitor: 1, meal: 1, call: 1, hand: 1, enchant: 1, upgrade: 1, build: 2 },
+    access: { visitor: "evening", call: "evening", meal: "evening", hand: "evening", enchant: "evening", upgrade: "evening", build: "evening" },
+    limits: { mealsPerDay: 1, handsPerBuilding: 1 },
     shiftDone: false,
     tonight: null,
     lastLedger: null,
@@ -73,6 +75,10 @@ describe("orderCue", () => {
   it("says there are none today when it is past noon with nothing open and nothing worked", () => {
     expect(orderCue(afternoon, false).text).toBe("No orders today");
   });
+
+  it("says the board closed at dusk in the evening", () => {
+    expect(orderCue(evening, false).text).toBe("The order board closed at dusk");
+  });
 });
 
 describe("ordersClosedText", () => {
@@ -80,6 +86,7 @@ describe("ordersClosedText", () => {
     expect(ordersClosedText(day({ sun: 2 }))).toBe("The order board opens at noon, 2 discoveries from now.");
     expect(ordersClosedText(day({ ...afternoon, shiftDone: true }))).toBe("Today's shift is worked. New orders come at noon tomorrow.");
     expect(ordersClosedText(afternoon)).toBe("There are no orders today. New ones come at noon tomorrow.");
+    expect(ordersClosedText(evening)).toBe("The order board closed at dusk. New orders come at noon tomorrow.");
   });
 });
 
@@ -96,30 +103,30 @@ describe("tonightNews", () => {
 
 describe("visitorCue", () => {
   it("holds the visitor until dusk", () => {
-    expect(visitorCue(day())).toEqual({ kind: "later", text: "Someone will be at your door this evening." });
-    expect(visitorCue(afternoon).kind).toBe("later");
+    expect(visitorCue(day(), "door")).toEqual({ kind: "later", text: "Someone will be at your door this evening." });
+    expect(visitorCue(afternoon, "door").kind).toBe("later");
   });
 
-  it("offers them from dusk, with the candle it takes", () => {
-    expect(visitorCue(evening)).toEqual({ kind: "sit", text: "Someone is at your door. Sit with them (1 candle)." });
+  it("offers them from dusk, with the time it takes", () => {
+    expect(visitorCue(evening, "door")).toEqual({ kind: "sit", text: "Someone is at your door. Sit with them (1 ⌛)." });
   });
 
   it("says the Tavern when the visitor sits there", () => {
-    expect(visitorCue(evening, "tavern").text).toBe("Someone is at the Tavern. Sit with them (1 candle).");
+    expect(visitorCue(evening, "tavern").text).toBe("Someone is at the Tavern. Sit with them (1 ⌛).");
     expect(visitorCue(afternoon, "tavern").text).toBe("Someone will be at the Tavern this evening.");
-    expect(visitorCue(day({ ...evening, candles: 0 }), "tavern").text).toContain("at the Tavern, but your candles are spent");
+    expect(visitorCue(day({ ...evening, time: 0 }), "tavern").text).toContain("at the Tavern, but you have no ⌛ left tonight");
   });
 
   it("reads the cost from the day, and never assumes it", () => {
     const dear = { ...evening.costs, visitor: 2 };
-    expect(visitorCue(day({ ...evening, costs: dear })).text).toBe("Someone is at your door. Sit with them (2 candles).");
-    expect(visitorCue(day({ ...evening, costs: dear, candles: 1 })).kind).toBe("spent");
+    expect(visitorCue(day({ ...evening, costs: dear }), "door").text).toBe("Someone is at your door. Sit with them (2 ⌛).");
+    expect(visitorCue(day({ ...evening, costs: dear, time: 1 }), "door").kind).toBe("spent");
   });
 
-  it("says they will be back when the candles are spent", () => {
-    expect(visitorCue(day({ ...evening, candles: 0 }))).toEqual({
+  it("says they will be back when the time are spent", () => {
+    expect(visitorCue(day({ ...evening, time: 0 }), "door")).toEqual({
       kind: "spent",
-      text: "Someone is at your door, but your candles are spent. They will be back tomorrow.",
+      text: "Someone is at your door, but you have no ⌛ left tonight. They will be back tomorrow.",
     });
   });
 });
@@ -132,27 +139,28 @@ describe("bedOffer", () => {
   it("offers to call it a day from noon, and says what that costs", () => {
     expect(bedOffer(afternoon, false)).toEqual({
       label: "Call it a day",
-      warning: "Calling it a day brings dusk on now, with an evening of 1 candle and not 3.",
+      warning: "Calling it a day brings dusk on now, with an evening of 1 ⌛ and not 3 ⌛.",
     });
-    expect(bedOffer(day({ ...afternoon, turnInCandles: 2 }), false)!.warning).toContain("an evening of 2 candles and not 3");
+    expect(bedOffer(day({ ...afternoon, turnInTime: 2 }), false)!.warning).toContain("an evening of 2 ⌛ and not 3 ⌛");
   });
 
-  it("does not say the shift is lost by calling it a day: orders stay open until night", () => {
-    expect(bedOffer(afternoon, true)!.warning).not.toMatch(/shift|orders/);
-  });
-
-  it("offers bed from dusk, and names the candles that would be given up", () => {
-    expect(bedOffer(day({ ...evening, candles: 2 }), false)).toEqual({
-      label: "Go to bed",
-      warning: "Going to bed ends the day. You have 2 candles left, and they will be gone.",
-    });
-    expect(bedOffer(day({ ...evening, candles: 1 }), false)!.warning).toContain("1 candle left");
-  });
-
-  it("warns that orders still waiting go with the day", () => {
-    expect(bedOffer(day({ ...evening, candles: 2 }), true)!.warning).toBe(
-      "Going to bed ends the day. You have 2 candles left, and they will be gone. Today's orders have not been worked, and will go with them.",
+  it("warns that calling it a day closes the order board on a shift still waiting", () => {
+    expect(bedOffer(afternoon, true)!.warning).toBe(
+      "Calling it a day brings dusk on now, with an evening of 1 ⌛ and not 3 ⌛. Today's orders have not been worked, and the order board closes at dusk.",
     );
+    expect(bedOffer(afternoon, false)!.warning).not.toMatch(/orders/);
+  });
+
+  it("offers bed from dusk, and names the time that would be given up", () => {
+    expect(bedOffer(day({ ...evening, time: 2 }), false)).toEqual({
+      label: "Go to bed",
+      warning: "Going to bed ends the day. You have 2 ⌛ left, and it will be gone.",
+    });
+    expect(bedOffer(day({ ...evening, time: 1 }), false)!.warning).toContain("1 ⌛ left");
+  });
+
+  it("says nothing of orders at bedtime: the board closed at dusk", () => {
+    expect(bedOffer(day({ ...evening, time: 2 }), true)!.warning).not.toMatch(/orders/);
   });
 });
 

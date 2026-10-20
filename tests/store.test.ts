@@ -119,3 +119,38 @@ describe("people and events", () => {
     expect(store.listEvents("bob")[0]!.state).toBe("pending");
   });
 });
+
+describe("writes made together", () => {
+  it("commit together, and an inner failure that is caught undoes only its own part", () => {
+    const store = openStore(":memory:");
+    store.atomically(() => {
+      store.addLedger("ann", 5, "quest", "a");
+      try {
+        store.atomically(() => {
+          store.addLedger("ann", 7, "quest", "b");
+          throw new Error("inner");
+        });
+      } catch {
+        // The outer action carries on without the inner one's writes.
+      }
+      store.addLedger("ann", 1, "quest", "c");
+    });
+    expect(store.getGold("ann")).toBe(6);
+  });
+
+  it("are all undone when the outer action throws", () => {
+    const store = openStore(":memory:");
+    expect(() =>
+      store.atomically(() => {
+        store.addLedger("ann", 5, "quest", "a");
+        store.atomically(() => store.addPlot("ann", 0));
+        throw new Error("outer");
+      }),
+    ).toThrow("outer");
+    expect(store.getGold("ann")).toBe(0);
+    expect(store.listPlots("ann")).toEqual([]);
+    // And the store is usable afterwards.
+    store.addLedger("ann", 2, "quest", "d");
+    expect(store.getGold("ann")).toBe(2);
+  });
+});

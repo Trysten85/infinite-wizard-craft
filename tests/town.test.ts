@@ -15,6 +15,9 @@ import {
   previewQuality,
   extraDiscoveryGold,
   isStockable,
+  hireCost,
+  hireTopUp,
+  staffedTakings,
   discountShare,
   learnPrice,
   levelForPlot,
@@ -38,6 +41,10 @@ const rules: TownRules = {
   plotPrices: [10, 30, 60, 100, 150, 210, 280, 360, 450],
   deedsByLevel: [2, 3, 5, 7, 9],
   regularAt: 6,
+  teachAt: 4,
+  hireByTier: [20, 50, 100],
+  raiseNights: 1,
+  neighbour: { reach: 1, liked: 0.05, disliked: 0.05, cap: 0.15 },
   regularTakings: 0.1,
   meal: { goldPerLevel: 5, lift: 0.2 },
   enchant: { blockedTags: ["control"], baseDays: 3, daysPerTier: 2, bonus: 0.1, bonusPerTier: 0.05 },
@@ -243,7 +250,7 @@ describe("perks", () => {
 
   it("are a closed list, and the six buildings use every kind between them", () => {
     const used = new Set(all.flatMap((item) => item.tiers.flatMap((tier) => tier.perks.map((perk) => perk.type))));
-    const kinds: Perk["type"][] = ["opens-shop", "shop-shelves", "shop-discount", "discovery-gold", "lifts", "learn-discount", "rumour", "gift", "enchant-days", "candles", "meals"];
+    const kinds: Perk["type"][] = ["opens-shop", "shop-shelves", "shop-discount", "discovery-gold", "lifts", "learn-discount", "rumour", "gift", "enchant-days", "time", "meals"];
     expect([...used].sort()).toEqual([...kinds].sort());
   });
 
@@ -262,8 +269,8 @@ describe("perks", () => {
     expect(perksOf(standing(1), "opens-shop").map((found) => found.building.id)).toEqual(["market-stall"]);
     expect(perksOf(standing(1), "lifts").map((found) => found.perk.building)).toEqual(["tavern"]);
     expect(perksOf(standing(2), "lifts").map((found) => found.perk.building)).toEqual(["tavern", "herb-garden"]);
-    expect(perksOf(standing(1), "candles")).toEqual([]);
-    expect(perksOf(standing(3), "candles").map((found) => [found.building.id, found.perk.count])).toEqual([["wizards-tower", 1]]);
+    expect(perksOf(standing(1), "time")).toEqual([]);
+    expect(perksOf(standing(3), "time").map((found) => [found.building.id, found.perk.count])).toEqual([["wizards-tower", 1]]);
     expect(perksOf([], "meals")).toEqual([]);
   });
 
@@ -552,5 +559,24 @@ describe("learning discount", () => {
     expect(learnPrice(20, 0.25)).toBe(15);
     expect(learnPrice(1, 0.9)).toBe(1);
     expect(learnPrice(0, 0.5)).toBe(0);
+  });
+});
+
+describe("hiring", () => {
+  it("costs more with the building's tier, and a tier past the table takes its last row", () => {
+    expect([1, 2, 3].map((tier) => hireCost(tier, rules))).toEqual([20, 50, 100]);
+    expect(hireCost(9, rules)).toBe(100);
+    expect(hireCost(0, rules)).toBe(20);
+  });
+
+  it("tops the hire up by the difference when a staffed building is raised", () => {
+    expect(hireTopUp(1, 2, rules)).toBe(30);
+    expect(hireTopUp(2, 3, rules)).toBe(50);
+    expect(hireTopUp(3, 3, rules)).toBe(0);
+  });
+
+  it("pays takings only while someone is hired", () => {
+    expect(staffedTakings(12, true)).toBe(12);
+    expect(staffedTakings(12, false)).toBe(0);
   });
 });

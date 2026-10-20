@@ -120,7 +120,7 @@ export function checkNeeds(building: Building, tier: number, player: Pick<Builde
 }
 
 // Why a building cannot be raised to this tier, or null if it can: the level first, then the
-// needs, then the gold. The plot, the hour, and the candles are checked elsewhere.
+// needs, then the gold. The plot, the hour, and the hourglasses are checked elsewhere.
 export function refuseTier(building: Building, tier: number, player: Builder, rules: TownRules): "level-too-low" | "needs-missing" | "not-enough-gold" | null {
   const cost = tierCost(building, tier, rules);
   if (player.level < cost.level) return "level-too-low";
@@ -184,12 +184,18 @@ export function liftsFor(target: string, standing: { building: Building; tier: n
 // The shelves of a building: what is stocked on them, as the things that count toward quality.
 export type Stocked = Pick<GameEntry, "tags" | "tier">;
 
+// All a quality is read from: the tags a building wants on its shelves. It is this narrow so the
+// page can ask with what the server sent it (a `BuildingView` carries the wants and no tiers)
+// without pretending to hold a whole `Building`. Asking for more here means the page stops
+// compiling, which is the warning we want.
+export type Wanting = Pick<Building, "wants">;
+
 // The score a building's stock earns, before any lift. It is the share of the building's wants
 // covered by its stock between them, plus the shifts' tier bonus when the best stocked thing is
 // at least the building's tier, plus a live enchantment's bonus, plus the owner's rank bonus
 // (only at their own building). There is no luck in it. An empty building scores nothing.
 export function buildingScore(
-  building: Building,
+  building: Wanting,
   tier: number,
   stock: Stocked[],
   extra: { enchantBonus?: number; rankBonus?: number },
@@ -211,7 +217,7 @@ export function liftQuality(quality: QualityId, steps: number): QualityId {
 // A building's quality tonight: its stock's score on the shift's scale, then every lift, capped
 // at Perfect. An empty building is Meh whatever lifts it, and still pays.
 export function buildingQuality(
-  building: Building,
+  building: Wanting,
   tier: number,
   stock: Stocked[],
   extra: { enchantBonus?: number; rankBonus?: number; lifts?: Partial<Lifts> },
@@ -227,7 +233,7 @@ export function buildingQuality(
 // What the quality would be with one more thing on the shelf, or with one taken off it, so the
 // page can show it before the player places or clears a discovery. `without` is an index.
 export function previewQuality(
-  building: Building,
+  building: Wanting,
   tier: number,
   stock: Stocked[],
   change: { add?: Stocked; without?: number },
@@ -323,4 +329,22 @@ export function mealCost(level: number, rules: TownRules): number {
 export function mealLift(rules: TownRules, perkLift?: number, doubled = false): number {
   const lift = perkLift ?? rules.meal.lift;
   return doubled ? lift * 2 : lift;
+}
+
+// What hiring a building's person costs at a tier. A tier past the table takes its last row.
+export function hireCost(tier: number, rules: Pick<TownRules, "hireByTier">): number {
+  const table = rules.hireByTier;
+  return table[Math.min(Math.max(tier, 1), table.length) - 1]!;
+}
+
+// What raising a staffed building from one tier to the next adds to its hire: the difference,
+// never less than nothing.
+export function hireTopUp(from: number, to: number, rules: Pick<TownRules, "hireByTier">): number {
+  return Math.max(0, hireCost(to, rules) - hireCost(from, rules));
+}
+
+// A building pays its takings only while someone is hired to run it. For now an unstaffed
+// building earns nothing.
+export function staffedTakings(takings: number, staffed: boolean): number {
+  return staffed ? takings : 0;
 }

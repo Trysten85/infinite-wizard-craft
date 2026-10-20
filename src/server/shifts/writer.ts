@@ -52,7 +52,9 @@ function content(text: string): Set<string> {
 }
 
 // The reason an order reads like another, or null. Two orders are alike when they open with the
-// same three words, or share most of what they say.
+// same three words, or share most of what they say: more than `share` of all the words the two
+// say between them. Counting against both orders together, not the shorter one, keeps a short
+// order from being refused for a couple of words it shares with a long one.
 export function tooAlike(text: string, others: string[], share = 0.5): string | null {
   const opening = words(text).slice(0, 3).join(" ");
   const mine = content(text);
@@ -62,8 +64,8 @@ export function tooAlike(text: string, others: string[], share = 0.5): string | 
     }
     const theirs = content(other);
     const shared = [...mine].filter((word) => theirs.has(word)).length;
-    const smaller = Math.min(mine.size, theirs.size);
-    if (smaller > 0 && shared / smaller > share) {
+    const between = new Set([...mine, ...theirs]).size;
+    if (between > 0 && shared / between > share) {
       return `It says much the same as "${other}". Write about a different thing, in a different shape.`;
     }
   }

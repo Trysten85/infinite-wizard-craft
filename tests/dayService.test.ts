@@ -38,7 +38,7 @@ const dayOf = (game: Game, player = "ann") => game.progress.getProgress(player).
 describe("the sun", () => {
   it("starts every player at dawn on day one", () => {
     const game = newGame();
-    expect(dayOf(game)).toMatchObject({ number: 1, sun: 0, phase: "morning", candles: rules.candles, nightIn: null, canTurnIn: false, shiftDone: false, lastLedger: null });
+    expect(dayOf(game)).toMatchObject({ number: 1, sun: 0, phase: "morning", time: rules.time, nightIn: null, canTurnIn: false, shiftDone: false, lastLedger: null });
   });
 
   it("moves a notch for each new thing made by combining, and for nothing else", async () => {
@@ -70,7 +70,7 @@ describe("the sun", () => {
     // Dusk is said once, on the thing that brought it on.
     expect(turns.map((turn) => turn.dusk !== null)).toEqual([...Array(DUSK - NOON - 1).fill(false), true]);
     expect(data.dayText.dusk).toContain(turns.at(-1)!.dusk);
-    expect(dayOf(game)).toMatchObject({ sun: DUSK, phase: "evening", candles: rules.candles, canTurnIn: false, nightIn: rules.nightAfter });
+    expect(dayOf(game)).toMatchObject({ sun: DUSK, phase: "evening", time: rules.time, canTurnIn: false, nightIn: rules.nightAfter });
     await discover(game, "ann", 2);
     expect(dayOf(game)).toMatchObject({ sun: DUSK, phase: "evening", nightIn: rules.nightAfter - 2 });
   });
@@ -85,36 +85,36 @@ describe("night", () => {
     expect(dusk).toBeNull();
     expect(night).toMatchObject({ day: 1, fell: "bed", takings: [], cheer: null, brought: [], missed: null, deed: false });
     expect(data.dayText.night.bed).toContain(night!.lines[0]);
-    expect(dayOf(game)).toMatchObject({ number: 2, sun: 0, phase: "morning", candles: rules.candles, shiftDone: false, lastLedger: night });
+    expect(dayOf(game)).toMatchObject({ number: 2, sun: 0, phase: "morning", time: rules.time, shiftDone: false, lastLedger: night });
   });
 
-  it("falls when the last candle is spent", () => {
+  it("falls when the last of the time is spent", () => {
     const game = newGame();
-    expect(() => game.day.spend("ann", 1)).toThrowError(expect.objectContaining({ code: "not-evening" }));
+    expect(() => game.day.spend("ann", "call", 1)).toThrowError(expect.objectContaining({ code: "not-evening" }));
     game.dusk("ann");
-    expect(game.day.spend("ann", 1)).toEqual({ night: null, dusk: null });
-    expect(() => game.day.spend("ann", 3)).toThrowError(expect.objectContaining({ code: "no-candles" }));
-    expect(dayOf(game).candles).toBe(rules.candles - 1);
-    const { night } = game.day.spend("ann", rules.candles - 1);
-    expect(night).toMatchObject({ day: 1, fell: "last-candle" });
+    expect(game.day.spend("ann", "call", 1)).toEqual({ night: null, dusk: null });
+    expect(() => game.day.spend("ann", "call", 3)).toThrowError(expect.objectContaining({ code: "no-time" }));
+    expect(dayOf(game).time).toBe(rules.time - 1);
+    const { night } = game.day.spend("ann", "call", rules.time - 1);
+    expect(night).toMatchObject({ day: 1, fell: "out-of-time" });
     expect(dayOf(game).number).toBe(2);
   });
 
-  it("falls by itself when the player crafts on past dusk, and a candle spent starts the count again", async () => {
+  it("falls by itself when the player crafts on past dusk, and time spent starts the count again", async () => {
     const game = newGame();
     // The discovery that brings dusk on does not count.
     await discover(game, "ann", DUSK);
     expect(dayOf(game).nightIn).toBe(rules.nightAfter);
     await discover(game, "ann", rules.nightAfter - 1);
     expect(dayOf(game)).toMatchObject({ number: 1, nightIn: 1 });
-    game.day.spend("ann", 1);
+    game.day.spend("ann", "call", 1);
     expect(dayOf(game).nightIn).toBe(rules.nightAfter);
     const turns = await discover(game, "ann", rules.nightAfter);
     expect(turns.slice(0, -1).every((turn) => turn.night === null)).toBe(true);
     expect(turns.at(-1)!.night).toMatchObject({ day: 1, fell: "midnight-oil" });
     expect(data.dayText.night["midnight-oil"]).toContain(turns.at(-1)!.night!.lines[0]);
-    // Unspent candles are gone with the day.
-    expect(dayOf(game)).toMatchObject({ number: 2, sun: 0, candles: rules.candles });
+    // Unspent time are gone with the day.
+    expect(dayOf(game)).toMatchObject({ number: 2, sun: 0, time: rules.time });
   });
 
   it("is not brought on by making old things again after dusk", async () => {
@@ -132,12 +132,12 @@ describe("turning in early", () => {
     const turn = game.day.end("ann");
     expect(turn.night).toBeNull();
     expect(data.dayText.turnedIn).toContain(turn.dusk);
-    expect(dayOf(game)).toMatchObject({ number: 1, sun: DUSK, phase: "evening", candles: rules.earlyCandles, candlesMax: rules.earlyCandles, canTurnIn: false });
+    expect(dayOf(game)).toMatchObject({ number: 1, sun: DUSK, phase: "evening", time: rules.earlyTime, timeMax: rules.earlyTime, canTurnIn: false });
     // From there the evening ends in the usual ways.
     expect(game.day.end("ann").night).toMatchObject({ fell: "bed" });
     // The next evening is a full one again.
     game.dusk("ann");
-    expect(dayOf(game).candles).toBe(rules.candles);
+    expect(dayOf(game).time).toBe(rules.time);
   });
 });
 
@@ -152,6 +152,7 @@ describe("the night ledger", () => {
 
     const smith = newGame();
     for (const id of ["person", "forge", "blacksmith"]) smith.store.addDiscovery("ann", id);
+    smith.store.addTaught("ann", "blacksmith");
     smith.progress.chooseJob("ann", "blacksmith");
     smith.dusk("ann");
     const second = smith.day.end("ann").night!;
@@ -316,6 +317,7 @@ describe("three days through the routes, with the model never called", () => {
     expect((await get("")).progress.day).toMatchObject({ number: 1, sun: 0, phase: "morning" });
     expect((await get("")).night).toBeNull();
     for (const id of ["person", "forge", "blacksmith"]) game.store.addDiscovery("ann", id);
+    game.store.addTaught("ann", "blacksmith");
     expect((await send("/job", { job: "blacksmith" })).body).toMatchObject({ night: null, progress: { shiftReady: false, day: { sun: 0 } } });
     expect((await send("/day/end")).status).toBe(400);
     const morning = await make(NOON);
@@ -331,10 +333,10 @@ describe("three days through the routes, with the model never called", () => {
     expect((await send("/event/respond", { type: "fair" })).body).toMatchObject({ code: "not-evening" });
     // On to dusk, and the evening: the visitor, then bed.
     const afternoon = await make(DUSK - NOON - rules.shiftNotches);
-    expect(afternoon.at(-1)).toMatchObject({ night: null, dusk: expect.any(String), progress: { day: { phase: "evening", candles: rules.candles } } });
+    expect(afternoon.at(-1)).toMatchObject({ night: null, dusk: expect.any(String), progress: { day: { phase: "evening", time: rules.time } } });
     const shelf = (await get("/shop")).slots.map((slot: { entry: { id: string } }) => slot.entry.id);
     const visit = await sit();
-    expect(visit).toMatchObject({ next: null, night: null, progress: { eventReady: false, eventIn: 1, day: { candles: rules.candles - rules.costs.visitor } } });
+    expect(visit).toMatchObject({ next: null, night: null, progress: { eventReady: false, eventIn: 1, day: { time: rules.time - rules.costs.visitor } } });
     const bed = await send("/day/end");
     expect(bed.body).toMatchObject({ rewards: { quests: [] }, dusk: null, night: { day: 1, fell: "bed" }, progress: { day: { number: 2, sun: 0, phase: "morning", shiftDone: false } } });
     expect(bed.body.night!.lines).toHaveLength(4);
@@ -350,13 +352,13 @@ describe("three days through the routes, with the model never called", () => {
     expect(late.at(-1)).toMatchObject({ night: { day: 2, fell: "midnight-oil" }, progress: { day: { number: 3, sun: 0 } } });
 
     // Day three. The visitor nobody sat with is still the one at the door. The player turns in
-    // early, and the one candle that leaves goes on the visit, which brings night.
+    // early, and the one time that leaves goes on the visit, which brings night.
     expect(game.store.listEvents("ann").map((event) => [event.day, event.state])).toEqual([[1, "resolved"], [2, "pending"]]);
     await make(NOON);
     const early = await send("/day/end");
-    expect(early.body).toMatchObject({ night: null, dusk: expect.any(String), progress: { shiftReady: true, day: { number: 3, phase: "evening", candles: rules.earlyCandles } } });
+    expect(early.body).toMatchObject({ night: null, dusk: expect.any(String), progress: { shiftReady: false, day: { number: 3, phase: "evening", time: rules.earlyTime } } });
     const last = await sit();
-    expect(last).toMatchObject({ next: null, night: { day: 3, fell: "last-candle" }, progress: { day: { number: 4, sun: 0, lastLedger: { day: 3 } } } });
+    expect(last).toMatchObject({ next: null, night: { day: 3, fell: "out-of-time" }, progress: { day: { number: 4, sun: 0, lastLedger: { day: 3 } } } });
     // Both visitors have been seen, each on the day they were written for or a later one.
     expect(game.store.listEvents("ann").filter((event) => event.state === "resolved").map((event) => event.day)).toEqual([1, 2]);
     expect(game.store.getDay("ann").visitorDay).toBe(3);

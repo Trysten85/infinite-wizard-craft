@@ -121,6 +121,49 @@ const countSchema = z.number().int().min(1);
 // With `made`, only things the player made by combining count. Anything bought or given is left out.
 const madeSchema = z.boolean().optional();
 
+// What makes a quest done, as data. Quests, lessons, and a townsperson's story beats all use it.
+export const questDoneSchema = z.discriminatedUnion("type", [
+  // Anything at all beyond the starting entries.
+  z.strictObject({ type: z.literal("discovered-any") }),
+  z.strictObject({ type: z.literal("discovered-count"), count: countSchema }),
+  z.strictObject({ type: z.literal("has-kind"), kind: questKindSchema, made: madeSchema }),
+  // This many things of one kind. With `tier`, only those of that tier or higher count.
+  z.strictObject({ type: z.literal("kind-count"), kind: questKindSchema, count: countSchema, tier: z.number().int().min(0).optional() }),
+  z.strictObject({ type: z.literal("has-entry"), entry: idSchema, made: madeSchema }),
+  z.strictObject({ type: z.literal("has-tag"), tag: z.string() }),
+  z.strictObject({ type: z.literal("tag-count"), tag: z.string(), count: countSchema }),
+  // Something this many combos from the starting entries.
+  z.strictObject({ type: z.literal("depth"), depth: countSchema, made: madeSchema }),
+  z.strictObject({ type: z.literal("learned-count"), count: countSchema }),
+  // A learned spell of exactly this tier.
+  z.strictObject({ type: z.literal("learned-tier"), tier: z.number().int().min(0) }),
+  // Learned spells from this many different schools.
+  z.strictObject({ type: z.literal("learned-schools"), count: countSchema }),
+  z.strictObject({ type: z.literal("level"), level: z.number().int().min(1) }),
+  // Events seen through to their end, whatever the player chose.
+  z.strictObject({ type: z.literal("events"), count: countSchema }),
+  // Things bought from the shop.
+  z.strictObject({ type: z.literal("bought"), count: countSchema }),
+  // The town. Townsfolk who have arrived, plots owned, buildings standing (at a tier or higher),
+  // one named building standing (at a tier or higher), evening actions taken, and regulars made.
+  z.strictObject({ type: z.literal("townsfolk"), count: countSchema }),
+  z.strictObject({ type: z.literal("plots"), count: countSchema }),
+  z.strictObject({ type: z.literal("buildings"), count: countSchema, tier: z.number().int().min(1).optional() }),
+  z.strictObject({ type: z.literal("built"), building: idSchema, tier: z.number().int().min(1).optional() }),
+  z.strictObject({ type: z.literal("evenings"), count: countSchema }),
+  z.strictObject({ type: z.literal("regulars"), count: countSchema }),
+  // Spells cast on a building, counting every cast.
+  z.strictObject({ type: z.literal("enchantments"), count: countSchema }),
+  // Another quest paid, such as a lesson, so one quest can wait on another.
+  z.strictObject({ type: z.literal("quest-done"), quest: idSchema }),
+  // The townsperson of this job has arrived and has at least this much Fondness.
+  z.strictObject({ type: z.literal("fondness"), job: idSchema, fondness: z.number().int() }),
+  // Things made for someone who asked: requests filled. With `job`, only those for the
+  // townsperson of that job.
+  z.strictObject({ type: z.literal("requests"), count: countSchema, job: idSchema.optional() }),
+]);
+export type QuestDone = z.infer<typeof questDoneSchema>;
+
 // A quest is done when its condition is met. Conditions are data, so quests never need code.
 // Everything a condition counts leaves out the starting entries.
 export const questSchema = z.strictObject({
@@ -133,39 +176,7 @@ export const questSchema = z.strictObject({
   level: z.number().int().min(1),
   gold: z.number().int().min(0),
   xp: z.number().int().min(0),
-  done: z.discriminatedUnion("type", [
-    // Anything at all beyond the starting entries.
-    z.strictObject({ type: z.literal("discovered-any") }),
-    z.strictObject({ type: z.literal("discovered-count"), count: countSchema }),
-    z.strictObject({ type: z.literal("has-kind"), kind: questKindSchema, made: madeSchema }),
-    // This many things of one kind. With `tier`, only those of that tier or higher count.
-    z.strictObject({ type: z.literal("kind-count"), kind: questKindSchema, count: countSchema, tier: z.number().int().min(0).optional() }),
-    z.strictObject({ type: z.literal("has-entry"), entry: idSchema, made: madeSchema }),
-    z.strictObject({ type: z.literal("has-tag"), tag: z.string() }),
-    z.strictObject({ type: z.literal("tag-count"), tag: z.string(), count: countSchema }),
-    // Something this many combos from the starting entries.
-    z.strictObject({ type: z.literal("depth"), depth: countSchema, made: madeSchema }),
-    z.strictObject({ type: z.literal("learned-count"), count: countSchema }),
-    // A learned spell of exactly this tier.
-    z.strictObject({ type: z.literal("learned-tier"), tier: z.number().int().min(0) }),
-    // Learned spells from this many different schools.
-    z.strictObject({ type: z.literal("learned-schools"), count: countSchema }),
-    z.strictObject({ type: z.literal("level"), level: z.number().int().min(1) }),
-    // Events seen through to their end, whatever the player chose.
-    z.strictObject({ type: z.literal("events"), count: countSchema }),
-    // Things bought from the shop.
-    z.strictObject({ type: z.literal("bought"), count: countSchema }),
-    // The town. Townsfolk who have arrived, plots owned, buildings standing (at a tier or higher),
-    // one named building standing, evening actions taken, and regulars made.
-    z.strictObject({ type: z.literal("townsfolk"), count: countSchema }),
-    z.strictObject({ type: z.literal("plots"), count: countSchema }),
-    z.strictObject({ type: z.literal("buildings"), count: countSchema, tier: z.number().int().min(1).optional() }),
-    z.strictObject({ type: z.literal("built"), building: idSchema }),
-    z.strictObject({ type: z.literal("evenings"), count: countSchema }),
-    z.strictObject({ type: z.literal("regulars"), count: countSchema }),
-    // Spells cast on a building, counting every cast.
-    z.strictObject({ type: z.literal("enchantments"), count: countSchema }),
-  ]),
+  done: questDoneSchema,
 });
 export type Quest = z.infer<typeof questSchema>;
 
@@ -265,14 +276,18 @@ export type RuleCode =
   | "level-too-low"
   | "no-job"
   | "shift-not-ready"
-  // The day: an evening action tried before dusk, or with too few candles left.
+  // The day: an evening action tried before dusk, or with too few hourglasses left.
   | "not-evening"
-  | "no-candles"
+  | "no-time"
   // The town: no deed for another plot, a building's needs not yet discovered, and the shop
   // asked for before a Market Stall stands.
   | "no-deed"
   | "needs-missing"
-  | "no-shop";
+  | "no-shop"
+  // The shop is shut from dusk until morning (`shopOpen`).
+  | "shop-closed"
+  // A job whose person has not yet taught it, so its shift cannot be worked.
+  | "not-taught";
 
 // What a player just earned, for the page to announce. A filled request is listed among the
 // quests, and pays no XP.
@@ -429,8 +444,8 @@ export const perkSchema = z.discriminatedUnion("type", [
   z.strictObject({ type: z.literal("gift"), tags: z.array(z.string()).min(1), every: z.number().int().min(1) }),
   // Enchantments last this many days longer.
   z.strictObject({ type: z.literal("enchant-days"), days: z.number().int().min(1) }),
-  // More candles each evening.
-  z.strictObject({ type: z.literal("candles"), count: z.number().int().min(1) }),
+  // More hourglasses each evening.
+  z.strictObject({ type: z.literal("time"), count: z.number().int().min(1) }),
   // Meals are served: tomorrow's discoveries pay this share more, for this much gold a level.
   z.strictObject({ type: z.literal("meals"), lift: shareSchema, goldPerLevel: z.number().int().min(0) }),
 ]);
@@ -462,7 +477,7 @@ export const buildingSchema = z.strictObject({
 });
 export type Building = z.infer<typeof buildingSchema>;
 
-// What a player can spend a candle on in the evening: sitting with tonight's visitor, a meal at
+// What a player can spend an hourglass on in the evening: sitting with tonight's visitor, a meal at
 // the Tavern, calling on a townsperson, lending a hand at a building, enchanting one, raising one
 // a tier, and raising a new one.
 export const EVENING_ACTIONS = ["visitor", "meal", "call", "hand", "enchant", "upgrade", "build"] as const;
@@ -540,12 +555,17 @@ export const balanceSchema = z.strictObject({
     // Notches that working the shift moves the sun.
     shiftNotches: z.number().int().min(0),
     // Evening actions, and how many there are when the player turns in early.
-    candles: z.number().int().min(1),
-    earlyCandles: z.number().int().min(0),
-    // Discoveries past dusk, with no candle spent between them, before night falls by itself.
+    time: z.number().int().min(1),
+    earlyTime: z.number().int().min(0),
+    // Discoveries past dusk, with no hourglass spent between them, before night falls by itself.
     nightAfter: z.number().int().min(1),
-    // What each evening action costs in candles.
+    // What each evening action costs in hourglasses.
     costs: z.record(z.enum(EVENING_ACTIONS), z.number().int().min(0)),
+    // When each action may be taken. "anytime" is from the morning until night; "evening" is only
+    // after dusk, and spends from the evening's budget. An action costing nothing is free.
+    access: z.record(z.enum(EVENING_ACTIONS), z.enum(["anytime", "evening"])),
+    // Once-a-day limits on the daytime actions: meals a day, and hands lent to one building a day.
+    limits: z.strictObject({ mealsPerDay: z.number().int().min(1), handsPerBuilding: z.number().int().min(1) }),
     // One-night happenings: the first day one may appear, and the chance of one each day.
     tonight: z.strictObject({ fromDay: z.number().int().min(1), chance: z.number().min(0).max(1) }),
   }),
@@ -557,6 +577,18 @@ export const balanceSchema = z.strictObject({
     // A person is a regular from this much fondness, and then stays one. A regular who has a
     // building of their own makes it pay this share more.
     regularAt: z.number().int().min(1),
+    // The Fondness at which a townsperson will teach their trade, once their lesson is done. It is
+    // less than `regularAt`: a person teaches before they are a regular.
+    teachAt: z.number().int().min(1),
+    // What hiring a building's person costs, by the building's tier, tier 1 first. Raising a
+    // staffed building tops the hire up to the new tier's price.
+    hireByTier: z.array(z.number().int().min(0)).min(1),
+    // Raising a building takes this many nights to finish. 0 is at once.
+    raiseNights: z.number().int().min(0),
+    // Neighbours: a building's takings change by `liked` for each neighbour its owner likes and
+    // `disliked` for each they dislike, within `reach` plots either side, and never by more than
+    // `cap` either way.
+    neighbour: z.strictObject({ reach: z.number().int().min(1), liked: z.number().min(0), disliked: z.number().min(0), cap: z.number().min(0) }),
     regularTakings: z.number().min(0),
     // A meal at the Tavern costs `goldPerLevel` x level and lifts tomorrow's discoveries by `lift`.
     meal: z.strictObject({ goldPerLevel: z.number().int().min(0), lift: z.number().min(0) }),
@@ -628,6 +660,8 @@ export const balanceSchema = z.strictObject({
     maxWords: z.number().int().min(1),
     // In the bake, how many pairs may make the same thing before that thing is passed over.
     bakeNameCap: z.number().int().min(1),
+    // How many candidates the bake tries, best first, before it gives up and queues the pair for alternatives.
+    gateTries: z.number().int().min(1),
     // The share of ordinary pairs whose description gets one playful twist. Code picks which,
     // and a pair always gets the same treatment. The name and what the thing is stay literal.
     twistShare: z.number().min(0).max(1),
@@ -641,14 +675,14 @@ export const balanceSchema = z.strictObject({
 });
 export type Balance = z.infer<typeof balanceSchema>;
 
-// The day. A player crafts through the morning, may work a shift from noon, spends candles in the
+// The day. A player crafts through the morning, may work a shift from noon, spends hourglasses in the
 // evening, and sees a ledger when night falls. The rules are in src/shared/day.ts.
 export type DayRules = Balance["day"];
 export const DAY_PHASES = ["morning", "afternoon", "evening"] as const;
 export type DayPhase = (typeof DAY_PHASES)[number];
-// Why night fell: the last candle was spent, the player went to bed, or they crafted on past dusk
+// Why night fell: the last hourglass was spent, the player went to bed, or they crafted on past dusk
 // until the evening had gone.
-export const NIGHT_REASONS = ["last-candle", "bed", "midnight-oil"] as const;
+export const NIGHT_REASONS = ["out-of-time", "bed", "midnight-oil"] as const;
 export type NightReason = (typeof NIGHT_REASONS)[number];
 
 // A one-night happening, once it has been announced. `taken` is set when the player took part.
@@ -683,16 +717,20 @@ export type DayView = {
   noon: number;
   phase: DayPhase;
   // Evening actions left, and how many this evening has in all. Only spendable in the evening.
-  candles: number;
-  candlesMax: number;
+  time: number;
+  timeMax: number;
   // Discoveries still to make before night falls by itself. Null outside the evening.
   nightIn: number | null;
-  // The player may turn in early: it is past noon and not yet dusk. `turnInCandles` is how many
-  // candles the evening would then have, so the page can say what turning in gives up.
+  // The player may turn in early: it is past noon and not yet dusk. `turnInTime` is how many
+  // hourglasses the evening would then have, so the page can say what turning in gives up.
   canTurnIn: boolean;
-  turnInCandles: number;
-  // What each evening action costs in candles.
+  turnInTime: number;
+  // What each evening action costs in hourglasses.
   costs: Record<EveningAction, number>;
+  // When each of those actions may be taken ("anytime" or "evening"), and the once-a-day limits,
+  // so the page reads the rules rather than guessing from a cost.
+  access: DayRules["access"];
+  limits: DayRules["limits"];
   // Today's shift has been worked.
   shiftDone: boolean;
   // Null until it is announced at noon, and on a day with no happening.
@@ -724,6 +762,68 @@ export const townsfolkSchema = z.strictObject({
   callingLines: z.record(z.string(), z.array(z.string().min(1)).min(1)).refine((lines) => "default" in lines, "callingLines needs a default"),
 });
 export type Townsfolk = z.infer<typeof townsfolkSchema>;
+
+// What a story beat gives when it is done. Code pays it; the model only writes the words.
+const beatRewardSchema = z.discriminatedUnion("kind", [
+  z.strictObject({ kind: z.literal("gold"), gold: z.number().int().min(0), xp: z.number().int().min(0) }),
+  // The person's commissions on the order board take these tags from now on.
+  z.strictObject({ kind: z.literal("commission"), tags: z.array(z.string().min(1)).min(1) }),
+  // A perk the person's building gives from now on.
+  z.strictObject({ kind: z.literal("perk"), perk: perkSchema }),
+  // Brings a tier's plan early. The building can still always be raised the usual way.
+  z.strictObject({ kind: z.literal("plan"), building: idSchema, tier: z.number().int().min(2) }),
+]);
+
+// One step of a person's story. It opens at a Fondness, and when beats it `waitsOn` are done, which
+// can be another person's. A beat with no `done` is done as soon as it opens (a finale).
+export const storyBeatSchema = z.strictObject({
+  id: idSchema,
+  title: z.string().min(1),
+  // The level the beat pays at, as a quest does, so it counts toward that level's XP.
+  level: z.number().int().min(1),
+  gate: z.number().int().min(0),
+  waitsOn: z.array(idSchema).default([]),
+  done: questDoneSchema.optional(),
+  reward: beatRewardSchema,
+  // The facts of the scene for the model to write from, and the plain line used until it does.
+  premise: z.string().min(1),
+  line: z.string().min(1),
+  // Part of the gentle town-wide thread through the cast.
+  thread: z.boolean().optional(),
+});
+export type StoryBeat = z.infer<typeof storyBeatSchema>;
+
+// A hand-written townsperson. One for each trade, the same in every game.
+export const castMemberSchema = z.strictObject({
+  id: idSchema,
+  name: z.string().regex(/^[A-Z][A-Za-z' -]*$/, "a name has letters only"),
+  pronoun: z.enum(["she", "he", "they"]),
+  job: idSchema,
+  // The building they live in, or "shared" for a person with no building of their own.
+  home: z.union([idSchema, z.literal("shared")]),
+  personality: z.string().min(1),
+  // One line on how they speak, for the prompt.
+  voice: z.string().min(1),
+  // Facts handed to the writers as they are.
+  traits: z.array(z.string().min(1)),
+  facts: z.array(z.string().min(1)),
+  likes: z.array(idSchema),
+  dislikes: z.array(idSchema),
+  // When they arrive, besides their job being discovered. Every part given must hold.
+  arrival: z.strictObject({
+    level: z.number().int().min(1).optional(),
+    buildings: countSchema.optional(),
+    townsfolk: countSchema.optional(),
+    quest: idSchema.optional(),
+  }),
+  // Their lesson: done, with enough Fondness, and they teach the trade.
+  lesson: z.array(questSchema).min(1),
+  beats: z.array(storyBeatSchema),
+  callingLines: z.array(z.string().min(1)).min(1),
+});
+export type CastMember = z.infer<typeof castMemberSchema>;
+export const castSchema = z.strictObject({ people: z.array(castMemberSchema) });
+export type Cast = z.infer<typeof castSchema>;
 
 // The plain lines the day is written in until the model writes them.
 export const dayTextSchema = z.strictObject({
@@ -768,9 +868,40 @@ export type BuildingView = {
   next: { gold: number; level: number; needs: NeedView[]; ready: boolean } | null;
 };
 
+// Everyone in town, for the People tab (`GET /town/people`). A hint of the next story beat gives
+// its title and the Fondness it opens at, never what it asks for.
+export type PersonView = {
+  person: number;
+  name: string;
+  pronoun: "she" | "he" | "they" | null;
+  job: string;
+  trade: string;
+  personality: string | null;
+  // Where they live, or null for a trade with no building to wait for. "shared" lodges in town.
+  home: { building: string; name: string } | "shared" | null;
+  housed: boolean;
+  // No home standing yet: they wait at the Tavern's door by day and leave at dusk.
+  homeless: boolean;
+  awayTonight: boolean;
+  fondness: number;
+  regular: boolean;
+  taught: boolean;
+  // Trade names.
+  likes: string[];
+  dislikes: string[];
+  lesson: { id: string; title: string; detail: string; done: boolean; progress?: { have: number; need: number } }[];
+  nextBeat: { title: string; gate: number; level: number } | null;
+  // The beats played with this person, oldest first, with their words.
+  scenes: { beat: string; title: string; text: string }[];
+};
+export type PeopleView = { people: PersonView[]; regularAt: number; teachAt: number };
+
 export type TownView = {
   // Every plot along the street. `opensAt` is the level whose deeds reach that plot.
-  plots: { index: number; owned: boolean; price: number; opensAt: number; building: BuildingView | null }[];
+  // `raising` is a building going up on the plot, or the tier being added to the one there,
+  // finished after `nights` more nights. Always sent; optional only until the page's fixtures
+  // carry it.
+  plots: { index: number; owned: boolean; price: number; opensAt: number; building: BuildingView | null; raising?: { building: string; name: string; tier: number; nights: number } | null }[];
   // How many plots the player's level lets them own, and how many the highest level would.
   deeds: { have: number; max: number };
   // Null until Cheer is worked out, in slice 3.
@@ -778,8 +909,8 @@ export type TownView = {
   // `person` is the id of their row among the people the player knows.
   townsfolk: { person: number; job: string; name: string; housed: boolean; fondness: number; regular: boolean }[];
   // Buildings the player holds the plan for and has not raised. `ready` means the gold, the
-  // level, and the needs are all there. It says nothing of the hour or the candles.
-  plans: { building: string; name: string; price: number; candles: number; needs: NeedView[]; ready: boolean }[];
+  // level, and the needs are all there. It says nothing of the hour or the hourglasses.
+  plans: { building: string; name: string; price: number; time: number; needs: NeedView[]; ready: boolean }[];
 };
 
 // The shift numbers the page needs to preview a result. Sent with the board.
@@ -869,6 +1000,8 @@ export const bakedComboSchema = z.strictObject({
   failure: z.enum(BAKE_FAILURES).optional(),
   correction: z.string().min(1).optional(),
   notes: z.string().optional(),
+  // Who settled the pair: Trysten, an assistant's reading that he cleared, or the model alone.
+  source: z.enum(["user", "assistant-read", "model"]).optional(),
 });
 export type BakedCombo = z.infer<typeof bakedComboSchema>;
 

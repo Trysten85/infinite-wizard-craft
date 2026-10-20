@@ -128,7 +128,7 @@ export function createShifts(deps: {
     return {
       job: at.job,
       rank: rankView(store.countShifts(player, at.job.id), rules),
-      ready: shiftOpen(day.today(player), data.balance.day, true),
+      ready: shiftOpen(day.today(player), data.balance.day, true) && progress.isJobTaught(player, at.job.id),
       slots: { base: at.skin.base.name, method: at.skin.method.name, touch: at.skin.touch.name },
       orders: ordersFor(player, at).map(toOrder),
       options: at.options,
@@ -139,35 +139,38 @@ export function createShifts(deps: {
   // Works one order. The page says which order and what to fill it with, and nothing else:
   // the quality, the pay, and the line are all decided here.
   function work(player: string, choice: { order: number; base: string; method: string; touch?: string | null }): { result: ShiftResult; rewards: Rewards } & DayTurn {
-    const at = situation(player);
-    if (!at) throw new RuleError("Take up a job before you work a shift.", "no-job");
-    const today = day.today(player);
-    if (today.shiftDone) throw new RuleError("You have worked today's shift. New orders come at noon tomorrow.", "shift-not-ready");
-    if (!shiftOpen(today, data.balance.day, true)) throw new RuleError("The order board opens at noon.", "shift-not-ready");
-    const order = ordersFor(player, at).find((item) => item.id === choice.order);
-    if (!order) throw new RuleError("That order is not on your board.");
-    const chosen = chosenFrom(at.options, choice);
-    if (!chosen) throw new RuleError("One of those is not on offer for this shift.");
+    return store.atomically(() => {
+      const at = situation(player);
+      if (!at) throw new RuleError("Take up a job before you work a shift.", "no-job");
+      if (!progress.isJobTaught(player, at.job.id)) throw new RuleError(`You have not been taught to be a ${at.job.name} yet, so there is no shift to work.`, "not-taught");
+      const today = day.today(player);
+      if (today.shiftDone) throw new RuleError("You have worked today's shift. New orders come at noon tomorrow.", "shift-not-ready");
+      if (!shiftOpen(today, data.balance.day, true)) throw new RuleError("The order board opens at noon.", "shift-not-ready");
+      const order = ordersFor(player, at).find((item) => item.id === choice.order);
+      if (!order) throw new RuleError("That order is not on your board.");
+      const chosen = chosenFrom(at.options, choice);
+      if (!chosen) throw new RuleError("One of those is not on offer for this shift.");
 
-    // Luck is rolled once, here, and nowhere else.
-    const qualityId = resolveQuality(order, chosen, at.rank.id, random(), rules);
-    const quality = rules.qualities.find((item) => item.id === qualityId)!;
-    const pay = payFor(order, quality.id, rules);
-    const line = resultLine(quality.id, data.shiftText, random);
-    const inputs = [chosen.base.id, chosen.method.id, ...(chosen.touch ? [chosen.touch.id] : [])];
-    const shiftId = store.addShift(player, { job: at.job.id, orderTags: order.tags, inputs, quality: quality.id, line, ...pay });
-    if (pay.gold !== 0) store.addLedger(player, pay.gold, "shift", String(shiftId));
-    if (pay.rep !== 0) store.changeStats(player, { rep: pay.rep });
-    store.finishShiftOrder(order.id);
-    // A Great or Perfect shift lifts the player's own building tonight, if they have one.
-    if (quality.id === "great" || quality.id === "perfect") store.setShiftLiftDay(player, day.today(player).number);
+      // Luck is rolled once, here, and nowhere else.
+      const qualityId = resolveQuality(order, chosen, at.rank.id, random(), rules);
+      const quality = rules.qualities.find((item) => item.id === qualityId)!;
+      const pay = payFor(order, quality.id, rules);
+      const line = resultLine(quality.id, data.shiftText, random);
+      const inputs = [chosen.base.id, chosen.method.id, ...(chosen.touch ? [chosen.touch.id] : [])];
+      const shiftId = store.addShift(player, { job: at.job.id, orderTags: order.tags, inputs, quality: quality.id, line, ...pay });
+      if (pay.gold !== 0) store.addLedger(player, pay.gold, "shift", String(shiftId));
+      if (pay.rep !== 0) store.changeStats(player, { rep: pay.rep });
+      store.finishShiftOrder(order.id);
+      // A Great or Perfect shift lifts the player's own building tonight, if they have one.
+      if (quality.id === "great" || quality.id === "perfect") store.setShiftLiftDay(player, day.today(player).number);
 
-    const shiftsDone = store.countShifts(player, at.job.id);
-    const rankUp = rankFor(shiftsDone, rules).id !== at.rank.id ? rankView(shiftsDone, rules) : null;
-    // The shift's XP can finish a quest or raise a level, which settling pays out.
-    const rewards = progress.settle(player);
-    // A shift takes a piece of the day, and can bring dusk on.
-    return { result: { order: toOrder(order), quality: { id: quality.id, name: quality.name }, line, ...pay, rankUp }, rewards, ...day.after(player, "shift") };
+      const shiftsDone = store.countShifts(player, at.job.id);
+      const rankUp = rankFor(shiftsDone, rules).id !== at.rank.id ? rankView(shiftsDone, rules) : null;
+      // The shift's XP can finish a quest or raise a level, which settling pays out.
+      const rewards = progress.settle(player);
+      // A shift takes a piece of the day, and can bring dusk on.
+      return { result: { order: toOrder(order), quality: { id: quality.id, name: quality.name }, line, ...pay, rankUp }, rewards, ...day.after(player, "shift") };
+    });
   }
 
   return { board, work, prepare, idle };

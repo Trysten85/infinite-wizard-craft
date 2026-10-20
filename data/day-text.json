@@ -9,9 +9,9 @@
     "Enough for one day. There is still a little evening left."
   ],
   "night": {
-    "last-candle": [
-      "The last candle gutters. That was the evening.",
-      "Out of candles, and not a minute wasted."
+    "out-of-time": [
+      "The sand has run out. That was the evening.",
+      "The last grain drops, and not a minute wasted."
     ],
     "bed": [
       "You turn in. The street carries on quietly without you.",

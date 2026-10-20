@@ -4,7 +4,7 @@ import { comboKey, type GameEntry, type TownView } from "../src/shared/schema";
 import { data, newGame } from "./helpers";
 
 const rules = data.balance.town;
-const { costs, candles } = data.balance.day;
+const { costs, time } = data.balance.day;
 type Game = ReturnType<typeof newGame>;
 
 // Something the player has discovered, carrying these tags, as fine as `tier`.
@@ -34,7 +34,7 @@ describe("stocking a building", () => {
     thing(game, "ingot", ["metal"]);
     game.town.stock("ann", 0, 1, "ingot");
     expect(game.town.view("ann").plots[0]!.building!.stock).toEqual([{ slot: 0, entry: null }, { slot: 1, entry: { id: "ingot", name: "ingot" } }]);
-    expect(game.progress.getProgress("ann").day).toMatchObject({ phase: "morning", candles });
+    expect(game.progress.getProgress("ann").day).toMatchObject({ phase: "morning", time });
     game.town.stock("ann", 0, 1, null);
     expect(game.town.view("ann").plots[0]!.building!.stock.every((slot) => slot.entry === null)).toBe(true);
   });
@@ -103,7 +103,7 @@ describe("a building's quality", () => {
     expect(qualityAt(game, 0)).toBe("perfect");
   });
 
-  it("is lifted by a hand lent this evening, once a building, for a candle", () => {
+  it("is lifted by a hand lent this evening, once a building, for time", () => {
     const game = street("smithy");
     thing(game, "a", ["metal", "forging"]);
     game.town.stock("ann", 0, 0, "a");
@@ -111,29 +111,31 @@ describe("a building's quality", () => {
     const turn = game.town.hand("ann", 0);
     expect(turn).toEqual({ night: null, dusk: null });
     expect(qualityAt(game, 0)).toBe("great");
-    expect(game.progress.getProgress("ann").day!.candles).toBe(candles - costs.hand);
+    expect(game.progress.getProgress("ann").day!.time).toBe(time - costs.hand);
     expect(() => game.town.hand("ann", 0)).toThrow(/already lent a hand/);
     // It lasts the evening only.
     game.day.end("ann");
     expect(qualityAt(game, 0)).toBe("good");
   });
 
-  it("is not worth a candle on bare shelves, in the morning, or past the candles", () => {
+  it("is not worth lending on bare shelves, is free at any hour, and is once a building a day", () => {
     const game = street("smithy");
     expect(() => game.town.hand("ann", 0)).toThrow(/nothing on its shelves/);
     expect(() => game.town.hand("ann", 3)).toThrow(/Nothing stands/);
     thing(game, "a", ["metal"]);
     game.town.stock("ann", 0, 0, "a");
-    game.setDay("ann", { spent: candles });
-    expect(() => game.town.hand("ann", 0)).toThrowError(expect.objectContaining({ code: "no-candles" }));
-    game.setDay("ann", { spent: 0, sun: 0 });
-    expect(() => game.town.hand("ann", 0)).toThrowError(expect.objectContaining({ code: "not-evening" }));
-    expect(game.store.hasHand("ann", 0, 1)).toBe(false);
+    // In the morning, with no time: still free, and the day is left as it was.
+    game.setDay("ann", { spent: time, sun: 0 });
+    expect(game.town.hand("ann", 0)).toEqual({ night: null, dusk: null });
+    expect(game.store.getDay("ann").state).toMatchObject({ spent: time, sun: 0 });
+    expect(game.store.hasHand("ann", 0, 1)).toBe(true);
+    expect(() => game.town.hand("ann", 0)).toThrow(/already lent a hand/);
   });
 
   it("is lifted by a Great or Perfect shift at the player's own building, that day only", () => {
     const game = street("smithy", "farm");
     for (const id of ["person", "forge", "blacksmith"]) game.store.addDiscovery("ann", id);
+    game.store.addTaught("ann", "blacksmith");
     game.progress.chooseJob("ann", "blacksmith");
     thing(game, "a", ["metal", "forging"]);
     thing(game, "f", ["plant", "animal"]);
@@ -152,6 +154,7 @@ describe("a building's quality", () => {
   it("counts the rank of the owner at their own building and nowhere else", () => {
     const game = street("smithy", "farm");
     for (const id of ["person", "forge", "blacksmith"]) game.store.addDiscovery("ann", id);
+    game.store.addTaught("ann", "blacksmith");
     game.progress.chooseJob("ann", "blacksmith");
     // Crude things earn no tier bonus, so every want covered is a score of exactly 1: Great.
     thing(game, "a", ["metal", "forging"], 0);
@@ -202,15 +205,15 @@ describe("Cheer and takings", () => {
 });
 
 describe("what the buildings' perks bring", () => {
-  it("adds an evening candle for a Wizard's Tower at its top tier", () => {
+  it("adds an evening time for a Wizard's Tower at its top tier", () => {
     const game = street("wizards-tower");
-    expect(game.progress.getProgress("ann").day).toMatchObject({ candles, candlesMax: candles });
+    expect(game.progress.getProgress("ann").day).toMatchObject({ time, timeMax: time });
     game.store.setBuilding("ann", 0, "wizards-tower", 3);
-    expect(game.progress.getProgress("ann").day).toMatchObject({ candles: candles + 1, candlesMax: candles + 1 });
-    // Night does not fall on the last of the usual candles.
-    game.setDay("ann", { spent: candles - 1 });
-    expect(game.day.spend("ann", 1).night).toBeNull();
-    expect(game.day.spend("ann", 1).night).toMatchObject({ fell: "last-candle" });
+    expect(game.progress.getProgress("ann").day).toMatchObject({ time: time + 1, timeMax: time + 1 });
+    // Night does not fall on the last of the usual time.
+    game.setDay("ann", { spent: time - 1 });
+    expect(game.day.spend("ann", "call", 1).night).toBeNull();
+    expect(game.day.spend("ann", "call", 1).night).toMatchObject({ fell: "out-of-time" });
   });
 
   it("gives a rumour from a Tavern every few days, as a hint, and says so in the ledger", () => {
@@ -262,12 +265,12 @@ describe("the town routes for stock and a hand", () => {
 
     const stocked = await send("/town/stock", { plot: 0, slot: 0, entry: "a" });
     expect(stocked.status).toBe(200);
-    expect(stocked.body).toMatchObject({ night: null, dusk: null, progress: { day: { candles } } });
+    expect(stocked.body).toMatchObject({ night: null, dusk: null, progress: { day: { time } } });
     const street_ = (await (await app.request("/api/players/ann/town")).json()) as TownView;
     expect(street_.plots[0]!.building).toMatchObject({ quality: "good", stock: [{ slot: 0, entry: { id: "a" } }, { slot: 1, entry: null }] });
 
     const lent = await send("/town/hand", { plot: 0 });
-    expect(lent.body).toMatchObject({ night: null, progress: { day: { candles: candles - costs.hand } } });
+    expect(lent.body).toMatchObject({ night: null, progress: { day: { time: time - costs.hand } } });
     expect(((await (await app.request("/api/players/ann/town")).json()) as TownView).plots[0]!.building!.quality).toBe("great");
 
     expect((await send("/town/stock", { plot: 0, slot: 0, entry: null })).status).toBe(200);
@@ -280,6 +283,7 @@ describe("what the building view carries for a preview", () => {
   it("has the lifts applied tonight, the owner's rank bonus, and no enchantment yet", () => {
     const game = street("smithy", "farm");
     for (const id of ["person", "forge", "blacksmith"]) game.store.addDiscovery("ann", id);
+    game.store.addTaught("ann", "blacksmith");
     game.progress.chooseJob("ann", "blacksmith");
     thing(game, "a", ["metal", "forging"]);
     game.town.stock("ann", 0, 0, "a");

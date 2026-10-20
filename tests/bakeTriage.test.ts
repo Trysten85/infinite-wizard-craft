@@ -12,7 +12,7 @@ const context = {
   vouched: (name: string) => name === "Treant",
   nameOf: (id: string) => data.entries.get(id)?.name ?? id,
 };
-const draft = (inputs: [string, string], name: string, more: Partial<BakedCombo> = {}): BakedCombo => ({ inputs, name, description: "A thing.", tags: [], wonder: false, sense: 4, reason: "Fits.", status: "draft", ...more });
+const draft = (inputs: [string, string], name: string, more: Partial<BakedCombo> = {}): BakedCombo => ({ inputs, name, description: "A thing.", tags: ["utility"], wonder: false, sense: 4, reason: "", status: "draft", ...more });
 const line = (key: string, more: Partial<TriageRow> = {}): TriageRow => ({
   key,
   pair: key,
@@ -48,6 +48,16 @@ describe("what code can see is wrong with a baked row", () => {
     expect(flagsFor(draft(["sand", "water"], "Beach", { sense: null }), 1, context)).toContain("unmarked");
     expect(flagsFor(draft(["sand", "water"], "Beach", { description: "It hums faintly." }), 1, context)).toContain("worn-out words");
     expect(flagsFor(draft(["sand", "water"], "Beach", { description: "One. Two. Three." }), 1, context)).toContain("too long");
+  });
+
+  it("flags a reason that names only one ingredient, a middling mark, and a row with no tags", () => {
+    expect(flagsFor(draft(["bat", "tea"], "Cave", { reason: "Bats live in a cave." }), 1, context)).toContain("reason names only one ingredient");
+    expect(flagsFor(draft(["bat", "tea"], "Cave", { reason: "Bats and tea in a cave." }), 1, context)).not.toContain("reason names only one ingredient");
+    expect(flagsFor(draft(["bat", "tea"], "Cave", { reason: "" }), 1, context)).not.toContain("reason names only one ingredient");
+    expect(flagsFor(draft(["sand", "water"], "Beach", { sense: 3 }), 1, context)).toContain("middling mark");
+    expect(flagsFor(draft(["sand", "water"], "Beach", { tags: [] }), 1, context)).toContain("no tags");
+    // A middling mark only helps order the review: it never suggests throwing the row out.
+    expect(suggestionFromFlags(["middling mark"])).toEqual({ verdict: "keep" });
   });
 
   it("suggests a verdict from the flags when nobody has given one", () => {
@@ -162,5 +172,17 @@ describe("the suggestions made for the first bake", () => {
       if (suggestion.failure) expect(BAKE_FAILURES as readonly string[], key).toContain(suggestion.failure);
       if (suggestion.verdict === "fix") expect(suggestion.result, key).toBeTruthy();
     }
+  });
+});
+
+describe("the two pairs a round is held to", () => {
+  const rows = (water: string, steam: string) => [draft(["salt", "water"], water), draft(["salt", "steam"], steam)];
+  const checks = (list: BakedCombo[]) => acceptanceChecks(list, { banned: data.banned, overused: data.overused, maxSentences: 2, nameCap: 3 });
+
+  it("want Saltwater for Water + Salt, and anything but Sea for Steam + Salt", () => {
+    expect(checks(rows("Saltwater", "Salt spray"))).toMatchObject({ saltwater: true, steamSaltNotSea: true });
+    expect(checks(rows("Brine", "Sea"))).toMatchObject({ saltwater: false, steamSaltNotSea: false });
+    // A correction stands in for the name.
+    expect(checks([draft(["salt", "water"], "Brine", { status: "fix", correction: "Saltwater" })]).saltwater).toBe(true);
   });
 });

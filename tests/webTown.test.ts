@@ -64,7 +64,7 @@ const plan = {
   building: "tavern",
   name: "Tavern",
   price: 80,
-  candles: 2,
+  time: 2,
   needs: [
     { label: "Spirits", met: true },
     { label: "Food", met: true },
@@ -80,12 +80,14 @@ function day(changes: Partial<DayView> = {}): DayView {
     length: 10,
     noon: 4,
     phase: "evening",
-    candles: 3,
-    candlesMax: 3,
+    time: 3,
+    timeMax: 3,
     nightIn: 6,
     canTurnIn: false,
-    turnInCandles: 1,
+    turnInTime: 1,
     costs: { visitor: 1, meal: 1, call: 1, hand: 1, enchant: 1, upgrade: 1, build: 2 },
+    access: { visitor: "evening", call: "evening", meal: "evening", hand: "evening", enchant: "evening", upgrade: "evening", build: "evening" },
+    limits: { mealsPerDay: 1, handsPerBuilding: 1 },
     shiftDone: false,
     tonight: null,
     lastLedger: null,
@@ -193,7 +195,7 @@ describe("needText", () => {
 });
 
 describe("planBlock", () => {
-  it("lets a ready plan be raised in the evening with the gold and the candles", () => {
+  it("lets a ready plan be raised in the evening with the gold and the time", () => {
     expect(planBlock(plan, 80, day(), true)).toBe("");
   });
 
@@ -212,12 +214,12 @@ describe("planBlock", () => {
 
   it("holds building until dusk, and says what it will take", () => {
     expect(planBlock(plan, 80, day({ phase: "afternoon" }), true)).toBe(
-      "Building is evening work, and takes 2 candles. Come back at dusk.",
+      "Building is evening work, and takes 2 ⌛. Come back at dusk.",
     );
   });
 
-  it("counts the candles", () => {
-    expect(planBlock(plan, 80, day({ candles: 1 }), true)).toBe("This takes 2 candles, and you have 1 left tonight.");
+  it("counts the time", () => {
+    expect(planBlock(plan, 80, day({ time: 1 }), true)).toBe("This takes 2 ⌛, and you have 1 ⌛ left tonight.");
   });
 
   it("checks only the gold when no day is served", () => {
@@ -239,10 +241,10 @@ describe("upgradeBlock", () => {
     expect(upgradeBlock(next, 500, 3, day())).toBe("Still needs Two things you made, depth 5 or more (1 of 2).");
   });
 
-  it("then the gold and the candle the day says it costs", () => {
+  it("then the gold and the time the day says it costs", () => {
     const met = { ...next, ready: true, needs: [{ label: "Two things you made", met: true }] };
     expect(upgradeBlock(met, 100, 3, day())).toBe("You need 50 more gold.");
-    expect(upgradeBlock(met, 150, 3, day({ phase: "morning" }))).toBe("Building is evening work, and takes 1 candle. Come back at dusk.");
+    expect(upgradeBlock(met, 150, 3, day({ phase: "morning" }))).toBe("Building is evening work, and takes 1 ⌛. Come back at dusk.");
     expect(upgradeBlock(met, 150, 3, day())).toBe("");
   });
 });
@@ -339,30 +341,39 @@ describe("handBlock", () => {
     expect(handBlock(shelved(null, null), day())).toBe("Its shelves are bare, so a hand would change nothing.");
   });
 
-  it("holds a hand until dusk, and names the candle it takes", () => {
+  it("holds a hand until dusk, and names the time it takes", () => {
     expect(handBlock(shelved("hay"), day({ phase: "morning" }))).toBe(
-      "Lending a hand is evening work, and takes 1 candle. Come back at dusk.",
+      "Lending a hand is evening work, and takes 1 ⌛. Come back at dusk.",
     );
   });
 
-  it("counts the candles", () => {
-    expect(handBlock(shelved("hay"), day({ candles: 0 }))).toBe("This takes 1 candle, and you have 0 left tonight.");
+  it("counts the time", () => {
+    expect(handBlock(shelved("hay"), day({ time: 0 }))).toBe("This takes 1 ⌛, and you have 0 ⌛ left tonight.");
   });
 
-  it("allows it in the evening with a candle and a stocked shelf", () => {
+  it("allows it in the evening with time and a stocked shelf", () => {
     expect(handBlock(shelved("hay"), day())).toBe("");
   });
 });
 
 describe("eveningBlock", () => {
-  it("holds evening work until dusk, and counts the candles", () => {
-    expect(eveningBlock(1, day({ phase: "afternoon" }))).toBe("This is evening work, and takes 1 candle. Come back at dusk.");
-    expect(eveningBlock(2, day({ candles: 1 }))).toBe("This takes 2 candles, and you have 1 left tonight.");
-    expect(eveningBlock(1, day())).toBe("");
+  const evening = day().access;
+  it("holds evening work until dusk, and counts the time", () => {
+    expect(eveningBlock("call", day({ phase: "afternoon" }))).toBe("Calling on someone is evening work, and takes 1 ⌛. Come back at dusk.");
+    expect(eveningBlock("build", day({ time: 1 }))).toBe("This takes 2 ⌛, and you have 1 ⌛ left tonight.");
+    expect(eveningBlock("call", day())).toBe("");
   });
 
-  it("lets a free action through at any hour", () => {
-    expect(eveningBlock(0, day({ phase: "morning" }))).toBe("");
+  it("goes by the day's access, not by whether the action costs time", () => {
+    const anytime = { ...evening, meal: "anytime" as const };
+    expect(eveningBlock("meal", day({ phase: "morning", access: anytime }))).toBe("");
+    expect(eveningBlock("meal", day({ time: 0, access: anytime }))).toBe("");
+    const free = { ...day().costs, call: 0 };
+    expect(eveningBlock("call", day({ phase: "morning", costs: free }))).toBe("Calling on someone is evening work. Come back at dusk.");
+  });
+
+  it("checks nothing with no day served", () => {
+    expect(eveningBlock("visitor", undefined)).toBe("");
   });
 });
 
@@ -426,7 +437,7 @@ describe("eveningOffers", () => {
   it("lists every evening action that has something to act on, with its cost", () => {
     const offers = eveningOffers(day(), street, { visitor: true, spells: 1, called: 0 });
     expect(ids(offers)).toEqual(["visitor", "call", "meal", "hand", "enchant", "build"]);
-    expect(offers.find((offer) => offer.id === "build")).toMatchObject({ cost: "2 candles", ok: true });
+    expect(offers.find((offer) => offer.id === "build")).toMatchObject({ cost: "2 ⌛", ok: true });
   });
 
   it("leaves out what there is nothing to do with", () => {
@@ -437,8 +448,8 @@ describe("eveningOffers", () => {
     expect(ids(eveningOffers(day(), street, { visitor: false, spells: 0, called: 1 }))).toEqual(["meal", "hand", "build"]);
   });
 
-  it("marks what the candles left cannot pay for", () => {
-    const offers = eveningOffers(day({ candles: 1 }), street, { visitor: true, spells: 1, called: 0 });
+  it("marks what the time left cannot pay for", () => {
+    const offers = eveningOffers(day({ time: 1 }), street, { visitor: true, spells: 1, called: 0 });
     expect(offers.map((offer) => [offer.id, offer.ok])).toEqual([
       ["visitor", true],
       ["call", true],

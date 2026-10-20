@@ -14,9 +14,9 @@ export type DayState = {
   shiftDone: boolean;
   // The player turned in early, so this evening is a short one.
   early: boolean;
-  // Candles spent this evening.
+  // Hourglasses spent this evening.
   spent: number;
-  // The midnight oil: discoveries made since dusk with no candle spent between them.
+  // The midnight oil: discoveries made since dusk with no hourglass spent between them.
   oil: number;
 };
 
@@ -47,19 +47,39 @@ export function isEvening(state: DayState, rules: DayRules): boolean {
   return phaseFor(state.sun, rules) === "evening";
 }
 
-// How many candles this evening has in all. `extra` is any a perk adds.
-export function candlesMax(state: DayState, rules: DayRules, extra = 0): number {
-  return (state.early ? rules.earlyCandles : rules.candles) + extra;
+// How many hourglasses this evening has in all. `extra` is any a perk adds.
+export function timeMax(state: DayState, rules: DayRules, extra = 0): number {
+  return (state.early ? rules.earlyTime : rules.time) + extra;
 }
 
-export function candlesLeft(state: DayState, rules: DayRules, extra = 0): number {
-  return Math.max(0, candlesMax(state, rules, extra) - state.spent);
+export function timeLeft(state: DayState, rules: DayRules, extra = 0): number {
+  return Math.max(0, timeMax(state, rules, extra) - state.spent);
 }
 
-// One shift a day, open from noon until night, to a player who has taken up a job. A shift not
+// One shift a day, open from noon until dusk, to a player who has taken up a job. A shift not
 // worked is gone with the day.
 export function shiftOpen(state: DayState, rules: DayRules, hasJob: boolean): boolean {
-  return hasJob && state.sun >= rules.noon && !state.shiftDone;
+  return hasJob && state.sun >= rules.noon && state.sun < rules.length && !state.shiftDone;
+}
+
+// The shop is open from the morning until dusk, and shut for the evening and the night.
+export function shopOpen(state: DayState, rules: DayRules): boolean {
+  return !isEvening(state, rules);
+}
+
+// Why an action may not be taken now, or null if it may. An "anytime" action has no hour and
+// costs nothing from the evening's budget. An "evening" action waits for dusk, and needs the
+// evening to have enough left for its cost.
+export function refuseAction(
+  state: DayState,
+  action: keyof DayRules["access"],
+  rules: DayRules,
+  extra = 0,
+  cost = rules.costs[action],
+): "not-evening" | "no-time" | null {
+  if (rules.access[action] === "anytime") return null;
+  if (!isEvening(state, rules)) return "not-evening";
+  return cost > timeLeft(state, rules, extra) ? "no-time" : null;
 }
 
 // One visitor a day: today's has not been sat with, and nothing earlier is still open. `visitorDay`
@@ -88,14 +108,14 @@ export function afterAction(state: DayState, action: DayAction, rules: DayRules)
   };
 }
 
-// Why an evening action costing this many candles is refused, or null if it may go ahead.
-export function refuseCandles(state: DayState, cost: number, rules: DayRules, extra = 0): "not-evening" | "no-candles" | null {
+// Why an evening action costing this many hourglasses is refused, or null if it may go ahead.
+export function refuseTime(state: DayState, cost: number, rules: DayRules, extra = 0): "not-evening" | "no-time" | null {
   if (!isEvening(state, rules)) return "not-evening";
-  return cost > candlesLeft(state, rules, extra) ? "no-candles" : null;
+  return cost > timeLeft(state, rules, extra) ? "no-time" : null;
 }
 
-// The day after an evening action. Spending a candle starts the midnight oil again.
-export function spendCandles(state: DayState, cost: number): DayState {
+// The day after an evening action. Spending an hourglass starts the midnight oil again.
+export function spendTime(state: DayState, cost: number): DayState {
   return { ...state, spent: state.spent + cost, oil: cost > 0 ? 0 : state.oil };
 }
 
@@ -109,16 +129,16 @@ export function nightIn(state: DayState, rules: DayRules): number | null {
   return isEvening(state, rules) ? Math.max(0, rules.nightAfter - state.oil) : null;
 }
 
-// Whether night has fallen without the player choosing it, and why: the last candle is spent, or
+// Whether night has fallen without the player choosing it, and why: the last hourglass is spent, or
 // they have crafted on until the evening is gone. Going to bed is the third way, and is the
 // player's own doing. Null while the day goes on.
 export function nightFalls(state: DayState, rules: DayRules, extra = 0): Exclude<NightReason, "bed"> | null {
   if (!isEvening(state, rules)) return null;
-  if (candlesLeft(state, rules, extra) === 0) return "last-candle";
+  if (timeLeft(state, rules, extra) === 0) return "out-of-time";
   return state.oil >= rules.nightAfter ? "midnight-oil" : null;
 }
 
-// Dawn on the day after. Nothing is carried over: not an unworked shift, not an unspent candle.
+// Dawn on the day after. Nothing is carried over: not an unworked shift, not an unspent hourglass.
 export function nextDay(state: DayState): DayState {
   return { ...firstDay(), number: state.number + 1 };
 }
@@ -138,21 +158,23 @@ export function tonightAnnounced(state: DayState, rules: DayRules): boolean {
 export function dayView(
   state: DayState,
   rules: DayRules,
-  also: { extraCandles?: number; tonight?: TonightView | null; lastLedger?: Ledger | null } = {},
+  also: { extraTime?: number; tonight?: TonightView | null; lastLedger?: Ledger | null } = {},
 ): DayView {
-  const extra = also.extraCandles ?? 0;
+  const extra = also.extraTime ?? 0;
   return {
     number: state.number,
     sun: state.sun,
     length: rules.length,
     noon: rules.noon,
     phase: phaseFor(state.sun, rules),
-    candles: candlesLeft(state, rules, extra),
-    candlesMax: candlesMax(state, rules, extra),
+    time: timeLeft(state, rules, extra),
+    timeMax: timeMax(state, rules, extra),
     nightIn: nightIn(state, rules),
     canTurnIn: canTurnIn(state, rules),
-    turnInCandles: rules.earlyCandles + extra,
+    turnInTime: rules.earlyTime + extra,
     costs: rules.costs,
+    access: rules.access,
+    limits: rules.limits,
     shiftDone: state.shiftDone,
     tonight: also.tonight && tonightAnnounced(state, rules) ? also.tonight : null,
     lastLedger: also.lastLedger ?? null,

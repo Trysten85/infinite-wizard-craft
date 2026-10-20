@@ -17,6 +17,7 @@ type Game = ReturnType<typeof newGame>;
 function working(job = "blacksmith", seed = 1): Game {
   const game = newGame(seed);
   for (const id of ["person", "forge", "blacksmith", "farmer"]) game.store.addDiscovery("ann", id);
+  game.store.addTaught("ann", job);
   game.progress.chooseJob("ann", job);
   game.setDay("ann", { sun: NOON });
   return game;
@@ -69,10 +70,12 @@ describe("the order board", () => {
   it("keeps each job's orders for when the player comes back to it", () => {
     const game = working();
     const smithing = game.shifts.board("ann").orders;
+    game.store.addTaught("ann", "farmer");
     game.progress.chooseJob("ann", "farmer");
     const farming = game.shifts.board("ann");
     expect(farming.job!.id).toBe("farmer");
     expect(farming.orders.map((order) => order.id)).not.toEqual(smithing.map((order) => order.id));
+    game.store.addTaught("ann", "blacksmith");
     game.progress.chooseJob("ann", "blacksmith");
     expect(game.shifts.board("ann").orders).toEqual(smithing);
   });
@@ -148,6 +151,7 @@ describe("working a shift", () => {
     expect(() => game.shifts.work("ann", { ...choice, base: "staple:hammer" })).toThrow(/not on offer/);
     // Another player's order is not on this player's board.
     game.store.addDiscovery("bob", "blacksmith");
+    game.store.addTaught("bob", "blacksmith");
     game.progress.chooseJob("bob", "blacksmith");
     const theirs = game.shifts.board("bob").orders[0]!;
     expect(() => game.shifts.work("ann", { ...choice, order: theirs.id })).toThrow(/not on your board/);
@@ -204,20 +208,19 @@ describe("the day's shift", () => {
     expect(game.store.listShifts("ann")).toHaveLength(1);
   });
 
-  it("brings dusk on when it carries the sun there, and can still be worked in the evening", () => {
+  it("brings dusk on when it carries the sun there, and is gone for the evening", () => {
     const late = working();
     late.setDay("ann", { sun: DUSK - shiftNotches });
     const worked = workOne(late);
     expect(worked.night).toBeNull();
     expect(data.dayText.dusk).toContain(worked.dusk);
-    expect(late.progress.getProgress("ann").day).toMatchObject({ phase: "evening", sun: DUSK, candles: 3 });
+    expect(late.progress.getProgress("ann").day).toMatchObject({ phase: "evening", sun: DUSK, time: 3 });
 
     const evening = working();
     evening.setDay("ann", { sun: DUSK, oil: 2 });
-    expect(evening.shifts.board("ann").ready).toBe(true);
-    expect(workOne(evening)).toMatchObject({ night: null, dusk: null });
-    // A shift is not a discovery, so it burns none of the midnight oil.
-    expect(evening.day.today("ann")).toMatchObject({ sun: DUSK, oil: 2, shiftDone: true });
+    // The order board closes at dusk, so an unworked shift is gone, and the oil is untouched.
+    expect(evening.shifts.board("ann").ready).toBe(false);
+    expect(evening.day.today("ann")).toMatchObject({ sun: DUSK, oil: 2, shiftDone: false });
   });
 });
 
@@ -239,8 +242,11 @@ describe("rank", () => {
     expect(board.options.method.map((option) => option.id)).toContain("staple:fold");
     expect(game.shifts.work("ann", fill(board, board.orders[0]!)).result.rankUp).toBeNull();
 
+    game.store.addTaught("ann", "farmer");
+
     game.progress.chooseJob("ann", "farmer");
     expect(game.shifts.board("ann").rank).toMatchObject({ id: "apprentice", shifts: 0 });
+    game.store.addTaught("ann", "blacksmith");
     game.progress.chooseJob("ann", "blacksmith");
     expect(game.shifts.board("ann").rank!.id).toBe("journeyman");
   });

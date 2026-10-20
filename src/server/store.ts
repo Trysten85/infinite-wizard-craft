@@ -2,6 +2,14 @@ import { DatabaseSync } from "node:sqlite";
 import { firstDay, type DayState } from "../shared/day";
 import type { GameEntry, Ledger } from "../shared/schema";
 
+
+// A ledger as saved. Ones saved while the evening's time was candles say the night fell on the
+// "last-candle"; that is read as "out-of-time", which is the same thing.
+export function readLedger(saved: string): Ledger {
+  const ledger = JSON.parse(saved) as Omit<Ledger, "fell"> & { fell: string };
+  return { ...ledger, fell: (ledger.fell === "last-candle" ? "out-of-time" : ledger.fell) as Ledger["fell"] };
+}
+
 export type CachedCombo = { key: string; a: string; b: string; resultId: string; createdAt: string };
 
 export type ModelCall = {
@@ -16,7 +24,8 @@ export type ModelCall = {
 
 // "perk" is the extra a building pays for a discovery of its kind. "plot" and "building" are
 // gold spent on the town, and "takings" what the town pays back at night.
-export type LedgerReason = "quest" | "discovery" | "learn" | "shop" | "event" | "request" | "gift" | "shift" | "perk" | "plot" | "building" | "takings" | "meal";
+// "beat" is a townsperson's story beat played, once, with what it paid (often nothing in gold).
+export type LedgerReason = "quest" | "discovery" | "learn" | "shop" | "event" | "request" | "gift" | "shift" | "perk" | "plot" | "building" | "takings" | "meal" | "beat";
 
 // `bonusXp` makes up the difference when a change to the game's numbers would otherwise have
 // taken away a level the player had already reached.
@@ -110,7 +119,10 @@ export type StoredEvent = {
 
 // A plot the player owns on the street, counted from 0, and what stands on it. `tier` is 0
 // while the plot is empty.
-export type StoredPlot = { plot: number; building: string | null; tier: number };
+// `raising` is a building going up on the plot, or a tier being added to the one there. It is
+// finished after `nights` more nights. Until then the plot keeps what it had.
+export type StoredRaise = { building: string; tier: number; nights: number };
+export type StoredPlot = { plot: number; building: string | null; tier: number; raising: StoredRaise | null };
 
 export type StoredRequest = { id: number; personId: number; eventId: number; entryId: string; ask: string; gold: number; state: "open" | "done" };
 export type StockedSlot = { slot: number; entryId: string; type: "random" | "tailored"; reason: string; sold: boolean };
@@ -121,6 +133,8 @@ export type Store = ReturnType<typeof openStore>;
 // and shop shelf, and the model call log.
 export function openStore(path: string) {
   const db = new DatabaseSync(path);
+  // How deep `transaction` is nested. Declared first: the migrations below already use it.
+  let depth = 0;
   db.exec(`
     CREATE TABLE IF NOT EXISTS entries (
       id TEXT PRIMARY KEY,
@@ -271,6 +285,17 @@ export function openStore(path: string) {
       PRIMARY KEY (player, plot, slot),
       UNIQUE (player, entry_id)
     );
+    CREATE TABLE IF NOT EXISTS beat_scenes (
+      player TEXT NOT NULL,
+      beat TEXT NOT NULL,
+      text TEXT NOT NULL,
+      PRIMARY KEY (player, beat)
+    );
+    CREATE TABLE IF NOT EXISTS taught_jobs (
+      player TEXT NOT NULL,
+      job TEXT NOT NULL,
+      PRIMARY KEY (player, job)
+    );
     CREATE TABLE IF NOT EXISTS town_hands (
       player TEXT NOT NULL,
       plot INTEGER NOT NULL,
@@ -380,14 +405,38 @@ export function openStore(path: string) {
   const orderColumns = db.prepare("PRAGMA table_info(shift_orders)").all().map((row) => row.name as string);
   if (!orderColumns.includes("subject")) db.exec("ALTER TABLE shift_orders ADD COLUMN subject TEXT");
 
+  // Trades are taught from N4. A save keeps the job it already had: it counts as taught. Marked
+  // once, the first time this runs, from the jobs players hold then.
+  const taughtSeeded = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'taught_seeded'").get();
+  if (!taughtSeeded) {
+    transaction(() => {
+      db.exec("CREATE TABLE taught_seeded (at TEXT NOT NULL)");
+      db.exec("INSERT OR IGNORE INTO taught_jobs (player, job) SELECT player, job FROM player_stats WHERE job IS NOT NULL");
+      db.prepare("INSERT INTO taught_seeded (at) VALUES (?)").run(new Date().toISOString());
+    });
+  }
+
+  // A raise finishes overnight. A save from before then has none in flight.
+  const plotColumns = db.prepare("PRAGMA table_info(town_plots)").all().map((row) => row.name as string);
+  if (!plotColumns.includes("raising")) db.exec("ALTER TABLE town_plots ADD COLUMN raising TEXT");
+
+  // Runs `fn` so that its writes happen together or not at all. It nests: an inner call is a
+  // savepoint inside the outer one, so a service can make one action atomic around helpers that
+  // are atomic themselves. It is synchronous, like node:sqlite: writes made after an `await`
+  // inside `fn` are not covered, so an async action wraps only its synchronous tail.
   function transaction<T>(fn: () => T): T {
-    db.exec("BEGIN");
+    const name = `sp${depth}`;
+    db.exec(`SAVEPOINT ${name}`);
+    depth++;
     try {
       const result = fn();
-      db.exec("COMMIT");
+      depth--;
+      db.exec(`RELEASE ${name}`);
       return result;
     } catch (err) {
-      db.exec("ROLLBACK");
+      depth--;
+      db.exec(`ROLLBACK TO ${name}`);
+      db.exec(`RELEASE ${name}`);
       throw err;
     }
   }
@@ -411,6 +460,11 @@ export function openStore(path: string) {
   }
 
   return {
+    // Several writes as one: all of them, or none if `fn` throws. See `transaction`.
+    atomically<T>(fn: () => T): T {
+      return transaction(fn);
+    },
+
     getCombo(key: string): string | undefined {
       const row = db.prepare("SELECT result_id FROM combos WHERE key = ?").get(key);
       return row?.result_id as string | undefined;
@@ -622,12 +676,13 @@ export function openStore(path: string) {
           sun: row.sun as number,
           shiftDone: row.shift_done === 1,
           early: row.early === 1,
+          // The column keeps its old name from when the evening's time was candles.
           spent: row.candles_spent as number,
           oil: row.oil as number,
         },
         dawnLevel: row.dawn_level as number,
         visitorDay: row.visitor_day as number,
-        lastLedger: row.last_ledger ? (JSON.parse(row.last_ledger as string) as Ledger) : null,
+        lastLedger: row.last_ledger ? readLedger(row.last_ledger as string) : null,
         shiftLiftDay: row.shift_lift_day as number,
       };
     },
@@ -877,9 +932,9 @@ export function openStore(path: string) {
     // The plots a player owns, in order along the street.
     listPlots(player: string): StoredPlot[] {
       return db
-        .prepare("SELECT plot, building, tier FROM town_plots WHERE player = ? ORDER BY plot")
+        .prepare("SELECT plot, building, tier, raising FROM town_plots WHERE player = ? ORDER BY plot")
         .all(player)
-        .map((row) => ({ plot: row.plot as number, building: (row.building as string | null) ?? null, tier: row.tier as number }));
+        .map((row) => ({ plot: row.plot as number, building: (row.building as string | null) ?? null, tier: row.tier as number, raising: row.raising ? (JSON.parse(row.raising as string) as StoredRaise) : null }));
     },
 
     // Gives the player a plot. Returns false if they already had it.
@@ -890,6 +945,9 @@ export function openStore(path: string) {
     // Whether the player is owed the stall their save predates the town for, and settling it.
     stallOwed(player: string): boolean {
       return db.prepare("SELECT stall_owed FROM player_stats WHERE player = ?").get(player)?.stall_owed === 1;
+    },
+    listOwedStalls(): string[] {
+      return db.prepare("SELECT player FROM player_stats WHERE stall_owed = 1 ORDER BY player").all().map((row) => row.player as string);
     },
     clearStallOwed(player: string): void {
       db.prepare("UPDATE player_stats SET stall_owed = 0 WHERE player = ?").run(player);
@@ -1004,6 +1062,12 @@ export function openStore(path: string) {
       db.prepare("UPDATE people SET name = ?, pronoun = ? WHERE id = ?").run(name, pronoun, id);
     },
 
+    // Gives a townsperson the identity the hand-written cast has for their trade. Their Fondness
+    // and history stay as they were.
+    castPerson(id: number, cast: { name: string; pronoun: Pronoun; traits: string[]; facts: string[] }): void {
+      db.prepare("UPDATE people SET name = ?, pronoun = ?, traits = ?, facts = ? WHERE id = ?").run(cast.name, cast.pronoun, JSON.stringify(cast.traits), JSON.stringify(cast.facts), id);
+    },
+
     // A hand lent at a building on a day. One a building a day.
     addHand(player: string, plot: number, day: number): boolean {
       return db.prepare("INSERT OR IGNORE INTO town_hands (player, plot, day) VALUES (?, ?, ?)").run(player, plot, day).changes === 1;
@@ -1016,6 +1080,27 @@ export function openStore(path: string) {
     // Raises a building on a plot the player owns, or raises the one there to a new tier.
     setBuilding(player: string, plot: number, building: string, tier: number): void {
       db.prepare("UPDATE town_plots SET building = ?, tier = ? WHERE player = ? AND plot = ?").run(building, tier, player, plot);
+    },
+
+    // The written scene of each story beat a player has played.
+    getBeatScenes(player: string): Map<string, string> {
+      return new Map(db.prepare("SELECT beat, text FROM beat_scenes WHERE player = ?").all(player).map((row) => [row.beat as string, row.text as string]));
+    },
+    setBeatScene(player: string, beat: string, text: string): void {
+      db.prepare("INSERT OR REPLACE INTO beat_scenes (player, beat, text) VALUES (?, ?, ?)").run(player, beat, text);
+    },
+
+    // The trades a player has been taught (a saved game's held job among them).
+    listTaught(player: string): string[] {
+      return db.prepare("SELECT job FROM taught_jobs WHERE player = ? ORDER BY job").all(player).map((row) => row.job as string);
+    },
+    addTaught(player: string, job: string): boolean {
+      return db.prepare("INSERT OR IGNORE INTO taught_jobs (player, job) VALUES (?, ?)").run(player, job).changes === 1;
+    },
+
+    // Starts a raise on a plot, moves one on, or with null clears it.
+    setRaising(player: string, plot: number, raising: StoredRaise | null): void {
+      db.prepare("UPDATE town_plots SET raising = ? WHERE player = ? AND plot = ?").run(raising ? JSON.stringify(raising) : null, player, plot);
     },
 
     addRequest(player: string, request: Omit<StoredRequest, "id" | "state">): number {

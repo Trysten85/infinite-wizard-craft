@@ -272,7 +272,7 @@ export function Workbench({ player, onLeave }: { player: string; onLeave: () => 
           id: `dusk-${next.day.number}`,
           // The server's own line for the evening coming on, when it sends one.
           label: dusk ?? "Dusk:",
-          name: `${next.day.candles} ${next.day.candles === 1 ? "candle" : "candles"} to spend this evening`,
+          name: `${next.day.time} ⌛ to spend this evening`,
         });
     }
     shownDay.current = next.day ? { number: next.day.number, phase: next.day.phase } : null;
@@ -1064,7 +1064,7 @@ export function Workbench({ player, onLeave }: { player: string; onLeave: () => 
               onClose={closeEvent}
             />
           )}
-          {/* A visitor who took the last candle is heard out first. The ledger waits for their card to close. */}
+          {/* A visitor who took the last of the time is heard out first. The ledger waits for their card to close. */}
           {ledger && !(event && eventOpen) && <NightLedger ledger={ledger.page} fresh={ledger.fresh} onClose={() => setLedger(null)} />}
         </Board>
       </div>

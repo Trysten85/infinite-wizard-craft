@@ -4,7 +4,7 @@ import { comboKey, type GameEntry } from "../src/shared/schema";
 import { data, newGame } from "./helpers";
 
 const rules = data.balance.town;
-const { costs, candles } = data.balance.day;
+const { costs, time } = data.balance.day;
 type Game = ReturnType<typeof newGame>;
 
 function thing(game: Game, id: string, tags: string[], tier = 1, player = "ann") {
@@ -28,23 +28,50 @@ const gold = (game: Game, amount: number) => game.store.addLedger("ann", amount,
 const who = (game: Game, job: string) => game.store.listPeople("ann").find((person) => person.job === job)!;
 
 describe("townsfolk names", () => {
-  it("are the next ones on the list, with their pronouns, and a trade-named one is renamed once", () => {
+  it("are the cast's for a trade with a written person, and the next on the list for any other", () => {
     const game = newGame();
-    game.store.addPerson("ann", { name: "The Blacksmith", role: "Blacksmith", traits: [], facts: [], job: "blacksmith" }, 1);
+    const cast = (job: string) => data.cast.people.find((person) => person.job === job)!;
+    // One who came before the cast existed takes their written identity, and keeps their Fondness.
+    const old = game.store.addPerson("ann", { name: "The Blacksmith", role: "Blacksmith", traits: [], facts: [], job: "blacksmith" }, 1);
+    game.store.updatePerson(old.id, { fondness: 3 });
     game.store.addDiscovery("ann", "farmer");
+    game.store.addDiscovery("ann", "carpenter");
     game.town.arrive("ann");
+    expect(who(game, "blacksmith")).toMatchObject({ id: old.id, name: cast("blacksmith").name, pronoun: cast("blacksmith").pronoun, traits: cast("blacksmith").traits, fondness: 3 });
+    expect(who(game, "farmer")).toMatchObject({ name: cast("farmer").name, facts: cast("farmer").facts });
+    // The carpenter has no written person, so comes from the list of names.
+    expect(data.townsfolk.people.map((person) => person.name)).toContain(who(game, "carpenter").name);
     const names = game.store.listPeople("ann").map((person) => person.name);
-    expect(new Set(names).size).toBe(2);
-    expect(names).not.toContain("The Blacksmith");
-    expect(names.every((name) => data.townsfolk.people.some((person) => person.name === name))).toBe(true);
     game.town.arrive("ann");
     expect(game.store.listPeople("ann").map((person) => person.name)).toEqual(names);
+  });
+
+  it("with a written arrival condition wait for it, even once their trade is found", () => {
+    const game = newGame();
+    const smith = data.cast.people.find((person) => person.job === "blacksmith")!;
+    expect(smith.arrival.buildings).toBe(1);
+    game.store.addDiscovery("ann", "blacksmith");
+    expect(game.town.arrive("ann")).toEqual([]);
+    game.store.addPlot("ann", 0);
+    game.store.setBuilding("ann", 0, "farm", 1);
+    expect(game.town.arrive("ann").map((person) => person.name)).toEqual([smith.name]);
+  });
+
+  it("with no home standing leave at dusk: they cannot be called on, and are back by morning", () => {
+    const game = street("farm");
+    game.store.addDiscovery("ann", "blacksmith");
+    const smith = game.town.arrive("ann")[0]!;
+    expect(game.town.view("ann").townsfolk[0]).toMatchObject({ job: "blacksmith", housed: false });
+    expect(() => game.town.call("ann", smith.id)).toThrow(/gone for the night/);
+    game.store.addPlot("ann", 1);
+    game.store.setBuilding("ann", 1, "smithy", 1);
+    expect(game.town.call("ann", smith.id).fondness).toBe(1);
   });
 });
 
 describe("calling on someone", () => {
-  it("raises fondness a step, gives their line, costs a candle, and is once a person a night", () => {
-    const game = street();
+  it("raises fondness a step, gives their line, costs time, and is once a person a night", () => {
+    const game = street("smithy");
     game.store.addDiscovery("ann", "blacksmith");
     game.town.arrive("ann");
     const smith = who(game, "blacksmith");
@@ -52,18 +79,18 @@ describe("calling on someone", () => {
     expect(call.fondness).toBe(1);
     const lines = data.townsfolk.callingLines.blacksmith ?? data.townsfolk.callingLines.default!;
     expect(lines.map((line) => line.replaceAll("{name}", smith.name))).toContain(call.line);
-    expect(game.progress.getProgress("ann").day!.candles).toBe(candles - costs.call);
+    expect(game.progress.getProgress("ann").day!.time).toBe(time - costs.call);
     expect(() => game.town.call("ann", smith.id)).toThrow(/already called on/);
     expect(() => game.town.call("ann", 9999)).toThrow(/do not know anyone/);
     expect(game.store.listPeople("ann").find((person) => person.id === smith.id)!.fondness).toBe(1);
   });
 
-  it("is refused before dusk and past the candles", () => {
-    const game = street();
+  it("is refused before dusk and past the time", () => {
+    const game = street("smithy");
     game.store.addDiscovery("ann", "blacksmith");
     const smith = game.town.arrive("ann")[0]!;
-    game.setDay("ann", { spent: candles });
-    expect(() => game.town.call("ann", smith.id)).toThrowError(expect.objectContaining({ code: "no-candles" }));
+    game.setDay("ann", { spent: time });
+    expect(() => game.town.call("ann", smith.id)).toThrowError(expect.objectContaining({ code: "no-time" }));
     game.setDay("ann", { spent: 0, sun: 0 });
     expect(() => game.town.call("ann", smith.id)).toThrowError(expect.objectContaining({ code: "not-evening" }));
   });
@@ -107,14 +134,14 @@ describe("regulars", () => {
 });
 
 describe("a meal at the Tavern", () => {
-  it("costs gold and a candle, once an evening, and makes tomorrow's discoveries pay more", () => {
+  it("costs gold and time, once an evening, and makes tomorrow's discoveries pay more", () => {
     const game = street("tavern");
     gold(game, 500);
     const before = game.progress.getProgress("ann");
     const ate = game.town.meal("ann");
     expect(ate.cost).toBe(5 * before.level);
     expect(ate.lift).toBeCloseTo(data.buildings.get("tavern")!.tiers[0]!.perks.flatMap((perk) => (perk.type === "meals" ? [perk.lift] : []))[0]!);
-    expect(game.progress.getProgress("ann")).toMatchObject({ gold: before.gold - ate.cost, day: { candles: candles - costs.meal } });
+    expect(game.progress.getProgress("ann")).toMatchObject({ gold: before.gold - ate.cost, day: { time: time - costs.meal } });
     expect(() => game.town.meal("ann")).toThrow(/already eaten/);
     game.day.end("ann");
     // Tomorrow a new discovery pays its gold and the lift; the day after, no longer.
@@ -128,16 +155,16 @@ describe("a meal at the Tavern", () => {
     expect(game.progress.getProgress("ann").gold - owed).toBeGreaterThanOrEqual(base + more);
   });
 
-  it("is refused with no Tavern, too little gold, no candles, or before dusk", () => {
+  it("is refused with no Tavern or too little gold, and is free of time at any hour, once a day", () => {
     const none = street("smithy");
     expect(() => none.town.meal("ann")).toThrow(/no Tavern/);
     const game = street("tavern");
     expect(() => game.town.meal("ann")).toThrowError(expect.objectContaining({ code: "not-enough-gold" }));
     gold(game, 500);
-    game.setDay("ann", { spent: candles });
-    expect(() => game.town.meal("ann")).toThrowError(expect.objectContaining({ code: "no-candles" }));
-    game.setDay("ann", { spent: 0, sun: 0 });
-    expect(() => game.town.meal("ann")).toThrowError(expect.objectContaining({ code: "not-evening" }));
+    game.setDay("ann", { spent: time, sun: 0 });
+    expect(game.town.meal("ann")).toMatchObject({ night: null, dusk: null });
+    expect(game.store.getDay("ann").state).toMatchObject({ spent: time, sun: 0 });
+    expect(() => game.town.meal("ann")).toThrow(/already eaten/);
   });
 
   it("lifts twice as much on the night of the harvest supper, which it then counts as taken", () => {
@@ -161,7 +188,7 @@ describe("enchanting a building", () => {
   }
   const mending = () => data.entries.get("spell-mending")!;
 
-  it("casts a learned spell that fits for a candle, lifts the building, and wears off", () => {
+  it("casts a learned spell that fits for time, lifts the building, and wears off", () => {
     const game = caster();
     // Mending carries utility, which the Smithy does not take: find a spell that fits it.
     const smith = data.buildings.get("smithy")!;
@@ -178,7 +205,7 @@ describe("enchanting a building", () => {
     expect(after.enchantment).toEqual({ spell: { id: fits!.id, name: fits!.name }, daysLeft: cast.days });
     expect(after.enchantBonus).toBeCloseTo(rules.enchant.bonus + rules.enchant.bonusPerTier * fits!.tier);
     expect(after.takings).toBeGreaterThanOrEqual(before.takings);
-    expect(game.progress.getProgress("ann").day!.candles).toBe(candles - costs.enchant);
+    expect(game.progress.getProgress("ann").day!.time).toBe(time - costs.enchant);
     expect(game.town.view("ann").cheer!.points).toBeGreaterThan(0);
     // Each night takes one off, says when one is left, and then it is gone.
     const lines: string[] = [];
@@ -219,7 +246,7 @@ describe("one-night happenings", () => {
   });
 
   it("are named in the ledger when missed, and not when taken", () => {
-    const game = street();
+    const game = street("smithy");
     tonight(game, "musician");
     expect(game.day.end("ann").night!.missed).toMatch(/came and went without you/);
     game.dusk("ann");
@@ -230,16 +257,16 @@ describe("one-night happenings", () => {
   });
 
   it("make the first call free and worth twice, on the musician's night only", () => {
-    const game = street();
+    const game = street("smithy", "farm");
     tonight(game, "musician");
     game.store.addDiscovery("ann", "blacksmith");
     game.store.addDiscovery("ann", "farmer");
     const [smith, farmer] = game.town.arrive("ann");
     const first = game.town.call("ann", smith!.id);
     expect(first.fondness).toBe(2);
-    expect(game.progress.getProgress("ann").day!.candles).toBe(candles);
+    expect(game.progress.getProgress("ann").day!.time).toBe(time);
     expect(game.town.call("ann", farmer!.id).fondness).toBe(1);
-    expect(game.progress.getProgress("ann").day!.candles).toBe(candles - costs.call);
+    expect(game.progress.getProgress("ann").day!.time).toBe(time - costs.call);
   });
 
   it("doubles an enchantment's length on the lantern festival", () => {
@@ -266,7 +293,7 @@ describe("one-night happenings", () => {
     expect(game.store.getDiscoveries("ann")).toContain(took.entry!.id);
     expect(took.price).toBeGreaterThan(0);
     expect(game.progress.getProgress("ann").gold).toBe(before - took.price + took.rewards.gold);
-    expect(game.progress.getProgress("ann").day!.candles).toBe(candles);
+    expect(game.progress.getProgress("ann").day!.time).toBe(time);
     expect(() => game.town.tonight("ann")).toThrow(/already had your share/);
   });
 
@@ -300,7 +327,7 @@ describe("the evening's routes", () => {
     gold(game, 500);
     tonight(game, null);
     const call = await send("/town/call", { person: smith.id });
-    expect(call).toMatchObject({ status: 200, body: { fondness: 1, line: expect.any(String), night: null, progress: { day: { candles: candles - costs.call } } } });
+    expect(call).toMatchObject({ status: 200, body: { fondness: 1, line: expect.any(String), night: null, progress: { day: { time: time - costs.call } } } });
     expect((await send("/town/call", { person: smith.id })).status).toBe(400);
     const meal = await send("/town/meal");
     expect(meal).toMatchObject({ status: 200, body: { lift: expect.any(Number), cost: expect.any(Number) } });

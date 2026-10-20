@@ -7,6 +7,7 @@ import type { EventService } from "./events/service";
 import { GenerationError } from "./llm/generate";
 import type { ProgressService } from "./progress";
 import type { ShiftService } from "./shifts/service";
+import type { StoryService } from "./story/service";
 import type { ShopService } from "./shop";
 import type { TownService } from "./town";
 
@@ -46,9 +47,19 @@ const SAME_DAY: DayTurn = { night: null, dusk: null };
 
 export function createApp(
   combiner: Combiner,
-  services?: { progress: ProgressService; shop: ShopService; day: DayService; town?: TownService; events?: EventService; shifts?: ShiftService },
+  services?: { progress: ProgressService; shop: ShopService; day: DayService; town?: TownService; events?: EventService; shifts?: ShiftService; story?: StoryService },
 ) {
   const app = new Hono();
+
+  // A story beat is played whenever anything is settled, so after every request about a player
+  // the scenes of any beat just played are set writing, out of sight.
+  const afterPlayer = async (c: Context, next: () => Promise<void>) => {
+    await next();
+    const player = playerSchema.safeParse(c.req.param("player"));
+    if (player.success) services?.story?.prepare(player.data);
+  };
+  app.use("/api/players/:player", afterPlayer);
+  app.use("/api/players/:player/*", afterPlayer);
 
   // Reads the player name and, when a schema is given, the JSON body. Returns null if either is bad.
   async function read<T>(c: Context, schema?: z.ZodType<T>): Promise<{ player: string; body: T } | null> {
@@ -101,6 +112,12 @@ export function createApp(
         return request ? c.json(town.view(request.player)) : invalid(c);
       });
 
+      // Everyone in town, for the People tab.
+      app.get("/api/players/:player/town/people", async (c) => {
+        const request = await read(c);
+        return request ? c.json(town.people(request.player)) : invalid(c);
+      });
+
       // Buys the next plot along. Free of the hour: this can be done at any time of day.
       app.post("/api/players/:player/town/plots", async (c) => {
         const request = await read(c);
@@ -114,7 +131,7 @@ export function createApp(
       });
 
       // Raises a new building on an empty plot, and raises one a tier. Evening actions: each
-      // takes candles, and the last candle brings night.
+      // takes hourglasses, and the last hourglass brings night.
       app.post("/api/players/:player/town/build", async (c) => {
         const request = await read(c, buildBodySchema);
         if (!request) return invalid(c);
@@ -138,7 +155,7 @@ export function createApp(
         }
       });
 
-      // Lends a hand at a building: one candle, once a building an evening.
+      // Lends a hand at a building: one hourglass, once a building an evening.
       app.post("/api/players/:player/town/hand", async (c) => {
         const request = await read(c, handBodySchema);
         if (!request) return invalid(c);
@@ -150,19 +167,19 @@ export function createApp(
         }
       });
 
-      // Calls on a townsperson, or anyone the player has met: one candle, once a person a night.
+      // Calls on a townsperson, or anyone the player has met: one hourglass, once a person a night.
       app.post("/api/players/:player/town/call", async (c) => {
         const request = await read(c, callBodySchema);
         if (!request) return invalid(c);
         try {
           const called = town.call(request.player, request.body.person);
-          return c.json({ rewards: { gold: 0, quests: [] }, ...called, progress: progress.getProgress(request.player) });
+          return c.json({ ...called, progress: progress.getProgress(request.player) });
         } catch (err) {
           return refuse(c, err);
         }
       });
 
-      // A meal at the Tavern: gold and a candle. Tomorrow's discoveries pay more.
+      // A meal at the Tavern: gold and an hourglass. Tomorrow's discoveries pay more.
       app.post("/api/players/:player/town/meal", async (c) => {
         const request = await read(c);
         if (!request) return invalid(c);
@@ -174,7 +191,7 @@ export function createApp(
         }
       });
 
-      // Casts a learned spell on a building: one candle.
+      // Casts a learned spell on a building: one hourglass.
       app.post("/api/players/:player/town/enchant", async (c) => {
         const request = await read(c, enchantBodySchema);
         if (!request) return invalid(c);
@@ -187,7 +204,7 @@ export function createApp(
       });
 
       // Takes part in tonight's happening where there is something to do: the pedlar's pack, or
-      // the stargazer's hint. No candle.
+      // the stargazer's hint. No hourglass.
       app.post("/api/players/:player/town/tonight", async (c) => {
         const request = await read(c);
         if (!request) return invalid(c);
@@ -264,7 +281,7 @@ export function createApp(
         }
       });
 
-      // For testing: writes a fresh event now, at any time of day, for no candle. `seed` is optional.
+      // For testing: writes a fresh event now, at any time of day, for no hourglass. `seed` is optional.
       app.post("/api/players/:player/event/test", async (c) => {
         const player = playerSchema.safeParse(c.req.param("player"));
         const body = testEventBodySchema.safeParse((await c.req.json().catch(() => null)) ?? {});
@@ -280,7 +297,7 @@ export function createApp(
         const request = await read(c, respondBodySchema);
         if (!request) return invalid(c);
         try {
-          // Sitting with the day's visitor is an evening action, and takes a candle when it ends.
+          // Sitting with the day's visitor is an evening action, and takes an hourglass when it ends.
           const result = await events.respond(request.player, request.body.type, request.body.beat);
           // Carries on writing whatever was being written for a testing event's later beats.
           events.prepare(request.player);

@@ -170,45 +170,45 @@ describe("the day's visitor", () => {
     expect(briefs).toHaveLength(1);
   });
 
-  it("takes one candle, when the conversation ends and not before", async () => {
+  it("takes one time, when the conversation ends and not before", async () => {
     const game = newGame();
     game.dusk("ann");
     await game.events.current("ann");
-    const candles = () => game.progress.getProgress("ann").day!.candles;
-    expect(candles()).toBe(3);
+    const time = () => game.progress.getProgress("ann").day!.time;
+    expect(time()).toBe(3);
     const reaction = await game.events.respond("ann", "fair");
     expect(reaction).toMatchObject({ night: null, dusk: null });
-    expect(candles()).toBe(3);
+    expect(time()).toBe(3);
     const result = await game.events.respond("ann", reaction.next!.responses[0]!.type);
     expect(result).toMatchObject({ next: null, night: null });
-    expect(candles()).toBe(3 - data.balance.day.costs.visitor);
+    expect(time()).toBe(3 - data.balance.day.costs.visitor);
   });
 
-  it("takes its candle at the door too, if the player turns them away", async () => {
+  it("takes its time at the door too, if the player turns them away", async () => {
     const game = newGame();
     game.dusk("ann");
     await game.events.current("ann");
     await game.events.respond("ann", "avoid");
-    expect(game.progress.getProgress("ann").day!.candles).toBe(2);
+    expect(game.progress.getProgress("ann").day!.time).toBe(2);
   });
 
-  it("brings night when it takes the last candle, and the ledger comes back with the answer", async () => {
+  it("brings night when it takes the last of the time, and the ledger comes back with the answer", async () => {
     const game = newGame();
     game.dusk("ann");
     game.setDay("ann", { spent: 2 });
     const result = await sitWith(game);
-    expect(result.night).toMatchObject({ day: 1, fell: "last-candle" });
+    expect(result.night).toMatchObject({ day: 1, fell: "out-of-time" });
     expect(game.progress.getProgress("ann").day).toMatchObject({ number: 2, sun: 0, phase: "morning", lastLedger: { day: 1 } });
   });
 
-  it("is refused when the candles are too few, and nothing is changed", async () => {
+  it("is refused when the time are too few, and nothing is changed", async () => {
     const game = newGame();
     game.dusk("ann");
     await game.events.current("ann");
-    // Night falls with the last candle, so this cannot come about by playing yet. A later
+    // Night falls with the last of the time, so this cannot come about by playing yet. A later
     // evening action that costs two will meet it.
     game.setDay("ann", { spent: 3 });
-    await expect(game.events.respond("ann", "fair")).rejects.toMatchObject({ code: "no-candles" });
+    await expect(game.events.respond("ann", "fair")).rejects.toMatchObject({ code: "no-time" });
     expect(game.store.listEvents("ann")[0]).toMatchObject({ state: "pending" });
     expect(game.store.listPeople("ann")[0]!.fondness).toBe(0);
   });
@@ -261,7 +261,7 @@ describe("the day's visitor", () => {
     game.dusk("ann");
     expect((await game.events.current("ann")).event).toEqual(heart);
     expect((await game.events.respond("ann", heart.responses[0]!.type)).next).toBeNull();
-    expect(game.progress.getProgress("ann").day).toMatchObject({ number: 2, candles: 2 });
+    expect(game.progress.getProgress("ann").day).toMatchObject({ number: 2, time: 2 });
   });
 });
 
@@ -838,6 +838,7 @@ describe("a long run of events", () => {
     const { writer, briefs } = recordingWriter();
     const game = newGame(3, writer);
     for (const id of ["light", "mud", "life", "tree", "spellbook", "evocation", "spell-fire-bolt", "person", "forge", "blacksmith"]) game.store.addDiscovery("ann", id);
+    game.store.addTaught("ann", "blacksmith");
     game.progress.chooseJob("ann", "blacksmith");
     for (let round = 0; round < 40; round++) {
       game.dusk("ann");
@@ -1031,7 +1032,7 @@ describe("the parting line", () => {
 });
 
 describe("a test event", () => {
-  it("is written at once, at any time of day, and costs no candle", async () => {
+  it("is written at once, at any time of day, and costs no time", async () => {
     const game = newGame();
     const { event, seed } = await game.events.test("ann");
     expect(event).toMatchObject({ beat: 1, beats: 2 });
@@ -1045,10 +1046,10 @@ describe("a test event", () => {
     expect(result.outcome).toBeTruthy();
     expect(result).toMatchObject({ night: null, dusk: null });
     expect(game.store.listEvents("ann")[0]!.state).toBe("resolved");
-    // And it is not the day's visitor: tonight's is still to come, and no candle has gone.
+    // And it is not the day's visitor: tonight's is still to come, and no time has gone.
     expect(game.store.getDay("ann")).toMatchObject({ visitorDay: 0, state: { spent: 0 } });
     game.setDay("ann", { sun: DUSK });
-    expect(game.progress.getProgress("ann").day!.candles).toBe(3);
+    expect(game.progress.getProgress("ann").day!.time).toBe(3);
   });
 
   it("uses the seed asked for, even one the player would not normally qualify for", async () => {
@@ -1093,7 +1094,7 @@ describe("a test event", () => {
 describe("the event routes", () => {
   const post = (body: unknown) => ({ method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
 
-  it("hold the visitor until dusk, serve them, and play the visit through both beats for a candle", async () => {
+  it("hold the visitor until dusk, serve them, and play the visit through both beats for time", async () => {
     const game = newGame();
     const app = createApp(game.combiner, { progress: game.progress, shop: game.shop, day: game.day, events: game.events });
     expect(await (await app.request("/api/players/ann/event")).json()).toEqual({ event: null });
@@ -1111,10 +1112,10 @@ describe("the event routes", () => {
     expect(JSON.stringify(waiting)).not.toContain("outcome");
 
     const reaction = (await (await app.request("/api/players/ann/event/respond", post({ type: "fair" }))).json()) as Record<string, any>;
-    expect(reaction).toMatchObject({ outcome: expect.any(String), next: { beat: 2 }, night: null, progress: { eventReady: true, day: { candles: 3 } } });
+    expect(reaction).toMatchObject({ outcome: expect.any(String), next: { beat: 2 }, night: null, progress: { eventReady: true, day: { time: 3 } } });
     const type = reaction.next.responses[0].type;
     const resolved = (await (await app.request("/api/players/ann/event/respond", post({ type }))).json()) as Record<string, any>;
-    expect(resolved).toMatchObject({ outcome: expect.any(String), effects: expect.any(Object), next: null, night: null, progress: { eventReady: false, day: { candles: 2 } } });
+    expect(resolved).toMatchObject({ outcome: expect.any(String), effects: expect.any(Object), next: null, night: null, progress: { eventReady: false, day: { time: 2 } } });
     expect((await app.request("/api/players/ann/event/respond", post({ type }))).status).toBe(400);
     expect((await app.request("/api/players/ann/event/respond", post({ type: "heroic" }))).status).toBe(400);
   });

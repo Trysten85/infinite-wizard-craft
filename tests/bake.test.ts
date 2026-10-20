@@ -357,3 +357,64 @@ describe("sharing the PC", () => {
     expect(pacer.holdReason()).toBeNull();
   });
 });
+
+describe("describing a name already settled on", () => {
+  const written = (name: string, description: string) => JSON.stringify({ name, description, tags: ["mineral"], missingTag: null });
+
+  it("writes new words for the same name, and sends back a description that leans on a worn-out phrase", async () => {
+    const { client, describePair } = baker([written("Beach", "Sand that hums faintly at the edge of the water."), written("Beach", "Sand at the edge of the water, warm by noon.")]);
+    const draft = await describePair(entry("sand"), entry("water"), "Beach");
+    expect(draft).toMatchObject({ name: "Beach", description: "Sand at the edge of the water, warm by noon." });
+    expect(client.requests).toHaveLength(2);
+    expect(client.requests[1]!.prompt).toContain("leans on");
+    expect(client.requests[0]!.prompt).toContain("Use exactly that name");
+  });
+});
+
+describe("the gate on a finished pair", () => {
+  const ideasFor = (a: string, b: string) => ideas(a, b, "Sandcastle");
+  const written = (name: string, reason = "") => JSON.stringify({ name, description: "Sand at the edge of the water.", tags: ["mineral"], missingTag: null, reason });
+  const gated = (answers: (string | Error)[], thinking: (string | Error)[], gate: (row: BakedCombo) => string[]) => {
+    const client = createFakeClient(answers);
+    const thinker = createFakeClient(thinking);
+    return { client, ...createBaker({ data, voice: "v", client, thinker, thinkerEffort: "medium", gate }) };
+  };
+  const blame = (row: BakedCombo) => (row.name === "Beach" ? ["not a real word"] : []);
+
+  it("gives way to the next best candidate when the pick is flagged", async () => {
+    const { bakePair } = gated([ideasFor("Beach", "Lagoon"), ideasFor("Shore", "Shell"), words("Beach"), words("Sandcastle")], [marks({ Beach: 5, Sandcastle: 4, Shore: 3, Lagoon: 2, Shell: 2 }, "Beach")], blame);
+    const record = await bakePair(entry("sand"), entry("water"));
+    expect(record.pick!.name).toBe("Sandcastle");
+    expect(record.runnerUp!.name).toBe("Beach");
+    expect(record.queued).toBeUndefined();
+    expect(draftOf(record)!.name).toBe("Sandcastle");
+  });
+
+  it("keeps the first pick as a draft marked as needing alternatives when every try is flagged", async () => {
+    const { bakePair } = gated([ideasFor("Beach", "Lagoon"), ideasFor("Shore", "Shell"), words("Beach"), words("Sandcastle"), words("Shore")], [marks({ Beach: 5, Sandcastle: 4, Shore: 3, Lagoon: 2, Shell: 2 }, "Beach")], () => ["only says what went in"]);
+    const record = await bakePair(entry("sand"), entry("water"));
+    expect(record.pick!.name).toBe("Beach");
+    expect(record.queued).toEqual(["only says what went in"]);
+    expect(draftOf(record)).toMatchObject({ name: "Beach", status: "draft", notes: "needs alternatives: only says what went in" });
+    expect(record.steps.filter((step) => step.purpose === "combo")).toHaveLength(data.balance.generation.gateTries);
+  });
+});
+
+describe("what the bake shows the model", () => {
+  it("puts approved pairs and the wrong answers to avoid in the prompt of the first suggestions", async () => {
+    const client = createFakeClient([ideas("Beach", "Lagoon", "Shell"), ideas("Shore", "Cove", "Dune"), words("Beach")]);
+    const thinker = createFakeClient([marks({ Beach: 5, Lagoon: 3, Shell: 3, Shore: 3, Cove: 3, Dune: 3 }, "Beach")]);
+    const { bakePair } = createBaker({
+      data,
+      voice: "v",
+      client,
+      thinker,
+      thinkerEffort: "medium",
+      extraExamples: [{ inputs: ["Water", "Water"], result: "Lake", why: "liquid", kind: "ordinary" }],
+      dont: ["Water + Salt: not Brine. Saltwater."],
+    });
+    await bakePair(entry("sand"), entry("water"));
+    expect(client.requests[0]!.prompt).toContain("Water + Water = Lake (liquid)");
+    expect(client.requests[0]!.prompt).toContain("Water + Salt: not Brine. Saltwater.");
+  });
+});

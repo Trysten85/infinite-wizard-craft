@@ -19,7 +19,8 @@
     "pace": "tsx src/tools/pace.ts",
     "eval": "tsx src/tools/eval.ts",
     "bench": "tsx src/tools/bench.ts",
-    "bake": "tsx src/tools/bake.ts"
+    "bake": "tsx src/tools/bake.ts",
+    "review": "tsx src/tools/review.ts"
   },
   "dependencies": {
     "@hono/node-server": "^2.1.3",

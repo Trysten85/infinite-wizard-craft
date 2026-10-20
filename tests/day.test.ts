@@ -4,8 +4,8 @@ import { buildGameData, readGameFiles } from "../src/server/gameData";
 import {
   DAY_ACTIONS,
   afterAction,
-  candlesLeft,
-  candlesMax,
+  timeLeft,
+  timeMax,
   canTurnIn,
   dayView,
   firstDay,
@@ -15,9 +15,11 @@ import {
   nightIn,
   notchesFor,
   phaseFor,
-  refuseCandles,
+  refuseTime,
+  refuseAction,
   shiftOpen,
-  spendCandles,
+  shopOpen,
+  spendTime,
   tonightAnnounced,
   tonightComes,
   turnIn,
@@ -30,7 +32,9 @@ import { data } from "./helpers";
 
 // Numbers pinned for the sums below, so retuning config/balance.json does not move these tests.
 const costs = { visitor: 1, meal: 1, call: 1, hand: 1, enchant: 1, upgrade: 1, build: 2 };
-const rules: DayRules = { length: 10, noon: 4, shiftNotches: 2, candles: 3, earlyCandles: 1, nightAfter: 6, costs, tonight: { fromDay: 4, chance: 0.25 } };
+const access = { visitor: "evening", call: "evening", meal: "evening", hand: "evening", enchant: "evening", upgrade: "evening", build: "evening" } as const;
+const limits = { mealsPerDay: 1, handsPerBuilding: 1 };
+const rules: DayRules = { length: 10, noon: 4, shiftNotches: 2, time: 3, earlyTime: 1, nightAfter: 6, costs, access, limits, tonight: { fromDay: 4, chance: 0.25 } };
 
 // Plays a run of actions from a starting point.
 function play(actions: DayAction[], from: DayState = firstDay()): DayState {
@@ -94,8 +98,10 @@ describe("the shift", () => {
     expect(shiftOpen(at(4), rules, false)).toBe(false);
   });
 
-  it("is worked once a day, and stays open through the evening until then", () => {
-    expect(shiftOpen(dusk(), rules, true)).toBe(true);
+  it("is worked once a day, from noon until dusk, and is shut for the evening", () => {
+    expect(shiftOpen(at(4), rules, true)).toBe(true);
+    expect(shiftOpen(at(9), rules, true)).toBe(true);
+    expect(shiftOpen(dusk(), rules, true)).toBe(false);
     const worked = afterAction(at(4), "shift", rules);
     expect(worked).toMatchObject({ sun: 6, shiftDone: true });
     expect(shiftOpen(worked, rules, true)).toBe(false);
@@ -118,61 +124,61 @@ describe("the shift", () => {
   });
 });
 
-describe("candles", () => {
+describe("time", () => {
   it("are three an evening, and are counted down as they are spent", () => {
-    expect(candlesMax(dusk(), rules)).toBe(3);
-    expect(candlesLeft(dusk(), rules)).toBe(3);
-    expect(candlesLeft(spendCandles(dusk(), 1), rules)).toBe(2);
-    expect(candlesLeft(spendCandles(spendCandles(dusk(), 1), 2), rules)).toBe(0);
+    expect(timeMax(dusk(), rules)).toBe(3);
+    expect(timeLeft(dusk(), rules)).toBe(3);
+    expect(timeLeft(spendTime(dusk(), 1), rules)).toBe(2);
+    expect(timeLeft(spendTime(spendTime(dusk(), 1), 2), rules)).toBe(0);
   });
 
   it("cannot be spent before dusk", () => {
-    for (const sun of [0, 4, 9]) expect(refuseCandles(at(sun), 1, rules)).toBe("not-evening");
-    expect(refuseCandles(dusk(), 1, rules)).toBeNull();
+    for (const sun of [0, 4, 9]) expect(refuseTime(at(sun), 1, rules)).toBe("not-evening");
+    expect(refuseTime(dusk(), 1, rules)).toBeNull();
   });
 
   it("are refused when an action costs more than are left", () => {
-    expect(refuseCandles(dusk(), 3, rules)).toBeNull();
-    expect(refuseCandles(dusk(), 4, rules)).toBe("no-candles");
-    const oneLeft = spendCandles(dusk(), 2);
-    expect(refuseCandles(oneLeft, 1, rules)).toBeNull();
+    expect(refuseTime(dusk(), 3, rules)).toBeNull();
+    expect(refuseTime(dusk(), 4, rules)).toBe("no-time");
+    const oneLeft = spendTime(dusk(), 2);
+    expect(refuseTime(oneLeft, 1, rules)).toBeNull();
     // Raising a new building takes two.
-    expect(refuseCandles(oneLeft, 2, rules)).toBe("no-candles");
+    expect(refuseTime(oneLeft, 2, rules)).toBe("no-time");
     // An action that costs nothing is still an evening action.
-    expect(refuseCandles(spendCandles(dusk(), 3), 0, rules)).toBeNull();
-    expect(refuseCandles(at(9), 0, rules)).toBe("not-evening");
+    expect(refuseTime(spendTime(dusk(), 3), 0, rules)).toBeNull();
+    expect(refuseTime(at(9), 0, rules)).toBe("not-evening");
   });
 
   it("can be added to by a perk, at any point in the evening", () => {
-    const spent = spendCandles(dusk(), 3);
-    expect(candlesLeft(spent, rules)).toBe(0);
-    expect(candlesMax(spent, rules, 1)).toBe(4);
-    expect(candlesLeft(spent, rules, 1)).toBe(1);
-    expect(refuseCandles(spent, 1, rules, 1)).toBeNull();
+    const spent = spendTime(dusk(), 3);
+    expect(timeLeft(spent, rules)).toBe(0);
+    expect(timeMax(spent, rules, 1)).toBe(4);
+    expect(timeLeft(spent, rules, 1)).toBe(1);
+    expect(refuseTime(spent, 1, rules, 1)).toBeNull();
     expect(nightFalls(spent, rules, 1)).toBeNull();
   });
 });
 
 describe("night", () => {
   it("can fall three ways", () => {
-    expect([...NIGHT_REASONS].sort()).toEqual(["bed", "last-candle", "midnight-oil"]);
+    expect([...NIGHT_REASONS].sort()).toEqual(["bed", "midnight-oil", "out-of-time"]);
   });
 
-  it("does not fall before dusk, or in an evening that still has candles and oil", () => {
+  it("does not fall before dusk, or in an evening that still has time and oil", () => {
     for (const sun of [0, 4, 9]) expect(nightFalls(at(sun), rules)).toBeNull();
     expect(nightFalls(dusk(), rules)).toBeNull();
-    expect(nightFalls(spendCandles(dusk(), 2), rules)).toBeNull();
+    expect(nightFalls(spendTime(dusk(), 2), rules)).toBeNull();
     // So going to bed is the player's own choice, offered from dusk and not before.
     expect(isEvening(dusk(), rules)).toBe(true);
     expect(isEvening(at(9), rules)).toBe(false);
   });
 
-  it("falls when the last candle is spent", () => {
-    expect(nightFalls(spendCandles(dusk(), 3), rules)).toBe("last-candle");
-    expect(nightFalls(spendCandles(spendCandles(spendCandles(dusk(), 1), 1), 1), rules)).toBe("last-candle");
+  it("falls when the last of the time is spent", () => {
+    expect(nightFalls(spendTime(dusk(), 3), rules)).toBe("out-of-time");
+    expect(nightFalls(spendTime(spendTime(spendTime(dusk(), 1), 1), 1), rules)).toBe("out-of-time");
   });
 
-  it("falls by itself after six discoveries past dusk with no candle spent: the midnight oil", () => {
+  it("falls by itself after six discoveries past dusk with no time spent: the midnight oil", () => {
     const five = play(discoveries(5), dusk());
     expect(five.oil).toBe(5);
     expect(nightFalls(five, rules)).toBeNull();
@@ -180,9 +186,9 @@ describe("night", () => {
     const six = play(["discovery"], five);
     expect(nightFalls(six, rules)).toBe("midnight-oil");
     expect(nightIn(six, rules)).toBe(0);
-    // Unspent candles are gone with the day.
-    expect(candlesLeft(six, rules)).toBe(3);
-    expect(candlesLeft(nextDay(six), rules)).toBe(3);
+    // Unspent time are gone with the day.
+    expect(timeLeft(six, rules)).toBe(3);
+    expect(timeLeft(nextDay(six), rules)).toBe(3);
     expect(nextDay(six).spent).toBe(0);
   });
 
@@ -199,16 +205,16 @@ describe("night", () => {
     expect(nightIn(busy, rules)).toBe(6);
   });
 
-  it("starts the midnight-oil count again when a candle is spent", () => {
+  it("starts the midnight-oil count again when time is spent", () => {
     const five = play(discoveries(5), dusk());
-    const called = spendCandles(five, 1);
+    const called = spendTime(five, 1);
     expect(called.oil).toBe(0);
     expect(nightIn(called, rules)).toBe(6);
     const fiveMore = play(discoveries(5), called);
     expect(nightFalls(fiveMore, rules)).toBeNull();
     expect(nightFalls(play(["discovery"], fiveMore), rules)).toBe("midnight-oil");
-    // Something that costs no candle does not start it again.
-    expect(spendCandles(five, 0).oil).toBe(5);
+    // Something that costs no time does not start it again.
+    expect(spendTime(five, 0).oil).toBe(5);
   });
 
   it("counts down only in the evening", () => {
@@ -232,15 +238,15 @@ describe("turning in early", () => {
     const early = turnIn(at(5), rules);
     expect(early).toMatchObject({ sun: 10, early: true, number: 1 });
     expect(isEvening(early, rules)).toBe(true);
-    expect(candlesMax(early, rules)).toBe(1);
+    expect(timeMax(early, rules)).toBe(1);
     expect(nightFalls(early, rules)).toBeNull();
-    expect(refuseCandles(early, 2, rules)).toBe("no-candles");
-    expect(nightFalls(spendCandles(early, 1), rules)).toBe("last-candle");
+    expect(refuseTime(early, 2, rules)).toBe("no-time");
+    expect(nightFalls(spendTime(early, 1), rules)).toBe("out-of-time");
   });
 
-  it("leaves the shift open, if it was not worked", () => {
-    expect(shiftOpen(turnIn(at(5), rules), rules, true)).toBe(true);
-    expect(shiftOpen(turnIn(at(6, { shiftDone: true }), rules), rules, true)).toBe(false);
+  it("gives up the shift, if it was not worked, because the shift closes at dusk", () => {
+    expect(shiftOpen(at(5), rules, true)).toBe(true);
+    expect(shiftOpen(turnIn(at(5), rules), rules, true)).toBe(false);
   });
 });
 
@@ -253,12 +259,12 @@ describe("a whole day", () => {
     expect(day).toMatchObject({ sun: 10, shiftDone: true });
     // Eight discoveries and a shift make a day.
     for (const cost of [1, 1]) {
-      expect(refuseCandles(day, cost, rules)).toBeNull();
-      day = spendCandles(day, cost);
+      expect(refuseTime(day, cost, rules)).toBeNull();
+      day = spendTime(day, cost);
       expect(nightFalls(day, rules)).toBeNull();
     }
-    day = spendCandles(day, 1);
-    expect(nightFalls(day, rules)).toBe("last-candle");
+    day = spendTime(day, 1);
+    expect(nightFalls(day, rules)).toBe("out-of-time");
     expect(nextDay(day)).toEqual({ ...firstDay(), number: 2 });
   });
 
@@ -315,19 +321,21 @@ describe("a one-night happening", () => {
 });
 
 describe("the day as the page sees it", () => {
-  it("carries the sun, the phase, the candles, and what the player may do", () => {
+  it("carries the sun, the phase, the time, and what the player may do", () => {
     expect(dayView(at(5, { number: 3 }), rules)).toEqual({
       number: 3,
       sun: 5,
       length: 10,
       noon: 4,
       phase: "afternoon",
-      candles: 3,
-      candlesMax: 3,
+      time: 3,
+      timeMax: 3,
       nightIn: null,
       canTurnIn: true,
-      turnInCandles: 1,
+      turnInTime: 1,
       costs,
+      access,
+      limits,
       shiftDone: false,
       tonight: null,
       lastLedger: null,
@@ -335,21 +343,21 @@ describe("the day as the page sees it", () => {
   });
 
   it("says what turning in early would leave, and what each evening action costs", () => {
-    expect(dayView(at(5), rules)).toMatchObject({ candlesMax: 3, turnInCandles: 1 });
-    // A perk's extra candle is kept on a short evening too.
-    expect(dayView(at(5), rules, { extraCandles: 1 }).turnInCandles).toBe(2);
-    expect(dayView(at(5), rules, { extraCandles: 1 }).turnInCandles).toBe(candlesMax(turnIn(at(5), rules), rules, 1));
+    expect(dayView(at(5), rules)).toMatchObject({ timeMax: 3, turnInTime: 1 });
+    // A perk's extrtime is kept on a short evening too.
+    expect(dayView(at(5), rules, { extraTime: 1 }).turnInTime).toBe(2);
+    expect(dayView(at(5), rules, { extraTime: 1 }).turnInTime).toBe(timeMax(turnIn(at(5), rules), rules, 1));
     expect(dayView(dusk(), rules).costs).toEqual({ visitor: 1, meal: 1, call: 1, hand: 1, enchant: 1, upgrade: 1, build: 2 });
     // A cost from the table is what an evening action is refused or let through on.
-    const oneLeft = spendCandles(dusk(), 2);
-    expect(refuseCandles(oneLeft, rules.costs.visitor, rules)).toBeNull();
-    expect(refuseCandles(oneLeft, rules.costs.build, rules)).toBe("no-candles");
+    const oneLeft = spendTime(dusk(), 2);
+    expect(refuseTime(oneLeft, rules.costs.visitor, rules)).toBeNull();
+    expect(refuseTime(oneLeft, rules.costs.build, rules)).toBe("no-time");
   });
 
   it("shows the evening running down", () => {
-    const evening = play(discoveries(2), spendCandles(dusk(), 1));
-    expect(dayView({ ...evening, shiftDone: true }, rules)).toMatchObject({ phase: "evening", candles: 2, candlesMax: 3, nightIn: 4, canTurnIn: false, shiftDone: true });
-    expect(dayView(turnIn(at(4), rules), rules, { extraCandles: 1 })).toMatchObject({ candles: 2, candlesMax: 2 });
+    const evening = play(discoveries(2), spendTime(dusk(), 1));
+    expect(dayView({ ...evening, shiftDone: true }, rules)).toMatchObject({ phase: "evening", time: 2, timeMax: 3, nightIn: 4, canTurnIn: false, shiftDone: true });
+    expect(dayView(turnIn(at(4), rules), rules, { extraTime: 1 })).toMatchObject({ time: 2, timeMax: 2 });
   });
 
   it("carries last night's ledger, so it can be shown again after a reload", () => {
@@ -362,7 +370,20 @@ describe("the day's numbers and words in the game files", () => {
   const files = readGameFiles(process.cwd());
 
   it("are the guide's draft numbers", () => {
-    expect(data.balance.day).toEqual({ length: 10, noon: 4, shiftNotches: 2, candles: 3, earlyCandles: 1, nightAfter: 6, costs, tonight: { fromDay: 4, chance: 0.25 } });
+    // N2: what the town does by day is free of time and open at any hour. Only the people of
+    // the evening, the visitor and a call, wait for dusk and take time.
+    expect(data.balance.day).toEqual({
+      length: 10,
+      noon: 4,
+      shiftNotches: 2,
+      time: 3,
+      earlyTime: 1,
+      nightAfter: 6,
+      costs: { visitor: 1, call: 1, meal: 0, hand: 0, enchant: 0, upgrade: 0, build: 0 },
+      access: { visitor: "evening", call: "evening", meal: "anytime", hand: "anytime", enchant: "anytime", upgrade: "anytime", build: "anytime" },
+      limits,
+      tonight: { fromDay: 4, chance: 0.25 },
+    });
   });
 
   it("have replaced the three old counters, which are gone from the balance file", () => {
@@ -388,12 +409,12 @@ describe("the day's numbers and words in the game files", () => {
 
 describe("refusal codes", () => {
   it("live with the shared types, and the server still reads them from the same place", () => {
-    const fromShared: RuleCode[] = ["not-evening", "no-candles", "shift-not-ready", "rule"];
+    const fromShared: RuleCode[] = ["not-evening", "no-time", "shift-not-ready", "rule"];
     const fromCombiner: CodeFromCombiner[] = fromShared;
     expect(fromCombiner).toHaveLength(4);
     expect(new RuleError("It is not evening yet.", "not-evening").code).toBe("not-evening");
     // The codes the day's own rules hand back are ones a refusal can carry.
-    const refused: RuleCode | null = refuseCandles(firstDay(), 1, rules);
+    const refused: RuleCode | null = refuseTime(firstDay(), 1, rules);
     expect(refused).toBe("not-evening");
   });
 });
@@ -416,5 +437,46 @@ describe("the townsfolk and what they say", () => {
         expect(line, line).not.toMatch(/[0-9!]/);
       }
     }
+  });
+});
+
+describe("what is open when", () => {
+  const open = { ...rules, access: { ...access, meal: "anytime", hand: "anytime", build: "anytime" } } as DayRules;
+
+  it("shuts the shop at dusk and opens it again at dawn", () => {
+    expect([0, 4, 9].map((sun) => shopOpen(at(sun), rules))).toEqual([true, true, true]);
+    expect(shopOpen(dusk(), rules)).toBe(false);
+    expect(shopOpen(nextDay(dusk()), rules)).toBe(true);
+  });
+
+  it("lets an anytime action go ahead in the morning without spending anything", () => {
+    expect(refuseAction(at(0), "meal", open)).toBeNull();
+    expect(refuseAction(at(0), "build", open)).toBeNull();
+    expect(refuseAction(dusk(), "hand", open)).toBeNull();
+  });
+
+  it("holds an evening action until dusk, and then to the time left", () => {
+    expect(refuseAction(at(5), "visitor", open)).toBe("not-evening");
+    expect(refuseAction(dusk(), "visitor", open)).toBeNull();
+    expect(refuseAction(dusk(), "call", open, 0, 4)).toBe("no-time");
+    expect(refuseAction(dusk(), "call", open, 1, 4)).toBeNull();
+  });
+
+  it("agrees with the old refusal for an evening action, so nothing changes until a switch is flipped", () => {
+    expect(refuseAction(at(5), "build", rules)).toBe("not-evening");
+    expect(refuseAction(spendTime(dusk(), 2), "build", rules)).toBe("no-time");
+  });
+
+  it("has one limit a day for meals and for hands, in the real data", () => {
+    expect(data.balance.day.limits).toEqual({ mealsPerDay: 1, handsPerBuilding: 1 });
+  });
+});
+
+describe("a ledger saved while the evening's time was candles", () => {
+  it("is read with the night falling out of time", async () => {
+    const { readLedger } = await import("../src/server/store");
+    const old = { day: 3, fell: "last-candle", takings: [], cheer: null, brought: [], missed: null, deed: false, lines: [] };
+    expect(readLedger(JSON.stringify(old)).fell).toBe("out-of-time");
+    expect(readLedger(JSON.stringify({ ...old, fell: "bed" })).fell).toBe("bed");
   });
 });

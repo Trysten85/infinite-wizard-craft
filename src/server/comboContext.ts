@@ -66,13 +66,19 @@ export function storybookFor(items: StorybookItem[], a: GameEntry, b: GameEntry,
 
 // The examples most like this pair. One that shares an ingredient comes first. A hand-written
 // recipe is only shown when it does. An ordinary pair is never shown magical examples.
-export function pickExamples(examples: ComboExample[], a: GameEntry, b: GameEntry, magical: boolean, count: number): ComboExample[] {
+// `avoid` names results that too many pairs give already: they are shown only to a pair that
+// shares an ingredient with them, so a favourite answer is not planted in every prompt. Of two
+// examples with the same result, one is shown.
+export function pickExamples(examples: ComboExample[], a: GameEntry, b: GameEntry, magical: boolean, count: number, avoid: Set<string> = new Set()): ComboExample[] {
   const names = new Set([a.name.toLowerCase(), b.name.toLowerCase()]);
   const key = [a.id, b.id].sort().join("+");
+  const seen = new Set<string>();
   const scored = examples
     .map((example) => ({ example, shared: example.inputs.filter((input) => names.has(input.toLowerCase())).length }))
     .filter(({ example, shared }) => (magical || example.kind === "ordinary") && (shared > 0 || !example.authored))
-    .sort((x, y) => y.shared - x.shared || hash(key + x.example.result) - hash(key + y.example.result));
+    .filter(({ example, shared }) => shared > 0 || !avoid.has(example.result.toLowerCase()))
+    .sort((x, y) => y.shared - x.shared || hash(key + x.example.result) - hash(key + y.example.result))
+    .filter(({ example }) => !seen.has(example.result.toLowerCase()) && !!seen.add(example.result.toLowerCase()));
   if (!magical) return scored.slice(0, count).map(({ example }) => example);
   // A magical pair is shown everyday things that came of magic, and ordinary ones only where an
   // ingredient is shared.
@@ -83,6 +89,32 @@ export function pickExamples(examples: ComboExample[], a: GameEntry, b: GameEntr
     if (next) picked.push(next.example);
   }
   return picked;
+}
+
+// Pairs Trysten has approved, as examples: the pair, the result, and its tags. Held-out pairs
+// are left out, and so is anything not in the game's entries. They carry no description: the
+// model's old words are never an example.
+export function approvedExamples(
+  entries: Map<string, GameEntry>,
+  approved: { inputs: [string, string]; result: string | null; tags: string[]; status: string }[],
+  heldOut: Set<string>,
+): ComboExample[] {
+  return approved.flatMap((row) => {
+    const names = row.inputs.map((id) => entries.get(id)?.name);
+    if (row.status !== "approved" || !row.result || heldOut.has([...row.inputs].sort().join("+")) || names.some((name) => name === undefined)) return [];
+    return [{ inputs: names as [string, string], result: row.result, why: row.tags.length > 0 ? row.tags.join(", ") : "settled by review", kind: "ordinary" as const }];
+  });
+}
+
+// Answers the model gives and should not, each beside the better one. A plain compound beats a
+// word that only sounds like the pair, and a result that the pair's own reasoning undoes is wrong.
+export const DONT_EXAMPLES: { inputs: [string, string]; wrong: string; right: string }[] = [
+  { inputs: ["Water", "Salt"], wrong: "Brine", right: "Saltwater" },
+  { inputs: ["Steam", "Salt"], wrong: "Sea", right: "Salt spray" },
+];
+
+export function dontLine(example: (typeof DONT_EXAMPLES)[number]): string {
+  return `${example.inputs[0]} + ${example.inputs[1]}: not ${example.wrong}. ${example.right}.`;
 }
 
 export function exampleLine(example: ComboExample): string {

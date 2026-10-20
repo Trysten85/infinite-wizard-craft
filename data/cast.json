@@ -1,0 +1,240 @@
+{
+  "people": [
+    {
+      "id": "ignatius",
+      "name": "Ignatius Puddlewick",
+      "pronoun": "he",
+      "job": "wizard",
+      "home": "wizards-tower",
+      "personality": "A retired certifier of kettles who has never once been in a hurry.",
+      "voice": "Long sentences that wander off and come back carrying one exact, useful point.",
+      "traits": ["kindly", "wandering", "proud of paperwork"],
+      "facts": [
+        "He spent forty years at the Office of Reasonable Enchantments, certifying kettles.",
+        "A wren nests in his hat and he will not disturb it.",
+        "He has been writing A Sensible History of Kettles for years and is on chapter two."
+      ],
+      "likes": ["merchant", "herbalist"],
+      "dislikes": ["farmer"],
+      "arrival": {},
+      "lesson": [
+        {"id": "lesson-wizard-hat", "title": "You already know how", "detail": "Ignatius has nothing to teach a wizard who owns a spellbook. He only has the hat.", "track": "side", "level": 1, "gold": 0, "xp": 0, "done": {"type": "has-entry", "entry": "spellbook"}}
+      ],
+      "beats": [
+        {"id": "ignatius-a-blank-where-we-live", "title": "A blank where we live", "level": 2, "gate": 2, "done": {"type": "built", "building": "wizards-tower"}, "reward": {"kind": "commission", "tags": ["knowledge", "utility"]}, "premise": "Settled in his tower at last, Ignatius unrolls the county map from the Office of Reasonable Enchantments. Where Crumb Lane should be there is only a pale ring, where somebody once set down a teacup. Officially, the player lives nowhere.", "line": "Ignatius taps the pale ring on the map where the lane ought to be. \"According to this, you and I are standing in a saucer.\"", "thread": true},
+        {"id": "ignatius-the-lapsed-licence", "title": "The lapsed licence", "level": 3, "gate": 4, "waitsOn": ["ignatius-a-blank-where-we-live"], "done": {"type": "learned-schools", "count": 2}, "reward": {"kind": "plan", "building": "wizards-tower", "tier": 2}, "premise": "Form Nine-B, the Application to Be Somewhere, wants the signature of a practising wizard. Ignatius's licence lapsed somewhere around chapter two. The renewal asks him to show he keeps up with more than one school of magic, and he would like to watch the player do it.", "line": "Ignatius signs the form with a flourish he has clearly been practising. \"Practising,\" he says, \"is the important word.\"", "thread": true},
+        {"id": "ignatius-chapter-three", "title": "Chapter three", "level": 4, "gate": 6, "done": {"type": "enchantments", "count": 3}, "reward": {"kind": "perk", "perk": {"type": "rumour", "every": 5}}, "premise": "Watching the player's spells settle on the street's buildings, Ignatius finally starts chapter three. It is about the player. He reads them the first line, then the second, then stops himself.", "line": "Ignatius reads you the first line of chapter three. It is about you, and it is kinder than you expected."},
+        {"id": "ignatius-on-the-map", "title": "On the map", "level": 5, "gate": 8, "waitsOn": ["ignatius-the-lapsed-licence", "hester-older-than-the-map", "ferris-form-nine", "marigold-a-licence-to-pour", "dunstan-a-sign-for-the-lane", "quince-a-registered-remedy"], "reward": {"kind": "gold", "gold": 100, "xp": 100}, "premise": "The form goes off to the Office with everything it asked for. A surveyor comes, walks the lane with a measuring chain, avoids the goose, and has a slice of pie at the Second Kettle. Crumb Lane goes on the map.", "line": "The new map comes back from the Office. Crumb Lane is on it, in ink, with no teacup anywhere.", "thread": true}
+      ],
+      "callingLines": [
+        "{name} reads you a paragraph from chapter two, then a different paragraph from chapter two.",
+        "{name} lifts his hat so you can see the wren, who does not care for you yet.",
+        "{name} certifies your kettle out of habit. It passes.",
+        "{name} shows you the map again, and the ring where the lane should be."
+      ]
+    },
+    {
+      "id": "hester",
+      "name": "Hester Furrow",
+      "pronoun": "she",
+      "job": "farmer",
+      "home": "farm",
+      "personality": "Grows enormous vegetables and is embarrassed whenever anyone mentions it.",
+      "voice": "Short sentences, a weather report in every conversation, and every compliment passed on to the soil.",
+      "traits": ["blunt", "patient", "weather-wise"],
+      "facts": [
+        "Her goose, the Magistrate, chases anyone carrying a clipboard.",
+        "The hawthorn hedge at the end of the lane was planted by her great-grandmother.",
+        "She forecasts rain by her left knee and is never wrong."
+      ],
+      "likes": ["innkeeper", "herbalist"],
+      "dislikes": ["wizard"],
+      "arrival": {},
+      "lesson": [
+        {"id": "lesson-farmer-tree", "title": "Hands in the dirt", "detail": "Hester wants to see you grow something on purpose. A Tree will do.", "track": "side", "level": 1, "gold": 5, "xp": 0, "done": {"type": "has-entry", "entry": "tree", "made": true}},
+        {"id": "lesson-farmer-food", "title": "Something to eat", "detail": "Growing is half of it. Make Food, and Hester will call it the other half.", "track": "side", "level": 1, "gold": 5, "xp": 0, "done": {"type": "has-entry", "entry": "food", "made": true}}
+      ],
+      "beats": [
+        {"id": "hester-the-marrow-question", "title": "The marrow question", "level": 2, "gate": 2, "done": {"type": "tag-count", "tag": "plant", "count": 6}, "reward": {"kind": "commission", "tags": ["plant", "animal"]}, "premise": "The fair is coming and Hester's marrow is merely large. She will not say she wants it to win. She wants to know what else the player can make grow, for ideas.", "line": "Hester looks at everything green you have made, then at the marrow. \"Hear that,\" she tells it. \"Competition.\""},
+        {"id": "hester-the-magistrate", "title": "The Magistrate", "level": 3, "gate": 4, "done": {"type": "has-entry", "entry": "spell-mage-hand"}, "reward": {"kind": "plan", "building": "farm", "tier": 2}, "premise": "The Magistrate has taken Ignatius's hat, wren and all, to the middle of the pond, and stands guard over it. Something has to fetch the hat back from somewhere the goose cannot reach. A spell that moves things from a distance would do it.", "line": "The hat floats back to shore by itself. The wren is unbothered. The Magistrate is furious, and Hester is trying very hard not to laugh."},
+        {"id": "hester-older-than-the-map", "title": "Older than the map", "level": 3, "gate": 6, "waitsOn": ["ignatius-a-blank-where-we-live"], "done": {"type": "has-entry", "entry": "rotted-leaves", "made": true}, "reward": {"kind": "gold", "gold": 20, "xp": 0}, "premise": "Form Nine-B wants a boundary older than the form. Hester's great-grandmother's hedge qualifies, but it must look like a hedge on the day, so it wants a good mulching of last year's leaves first.", "line": "Hester mulches the old hedge and stands back. \"Older than any map,\" she says. \"Tell them that.\"", "thread": true},
+        {"id": "hester-prize-day", "title": "Prize day", "level": 5, "gate": 8, "waitsOn": ["hester-the-marrow-question"], "done": {"type": "depth", "depth": 8, "made": true}, "reward": {"kind": "perk", "perk": {"type": "gift", "tags": ["plant"], "every": 5}}, "premise": "The fair at last. Something the player made a long way from the four elements went into the marrow's soil. The marrow wins. Hester pretends not to mind. The Magistrate attends in a ribbon.", "line": "The marrow wins. Hester says it was the soil. The Magistrate wears the ribbon home."}
+      ],
+      "callingLines": [
+        "{name} says it will rain by teatime, and it does.",
+        "{name} walks you down the rows and names every cabbage.",
+        "{name} keeps the Magistrate behind her while you talk, mostly.",
+        "{name} sends you home with an onion the size of your head and refuses to discuss it."
+      ]
+    },
+    {
+      "id": "ferris",
+      "name": "Ferris Tally",
+      "pronoun": "they",
+      "job": "merchant",
+      "home": "market-stall",
+      "personality": "Haggles for the pleasure of it, even over things they are giving away.",
+      "voice": "Quick and warm, and nearly every sentence is an offer.",
+      "traits": ["chatty", "honest", "a touch vain"],
+      "facts": [
+        "Their brass scales are the good scales, and only friends may look at them.",
+        "They remember how everyone in town takes their tea.",
+        "They keep every form the Office has ever printed, filed by colour."
+      ],
+      "likes": ["blacksmith", "farmer"],
+      "dislikes": ["innkeeper"],
+      "arrival": {},
+      "lesson": [
+        {"id": "lesson-merchant-glass", "title": "A fair weight", "detail": "Ferris will not teach a trade to anyone without a jar to sell things out of. Make Glass.", "track": "side", "level": 1, "gold": 5, "xp": 0, "done": {"type": "has-entry", "entry": "glass", "made": true}},
+        {"id": "lesson-merchant-salt", "title": "The first thing on the scales", "detail": "Every market starts by weighing Salt. Ferris says so, and they would know.", "track": "side", "level": 1, "gold": 5, "xp": 0, "done": {"type": "has-entry", "entry": "salt", "made": true}}
+      ],
+      "beats": [
+        {"id": "ferris-the-good-scales", "title": "The good scales", "level": 2, "gate": 2, "done": {"type": "built", "building": "market-stall"}, "reward": {"kind": "commission", "tags": ["utility", "industrial"]}, "premise": "The good scales deserve a proper counter. Ferris has been weighing things on a borrowed crate. The stall is that counter.", "line": "Ferris sets the good scales on the new counter and lets you look at them, which is a compliment."},
+        {"id": "ferris-something-for-everyone", "title": "Something for everyone", "level": 3, "gate": 4, "done": {"type": "bought", "count": 3}, "reward": {"kind": "plan", "building": "market-stall", "tier": 2}, "premise": "Ferris wants to learn the lane's taste. They watch what the player buys from the stall and take notes in the margin of an old form.", "line": "Ferris reads back what you bought, from the margin of a pale blue form. \"Interesting,\" they say. \"Very interesting. Half price next time.\""},
+        {"id": "ferris-form-nine", "title": "Form nine", "level": 3, "gate": 6, "waitsOn": ["ignatius-a-blank-where-we-live"], "done": {"type": "has-entry", "entry": "crown", "made": true}, "reward": {"kind": "gold", "gold": 20, "xp": 0}, "premise": "Ferris has filled in Form Nine-B correctly, in the right colour of ink. It must carry any reasonable seal. Ferris holds that a seal should look important, and a Crown is the most important-looking thing anyone can make before lunch.", "line": "Ferris presses the Crown to the wax. It is not what the Office meant by a seal. It is, Ferris says, what the Office deserves.", "thread": true},
+        {"id": "ferris-a-rival", "title": "A rival, in a friendly way", "level": 4, "gate": 8, "waitsOn": ["ferris-something-for-everyone"], "done": {"type": "regulars", "count": 4}, "reward": {"kind": "perk", "perk": {"type": "shop-discount", "share": 0.05}}, "premise": "A travelling stall sets up at the end of the lane. Ferris is delighted and furious in equal measure. They win the lane back by being nicer, and by the player's friends shopping where they always have.", "line": "The travelling stall packs up and leaves, with Ferris waving it off and pressing a farewell discount on it."}
+      ],
+      "callingLines": [
+        "{name} lets you look at the good scales, which is a compliment.",
+        "{name} remembers how you take your tea, and has it ready.",
+        "{name} haggles you down on something you were not buying.",
+        "{name} shows you a form in a colour you did not know existed."
+      ]
+    },
+    {
+      "id": "marigold",
+      "name": "Marigold Tumble",
+      "pronoun": "she",
+      "job": "innkeeper",
+      "home": "tavern",
+      "personality": "Knows everyone's usual and most of their business, and keeps both behind the bar.",
+      "voice": "Brief and warm. She ends conversations by putting food in front of people.",
+      "traits": ["unflappable", "nosy", "generous"],
+      "facts": [
+        "The inn is the Second Kettle, named for the first kettle, which she will not talk about.",
+        "The inn's sign shows half a cat, because the painter left mid-job, and she has grown fond of it.",
+        "She keeps a spare bed made up, for whoever."
+      ],
+      "likes": ["farmer", "merchant"],
+      "dislikes": ["alchemist"],
+      "arrival": {"townsfolk": 2},
+      "lesson": [
+        {"id": "lesson-innkeeper-food", "title": "Last orders", "detail": "Marigold will not let anyone behind the bar who cannot put Food on a table.", "track": "side", "level": 1, "gold": 5, "xp": 0, "done": {"type": "has-entry", "entry": "food", "made": true}},
+        {"id": "lesson-innkeeper-tea", "title": "A proper cup", "detail": "Then Tea. Not a hurried one.", "track": "side", "level": 1, "gold": 5, "xp": 0, "done": {"type": "has-entry", "entry": "tea", "made": true}}
+      ],
+      "beats": [
+        {"id": "marigold-half-a-cat", "title": "Half a cat", "level": 2, "gate": 2, "done": {"type": "built", "building": "tavern"}, "reward": {"kind": "commission", "tags": ["liquid", "plant"]}, "premise": "The Second Kettle opens and its sign goes up: half a cat, because the painter left mid-job. The first customer asks where the rest of the cat is.", "line": "\"The rest of the cat,\" Marigold tells the first customer, \"is none of your business.\" She gives them a bowl of stew anyway."},
+        {"id": "marigold-the-usual", "title": "The usual", "level": 3, "gate": 4, "done": {"type": "evenings", "count": 10}, "reward": {"kind": "plan", "building": "tavern", "tier": 2}, "premise": "Marigold knows everyone's usual except the player's, because the player never orders the same thing twice. She means to work it out, so she watches them across a run of evenings.", "line": "Marigold sets down a cup before you sit. It is exactly right. She does not explain how she knew."},
+        {"id": "marigold-a-licence-to-pour", "title": "A licence to pour", "level": 4, "gate": 6, "waitsOn": ["ferris-form-nine"], "done": {"type": "tag-count", "tag": "liquid", "count": 5}, "reward": {"kind": "gold", "gold": 20, "xp": 0}, "premise": "Form Nine-B names the inn, so the inn needs a licence to pour. Ferris has filed it. The Office wants proof that the Second Kettle pours more than one thing, and the player can supply it.", "line": "The licence comes back from the Office. Marigold frames it beside the half a cat, slightly lower.", "thread": true},
+        {"id": "marigold-the-first-kettle", "title": "The first kettle", "level": 5, "gate": 8, "waitsOn": ["dunstan-the-box-of-wrong-hinges"], "done": {"type": "regulars", "count": 3}, "reward": {"kind": "perk", "perk": {"type": "gift", "tags": ["liquid"], "every": 5}}, "premise": "Bittersweet and warm. With the inn full of regulars, Marigold takes the cracked first kettle down from the high shelf. It was her mother's. Dunstan has been mending things lately, and she asks him to look at it.", "line": "The first kettle sits on the stove again, mended, with the crack still showing. Marigold says she likes it better that way."}
+      ],
+      "callingLines": [
+        "{name} sets down a cup you did not ask for and does not charge for it.",
+        "{name} tells you who has been in today and what they ordered, which is nearly gossip.",
+        "{name} straightens the half a cat on the sign, fondly.",
+        "{name} asks if you have eaten, and does not believe the answer."
+      ]
+    },
+    {
+      "id": "dunstan",
+      "name": "Dunstan Coals",
+      "pronoun": "he",
+      "job": "blacksmith",
+      "home": "smithy",
+      "personality": "Very large, very gentle, and easier with iron than with people.",
+      "voice": "Few words and long pauses. He describes metal with great tenderness.",
+      "traits": ["shy", "careful", "perfectionist"],
+      "facts": [
+        "A dragon called Mrs Cindertoe writes to him, at length, about the fit of her horseshoes.",
+        "He hums one tune while he works and does not know its name.",
+        "He keeps a box of every hinge that did not come out right, and cannot throw it away."
+      ],
+      "likes": ["farmer", "wizard"],
+      "dislikes": ["herbalist"],
+      "arrival": {"buildings": 1},
+      "lesson": [
+        {"id": "lesson-blacksmith-iron", "title": "Mind the heat", "detail": "Dunstan starts everyone on Iron. He says it forgives you.", "track": "side", "level": 1, "gold": 5, "xp": 0, "done": {"type": "has-entry", "entry": "iron", "made": true}},
+        {"id": "lesson-blacksmith-metals", "title": "Three kinds of ring", "detail": "Hold three metals, so you can hear how each one rings.", "track": "side", "level": 1, "gold": 5, "xp": 0, "done": {"type": "tag-count", "tag": "metal", "count": 3}}
+      ],
+      "beats": [
+        {"id": "dunstan-mrs-cindertoes-letter", "title": "Mrs Cindertoe's letter", "level": 2, "gate": 2, "done": {"type": "built", "building": "smithy"}, "reward": {"kind": "commission", "tags": ["metal", "forging"]}, "premise": "The smithy is lit. A letter arrives in singed handwriting from a dragon called Mrs Cindertoe. Her front left shoe pinches, and she would like it seen to by someone careful.", "line": "Dunstan reads Mrs Cindertoe's letter twice, nods slowly, and starts on a new shoe."},
+        {"id": "dunstan-the-box-of-wrong-hinges", "title": "The box of wrong hinges", "level": 3, "gate": 4, "done": {"type": "has-entry", "entry": "spell-mending"}, "reward": {"kind": "plan", "building": "smithy", "tier": 2}, "premise": "The player has found a spell that mends things, and could mend every hinge in Dunstan's box. He is not sure he wants that, because the hinges are his history. In the end he lets the player mend one, and keeps the rest exactly as they are.", "line": "Dunstan turns the mended hinge over in his hands, then puts it back in the box with the others."},
+        {"id": "dunstan-a-sign-for-the-lane", "title": "A sign for the lane", "level": 4, "gate": 6, "waitsOn": ["ignatius-a-blank-where-we-live"], "done": {"type": "depth", "depth": 6, "made": true}, "reward": {"kind": "gold", "gold": 20, "xp": 0}, "premise": "A street needs a sign before it can go on a map. Dunstan has never made letters before. The first one comes out backwards. The player's own patient, many-step making gives him the idea of starting from the end.", "line": "The sign goes up at the top of the lane: Crumb Lane, in iron, every letter the right way round.", "thread": true},
+        {"id": "dunstan-the-name-of-the-tune", "title": "The name of the tune", "level": 5, "gate": 8, "waitsOn": ["tansy-something-that-hums", "marigold-the-first-kettle"], "done": {"type": "evenings", "count": 20}, "reward": {"kind": "perk", "perk": {"type": "lifts", "building": "tavern", "steps": 1}}, "premise": "One of Tansy's tonics hums Dunstan's tune. He brings it to the Second Kettle to ask if anyone knows it. Marigold does: her mother sang it by the first kettle.", "line": "Marigold tells Dunstan the name of his tune. He hums it at the Second Kettle now, out loud, where people can hear."}
+      ],
+      "callingLines": [
+        "{name} lets you work the bellows once, and watches carefully.",
+        "{name} reads you a letter from Mrs Cindertoe, which takes some time.",
+        "{name} hums while he works, and stops when he notices you listening.",
+        "{name} shows you a hinge he is proud of. It does not squeak."
+      ]
+    },
+    {
+      "id": "quince",
+      "name": "Quince Mallow",
+      "pronoun": "they",
+      "job": "herbalist",
+      "home": "herb-garden",
+      "personality": "Labels everything in very small handwriting, and worries about all of it.",
+      "voice": "They qualify everything and apologise for it, then say one thing with total certainty.",
+      "traits": ["precise", "anxious", "kind"],
+      "facts": [
+        "Meadowsweet is their favourite flower, and it makes them sneeze.",
+        "They keep a notebook of every remedy that did not work, for balance.",
+        "They talk to seedlings, but only to encourage them."
+      ],
+      "likes": ["innkeeper", "alchemist"],
+      "dislikes": ["blacksmith"],
+      "arrival": {},
+      "lesson": [
+        {"id": "lesson-herbalist-herb", "title": "Which leaf is which", "detail": "Quince would like you to pick an Herb, gently, and know what it is.", "track": "side", "level": 1, "gold": 5, "xp": 0, "done": {"type": "has-entry", "entry": "herb", "made": true}},
+        {"id": "lesson-herbalist-rotted-leaves", "title": "What not to pick", "detail": "Then make Rotted leaves, so you know them when you see them.", "track": "side", "level": 1, "gold": 5, "xp": 0, "done": {"type": "has-entry", "entry": "rotted-leaves", "made": true}}
+      ],
+      "beats": [
+        {"id": "quince-small-labels", "title": "Small labels", "level": 2, "gate": 2, "done": {"type": "built", "building": "herb-garden"}, "reward": {"kind": "commission", "tags": ["plant", "healing"]}, "premise": "The herb garden is planted, and Quince has labelled every bed in handwriting too small to read. They are proud of the labels and worried about the beds.", "line": "Quince hands you a magnifying glass so you can read the labels. Every one is correct."},
+        {"id": "quince-the-smoke", "title": "The smoke", "level": 3, "gate": 4, "done": {"type": "has-entry", "entry": "abjuration"}, "reward": {"kind": "plan", "building": "herb-garden", "tier": 2}, "premise": "Smoke from the forge drifts into the drying sage. Quince is far too polite to mention it to Dunstan. Abjuration keeps the rain off, and they wonder aloud whether it might keep smoke off too.", "line": "A faint ward settles over the drying racks. The sage smells only of sage. Quince still has not told Dunstan, and never will."},
+        {"id": "quince-a-registered-remedy", "title": "A registered remedy", "level": 4, "gate": 6, "waitsOn": ["ignatius-a-blank-where-we-live"], "done": {"type": "tag-count", "tag": "healing", "count": 3}, "reward": {"kind": "gold", "gold": 20, "xp": 0}, "premise": "Form Nine-B wants one remedy registered with the Office. Quince has hundreds and cannot choose. Looking over the player's healing things together helps them settle on one.", "line": "Quince copies out the remedy for the Office, in handwriting large enough to read, which costs them something.", "thread": true},
+        {"id": "quince-meadowsweet", "title": "Meadowsweet", "level": 5, "gate": 8, "waitsOn": ["tansy-the-sneeze"], "done": {"type": "regulars", "count": 5}, "reward": {"kind": "perk", "perk": {"type": "gift", "tags": ["healing", "plant"], "every": 4}}, "premise": "Tansy has finally made something for the sneeze. Surrounded by friends at the Second Kettle, Quince holds a meadowsweet flower close for the first time.", "line": "Quince smells the meadowsweet and does not sneeze. They write it in the notebook of things that worked, which is a new notebook."}
+      ],
+      "callingLines": [
+        "{name} presses a sprig into your hand and tells you what it is for.",
+        "{name} shows you a label you can almost read.",
+        "{name} adds a line to the notebook of things that did not work, and looks pleased about it.",
+        "{name} introduces you to a seedling, encouragingly."
+      ]
+    },
+    {
+      "id": "tansy",
+      "name": "Tansy Vell",
+      "pronoun": "she",
+      "job": "alchemist",
+      "home": "shared",
+      "personality": "Quince's old classmate, who never labels anything and is usually right.",
+      "voice": "Fast and delighted. She explains everything backwards, starting from the result.",
+      "traits": ["bold", "cheerful", "untidy"],
+      "facts": [
+        "She and Quince studied together and still argue about the same jar.",
+        "Her tonics hum when they are ready, each in a different key.",
+        "She once turned a weed into a remedy and, on an off day, into something that sang."
+      ],
+      "likes": ["blacksmith", "wizard"],
+      "dislikes": [],
+      "arrival": {"level": 3},
+      "lesson": [
+        {"id": "lesson-alchemist-transmutation", "title": "Something that bubbles", "detail": "Tansy wants to know you have met Transmutation before she hands you a jar.", "track": "side", "level": 1, "gold": 5, "xp": 0, "done": {"type": "has-entry", "entry": "transmutation"}},
+        {"id": "lesson-alchemist-sulfur", "title": "Mind the smell", "detail": "Then make Sulfur, and stand upwind of it.", "track": "side", "level": 1, "gold": 5, "xp": 0, "done": {"type": "has-entry", "entry": "sulfur", "made": true}}
+      ],
+      "beats": [
+        {"id": "tansy-two-labels-on-one-jar", "title": "Two labels on one jar", "level": 3, "gate": 2, "done": {"type": "built", "building": "herb-garden", "tier": 2}, "reward": {"kind": "commission", "tags": ["reagent", "liquid"]}, "premise": "The herb garden has grown into somewhere two people can work, and Tansy moves in. Quince labels a jar. Tansy relabels it. Quince relabels it back.", "line": "The jar now has two labels. They disagree. Both are, in their way, correct."},
+        {"id": "tansy-the-sneeze", "title": "The sneeze", "level": 4, "gate": 4, "waitsOn": ["quince-the-smoke"], "done": {"type": "tag-count", "tag": "reagent", "count": 6}, "reward": {"kind": "gold", "gold": 30, "xp": 0}, "premise": "Tansy is sure meadowsweet can be talked out of making Quince sneeze. Quince is sure it cannot. Tansy needs a shelf of the player's components to prove it.", "line": "Tansy holds up a small jar that hums in a hopeful key. \"For the sneeze,\" she says. \"Probably.\""},
+        {"id": "tansy-something-that-hums", "title": "Something that hums", "level": 5, "gate": 6, "done": {"type": "depth", "depth": 7, "made": true}, "reward": {"kind": "gold", "gold": 50, "xp": 50}, "premise": "Working from something the player made a long way from the four elements, one of Tansy's tonics hums a tune nobody taught it. It is the tune Dunstan hums at the forge.", "line": "The tonic hums Dunstan's tune, all the way through. Tansy goes to fetch him, still holding it."}
+      ],
+      "callingLines": [
+        "{name} hands you a jar and asks you to hold it very still.",
+        "{name} explains a tonic, starting from the end.",
+        "{name} relabels something of Quince's while you watch.",
+        "{name} lets you hear which key today's batch hums in."
+      ]
+    }
+  ]
+}

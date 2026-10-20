@@ -105,7 +105,7 @@ export function StatusBar({ progress, job, rank, jobDrag, jobRef, onOpenOrders, 
 type DayProps = { day: Day; ordersWaiting: boolean; busy: boolean; onEndDay: () => void; onShowLedger: () => void };
 
 // The day, as a strip along the top of the status box: which day it is, a meter the sun crosses
-// from dawn to dusk with noon marked on it, and from dusk the candles left to spend. The way to
+// from dawn to dusk with noon marked on it, and from dusk the time left to spend, as hourglasses. The way to
 // end the day is here too, and it says what would be given up before anything happens.
 function DayStrip({ day, ordersWaiting, busy, onEndDay, onShowLedger }: DayProps) {
   const [asking, setAsking] = useState(false);
@@ -127,16 +127,17 @@ function DayStrip({ day, ordersWaiting, busy, onEndDay, onShowLedger }: DayProps
         </span>
         <span className="sun-noon" style={{ left: `${noonShare(day) * 100}%` }} />
         <span className="sun" style={{ left: `${sunShare(day) * 100}%` }} />
-        <span className="sun-dusk" />
+        <span className="sun-dusk" title="Dusk: the shop and the order board close here." />
       </div>
 
       {day.phase === "evening" && (
-        <span className="candles" role="img" aria-label={`${day.candles} of ${day.candlesMax} candles left`}>
-          {Array.from({ length: day.candlesMax }, (_, index) => (
-            <span key={index} className={`candle ${index < day.candles ? "lit" : "spent"}`} />
+        <span className="hourglasses" role="img" aria-label={`You have ${day.time} of ${day.timeMax} ⌛ left`}>
+          {Array.from({ length: day.timeMax }, (_, index) => (
+            <span key={index} className={`hourglass ${index < day.time ? "full" : "spent"}`} />
           ))}
         </span>
       )}
+      {day.phase !== "evening" && <span className="dusk-note">The shop and the order board close at dusk.</span>}
 
       <p className="day-links">
         {day.tonight && (
@@ -156,7 +157,7 @@ function DayStrip({ day, ordersWaiting, busy, onEndDay, onShowLedger }: DayProps
         )}
       </p>
 
-      {oil && <p className="day-oil">{oil}, unless you spend a candle first.</p>}
+      {oil && <p className="day-oil">{oil}, unless you spend some time first.</p>}
 
       {asking && offer && (
         <div className="day-ask" role="group" aria-label={offer.label}>

@@ -74,7 +74,7 @@
     "tiers": [
       {"needs": [{"entry": "spellbook"}, {"entry": "crystal"}], "perks": [{"type": "learn-discount", "share": 0.25}]},
       {"perks": [{"type": "learn-discount", "share": 0.25}, {"type": "enchant-days", "days": 2}]},
-      {"perks": [{"type": "learn-discount", "share": 0.25}, {"type": "enchant-days", "days": 2}, {"type": "candles", "count": 1}]}
+      {"perks": [{"type": "learn-discount", "share": 0.25}, {"type": "enchant-days", "days": 2}, {"type": "time", "count": 1}]}
     ]
   }
 ]

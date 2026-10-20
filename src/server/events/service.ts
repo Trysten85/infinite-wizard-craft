@@ -7,7 +7,7 @@ import { GenerationError } from "../llm/generate";
 import { levelForSpellTier, type GameData } from "../gameData";
 import { buildPath } from "../paths";
 import { repBandFor, type ProgressService } from "../progress";
-import { standingBuildings } from "../town";
+import { isHomeless, standingBuildings } from "../town";
 import type { Person, Store, StoredEvent } from "../store";
 import {
   eligibleSeeds,
@@ -52,7 +52,7 @@ type Payload = {
   // conversation never stalls while the model writes.
   drafts?: Partial<Record<ResponseType, HeartDraft>>;
   // An event called up with the testing tool. It is not the day's visitor: it can be seen at any
-  // time of day and costs no candle.
+  // time of day and costs no hourglass.
   free?: boolean;
 };
 type HeartDraft = Pick<Payload, "heart" | "responseTypes" | "payoff" | "spell" | "parting">;
@@ -85,7 +85,7 @@ export function createEvents(deps: {
 }) {
   const { data, store, progress, day, listDiscovered, writer, random = Math.random, writeAhead = false } = deps;
   const rules = data.balance.events;
-  // What sitting with the visitor costs, in candles.
+  // What sitting with the visitor costs, in hourglasses.
   const cost = data.balance.day.costs.visitor;
   // The first reactions that lead on to a second beat. Turning the person away ends it at the door.
   const carryOn = rules.openingTypes.filter((type) => type !== "avoid");
@@ -102,8 +102,12 @@ export function createEvents(deps: {
   // visitor (see `everyoneOf`), but they are not counted against the cap, so a town full of
   // them never crowds out new arrivals.
   const castOf = (player: string) => store.listPeople(player).filter((person) => person.job === null);
-  // Everyone who can come to the door: the cast and the townsfolk.
-  const everyoneOf = (player: string) => store.listPeople(player);
+  // Everyone who can come to the door: the cast and the townsfolk. A townsperson with no home
+  // yet leaves the town at dusk, so is never the evening's visitor.
+  const everyoneOf = (player: string) => {
+    const built = standingBuildings(data, store, player);
+    return store.listPeople(player).filter((person) => person.job === null || !isHomeless(data, built, person.job));
+  };
   const pendingEvent = (player: string) => store.listEvents(player).find((event) => event.state === "pending");
   // An event still being written out of sight.
   const hiddenEvent = (player: string) => store.listEvents(player).find((event) => event.state === "writing");
@@ -443,63 +447,65 @@ export function createEvents(deps: {
   }
 
   // Ends the event: applies what the chosen response type does, and whatever the person leaves
-  // behind. Sitting with the day's visitor has then taken a candle, which can bring night.
+  // behind. Sitting with the day's visitor has then taken an hourglass, which can bring night.
   function finish(player: string, event: StoredEvent, payload: Payload, choice: Choice): Answer {
-    const today = day.today(player).number;
-    const profile = rules.effects[choice.type]!;
-    const stake = rules.stakes[event.stakes as Stakes]!;
-    // A generous act never costs more than the player has.
-    const gold = Math.max(Math.round(profile.gold * stake.gold), -progress.getProgress(player).gold) || 0;
-    const effects: Effects = { gold, rep: Math.round(profile.rep * stake.scale), fondness: Math.round(profile.fondness * stake.scale) };
-    if (gold !== 0) store.addLedger(player, gold, "event", String(event.id));
-    store.changeStats(player, { rep: effects.rep });
+    return store.atomically(() => {
+      const today = day.today(player).number;
+      const profile = rules.effects[choice.type]!;
+      const stake = rules.stakes[event.stakes as Stakes]!;
+      // A generous act never costs more than the player has.
+      const gold = Math.max(Math.round(profile.gold * stake.gold), -progress.getProgress(player).gold) || 0;
+      const effects: Effects = { gold, rep: Math.round(profile.rep * stake.scale), fondness: Math.round(profile.fondness * stake.scale) };
+      if (gold !== 0) store.addLedger(player, gold, "event", String(event.id));
+      store.changeStats(player, { rep: effects.rep });
 
-    const person = store.listPeople(player).find((item) => item.id === event.personId);
-    if (person) {
-      const fondness = person.fondness + effects.fondness;
-      // Kindness may be thanked later, and a problem walked away from may come back.
-      const flag = choice.type === "generous" ? "thanks" : choice.type === "avoid" ? "unfinished" : null;
-      const flagged = flag !== null && random() < rules.followUpChance[payload.seed.followUp];
-      // A visitor may have waited some days to be seen. What happened, happened today.
-      store.updatePerson(person.id, {
-        fondness,
-        lastDay: today,
-        status: Math.abs(fondness) >= rules.settledAt ? "settled" : person.status,
-        ...(flagged ? { flag, flagDay: today + 2 } : {}),
-      });
-    }
-
-    let request: RequestView | null = null;
-    let hint: HintView | null = null;
-    let gift: EventOutcome["gift"] = null;
-    const parting = payload.parting;
-    // The event may have been written a while ago. What it planned to leave is dropped if the
-    // player has since come by that thing themselves.
-    const owned = payload.payoff !== null && listDiscovered(player).some((entry) => entry.id === payload.payoff!.entryId);
-    if (payload.payoff && parting && person && HELPFUL.includes(choice.type) && !owned) {
-      const entry = data.entries.get(payload.payoff.entryId)!;
-      const named = { id: entry.id, name: entry.name };
-      if (payload.payoff.kind === "request") {
-        const id = store.addRequest(player, { personId: person.id, eventId: event.id, entryId: entry.id, ask: parting, gold: payload.payoff.gold });
-        request = { id, from: person.name, ask: parting, entry: named, gold: payload.payoff.gold, state: "open" };
-      } else if (payload.payoff.kind === "hint") {
-        store.addHint(player, entry.id, payload.payoff.recipe, person.name);
-        hint = { entry: named, recipe: payload.payoff.recipe, from: person.name };
-      } else {
-        // A gift is the player's from now on, but it was not made, so it pays no discovery gold.
-        store.addLedger(player, 0, "gift", entry.id);
-        store.addDiscovery(player, entry.id);
-        gift = named;
+      const person = store.listPeople(player).find((item) => item.id === event.personId);
+      if (person) {
+        const fondness = person.fondness + effects.fondness;
+        // Kindness may be thanked later, and a problem walked away from may come back.
+        const flag = choice.type === "generous" ? "thanks" : choice.type === "avoid" ? "unfinished" : null;
+        const flagged = flag !== null && random() < rules.followUpChance[payload.seed.followUp];
+        // A visitor may have waited some days to be seen. What happened, happened today.
+        store.updatePerson(person.id, {
+          fondness,
+          lastDay: today,
+          status: Math.abs(fondness) >= rules.settledAt ? "settled" : person.status,
+          ...(flagged ? { flag, flagDay: today + 2 } : {}),
+        });
       }
-    }
 
-    const outcome = parting && (request || hint || gift) ? `${choice.outcome} ${parting}` : choice.outcome;
-    store.resolveEvent(event.id, choice.type, effects, choice.outcome);
-    retireExtraPeople(player);
-    const rewards = progress.settle(player);
-    if (payload.free) return { outcome, effects, next: null, request, hint, gift, rewards, ...NO_TURN };
-    store.setVisitorDay(player, today);
-    return { outcome, effects, next: null, request, hint, gift, rewards, ...day.spend(player, cost) };
+      let request: RequestView | null = null;
+      let hint: HintView | null = null;
+      let gift: EventOutcome["gift"] = null;
+      const parting = payload.parting;
+      // The event may have been written a while ago. What it planned to leave is dropped if the
+      // player has since come by that thing themselves.
+      const owned = payload.payoff !== null && listDiscovered(player).some((entry) => entry.id === payload.payoff!.entryId);
+      if (payload.payoff && parting && person && HELPFUL.includes(choice.type) && !owned) {
+        const entry = data.entries.get(payload.payoff.entryId)!;
+        const named = { id: entry.id, name: entry.name };
+        if (payload.payoff.kind === "request") {
+          const id = store.addRequest(player, { personId: person.id, eventId: event.id, entryId: entry.id, ask: parting, gold: payload.payoff.gold });
+          request = { id, from: person.name, ask: parting, entry: named, gold: payload.payoff.gold, state: "open" };
+        } else if (payload.payoff.kind === "hint") {
+          store.addHint(player, entry.id, payload.payoff.recipe, person.name);
+          hint = { entry: named, recipe: payload.payoff.recipe, from: person.name };
+        } else {
+          // A gift is the player's from now on, but it was not made, so it pays no discovery gold.
+          store.addLedger(player, 0, "gift", entry.id);
+          store.addDiscovery(player, entry.id);
+          gift = named;
+        }
+      }
+
+      const outcome = parting && (request || hint || gift) ? `${choice.outcome} ${parting}` : choice.outcome;
+      store.resolveEvent(event.id, choice.type, effects, choice.outcome);
+      retireExtraPeople(player);
+      const rewards = progress.settle(player);
+      if (payload.free) return { outcome, effects, next: null, request, hint, gift, rewards, ...NO_TURN };
+      store.setVisitorDay(player, today);
+      return { outcome, effects, next: null, request, hint, gift, rewards, ...day.spend(player, "visitor", cost) };
+    });
   }
 
   // The player's answer to the beat in front of them. The story is never read to decide what it
@@ -517,9 +523,9 @@ export function createEvents(deps: {
       const event = pendingEvent(player);
       if (!event) throw new RuleError("Nothing is waiting on you right now.");
       const payload = event.payload as Payload;
-      // Sitting with the day's visitor is an evening action. The candle is taken when the
+      // Sitting with the day's visitor is an evening action. The hourglass is taken when the
       // conversation ends, so night never falls in the middle of one.
-      if (!payload.free) day.check(player, cost);
+      if (!payload.free) day.check(player, "visitor", cost);
       if (expectedBeat !== undefined && expectedBeat !== payload.beat) throw new RuleError("That moment has passed.");
       const beat = payload.beat === 2 && payload.heart ? { written: payload.heart, types: payload.responseTypes } : { written: payload.arrival, types: payload.openingTypes };
       if (!beat.types.includes(type)) throw new RuleError("That is not one of the choices.");
@@ -535,10 +541,13 @@ export function createEvents(deps: {
       // Use the beat written ahead for this choice if there is one. Otherwise write it now.
       const draft = payload.drafts?.[type] ?? (await writeHeart(player, event, payload, warmed, choice));
       // Nothing is changed until the next beat exists, so a failed write can simply be tried again.
-      store.updatePerson(person.id, { fondness: warmed.fondness });
-      const next: Payload = { ...payload, ...draft, beat: 2, opening: { ...choice, effects }, drafts: undefined };
-      store.updateEvent(event.id, next, next.heart!.sceneSummary);
-      return { outcome: choice.outcome, effects, next: toView(player, { ...event, payload: next }), request: null, hint: null, gift: null, rewards: progress.settle(player), ...NO_TURN };
+      // Once it does, the changes go in together.
+      return store.atomically(() => {
+        store.updatePerson(person.id, { fondness: warmed.fondness });
+        const next: Payload = { ...payload, ...draft, beat: 2, opening: { ...choice, effects }, drafts: undefined };
+        store.updateEvent(event.id, next, next.heart!.sceneSummary);
+        return { outcome: choice.outcome, effects, next: toView(player, { ...event, payload: next }), request: null, hint: null, gift: null, rewards: progress.settle(player), ...NO_TURN };
+      });
     };
     if (!needsWriting) return answer();
     answering.add(player);
@@ -576,7 +585,7 @@ export function createEvents(deps: {
   }
 
   // For testing: writes a fresh event right now, at any time of day. It is not the day's visitor
-  // and costs no candle. An event already waiting is thrown away first, along with a person it
+  // and costs no hourglass. An event already waiting is thrown away first, along with a person it
   // introduced. The result is a real event: answering it changes gold, standing, and fondness as usual.
   async function test(player: string, seedId?: string): Promise<{ event: EventView | null; seed: string }> {
     const known = ["repeat", ...data.eventSeeds.map((seed) => seed.id)];

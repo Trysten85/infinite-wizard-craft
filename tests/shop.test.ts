@@ -159,6 +159,7 @@ describe("tailored slots", () => {
     const game = newGame();
     for (const id of ["person", "forge", "farmer", "blacksmith"]) game.store.addDiscovery("ann", id);
     // Farmer was discovered first, and Blacksmith last. It is the one taken up that counts.
+    game.store.addTaught("ann", "farmer");
     game.progress.chooseJob("ann", "farmer");
     const pick = tailored(game).find((slot) => slot.reason.startsWith("Stock for a"));
     expect(pick?.reason).toBe("Stock for a Farmer.");

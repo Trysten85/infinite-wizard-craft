@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { buildGameData, readGameFiles, xpForTier } from "../src/server/gameData";
 import { xpToReach } from "../src/server/progress";
+import { castXpAtLevel } from "../src/shared/cast";
 import type { Store } from "../src/server/store";
 import type { GameEntry, Quest } from "../src/shared/schema";
 import { data, newGame, TO_FIRE_BOLT } from "./helpers";
@@ -33,9 +34,10 @@ describe("the quest list", () => {
     for (const id of ["first-combine", "first-focus", "first-cantrip", "first-learned", "level-two", "component", "first-job"]) expect(ids).toContain(id);
   });
 
-  it("pays about two fifths of the XP each level takes", () => {
+  it("pays about two fifths of the XP each level takes, the cast's lessons and story beats included", () => {
     for (const level of levels.slice(0, -1)) {
-      const fromQuests = data.quests.filter((quest) => quest.level === level).reduce((total, quest) => total + quest.xp, 0);
+      const fromQuests =
+        data.quests.filter((quest) => quest.level === level).reduce((total, quest) => total + quest.xp, 0) + castXpAtLevel(data.cast, level);
       const share = fromQuests / (level * xpStep);
       expect(share, `level ${level}`).toBeGreaterThanOrEqual(0.35);
       expect(share, `level ${level}`).toBeLessThanOrEqual(0.45);

@@ -1,10 +1,11 @@
 import type { Balance, GameEntry, PlayerProgress, Quest, QuestProgress, RequestView, Rewards } from "../shared/schema";
 import { dayView, shiftOpen, visitorDue } from "../shared/day";
+import { isTaught, lessonFor, openBeats } from "../shared/cast";
 import { extraDiscoveryGold } from "../shared/town";
 import { RuleError } from "./combiner";
 import { learnCostForTier, levelForSpellTier, type GameData } from "./gameData";
 import type { Store } from "./store";
-import { extraCandles, perksGiven, regularIds, standingBuildings, tonightView } from "./town";
+import { extraTime, perksGiven, regularIds, standingBuildings, tonightView } from "./town";
 
 export type ProgressService = ReturnType<typeof createProgress>;
 
@@ -52,18 +53,32 @@ export function createProgress(deps: {
 }) {
   const { data, store, listDiscovered, eventsWrittenAhead = false } = deps;
   const starting = new Set(data.balance.startingEntries);
+  // Every trade's lesson, the cast person's own or the one code builds. Paid like quests, under
+  // the same ledger reason, so a quest can wait on one.
+  const lessons = [...data.jobs.values()].flatMap((job) => lessonFor(job, data.cast).map((quest) => ({ job: job.id, quest })));
+  const beats = data.cast.people.flatMap((person) => person.beats);
+  const beatXp = (id: string) => {
+    const beat = beats.find((item) => item.id === id);
+    return beat?.reward.kind === "gold" ? beat.reward.xp : 0;
+  };
+  const starters = new Set([...data.jobs.values()].filter((job) => job.starter).map((job) => job.id));
 
   function measure(player: string) {
     const entries = listDiscovered(player);
     const found = entries.filter((entry) => !starting.has(entry.id));
     const stats = store.getStats(player);
     const paid = new Set(store.getLedgerRefs(player, "quest"));
-    const fromQuests = data.quests.reduce((total, quest) => total + (paid.has(quest.id) ? quest.xp : 0), 0);
+    const beatsDone = new Set(store.getLedgerRefs(player, "beat"));
+    const fromQuests =
+      data.quests.reduce((total, quest) => total + (paid.has(quest.id) ? quest.xp : 0), 0) +
+      lessons.reduce((total, { quest }) => total + (paid.has(quest.id) ? quest.xp : 0), 0) +
+      [...beatsDone].reduce((total, id) => total + beatXp(id), 0);
     const earned = found.reduce((total, entry) => total + entry.xp, 0) + fromQuests + store.getShiftXp(player) + stats.bonusXp;
     // What the player is short of the level they had already reached, if anything.
     const short = Math.max(0, xpToReach(stats.lastLevel, data.balance) - earned);
     const xp = earned + short;
     const learned = store.getLearned(player);
+    const people = store.listPeople(player);
     // Things bought or given were not made by the player.
     const handed = new Set([...store.getLedgerRefs(player, "shop"), ...store.getLedgerRefs(player, "gift")]);
     return {
@@ -75,11 +90,15 @@ export function createProgress(deps: {
       learned,
       learnedSpells: learned.map((id) => data.entries.get(id)).filter((entry) => entry !== undefined),
       paid,
+      beatsDone,
       events: store.countResolvedEvents(player),
       bought: store.getLedgerRefs(player, "shop").length,
       // The town: people who have arrived, plots owned, what stands on them, evenings spent.
       // Regulars and enchantments are counted from the evening's actions once those exist.
-      townsfolk: store.listPeople(player).filter((person) => person.job !== null).length,
+      townsfolk: people.filter((person) => person.job !== null).length,
+      // Townsfolk by job, for Fondness, and requests filled, for things made for someone.
+      people: people.filter((person) => person.job !== null),
+      requestsFilled: store.listRequests(player).filter((request) => request.state === "done"),
       plots: store.listPlots(player),
       evenings: store.countEvenings(player),
       regulars: regularIds(data, store, player).size,
@@ -102,7 +121,7 @@ export function createProgress(deps: {
       case "buildings":
         return { have: standing.filter((plot) => plot.tier >= (condition.tier ?? 1)).length, need: count };
       case "built":
-        return { have: standing.some((plot) => plot.building === condition.building) ? 1 : 0, need: 1 };
+        return { have: standing.some((plot) => plot.building === condition.building && plot.tier >= (condition.tier ?? 1)) ? 1 : 0, need: 1 };
       case "evenings":
         return { have: state.evenings, need: count };
       case "regulars":
@@ -148,6 +167,18 @@ export function createProgress(deps: {
         return { have: state.events, need: condition.count };
       case "bought":
         return { have: state.bought, need: condition.count };
+      case "quest-done":
+        return { have: state.paid.has(condition.quest) ? 1 : 0, need: 1 };
+      case "fondness": {
+        // Met or not. Fondness can fall below zero, so it does not read as a count.
+        const person = state.people.find((each) => each.job === condition.job);
+        return { have: person && person.fondness >= condition.fondness ? 1 : 0, need: 1 };
+      }
+      case "requests": {
+        const people = new Map(state.people.map((person) => [person.id, person]));
+        const filled = state.requestsFilled.filter((request) => condition.job === undefined || people.get(request.personId)?.job === condition.job);
+        return { have: filled.length, need: condition.count };
+      }
     }
     // A condition type this does not know yet is never met, and never blocks anything.
     return { have: 0, need: 1 };
@@ -161,63 +192,98 @@ export function createProgress(deps: {
   // Pays out anything the player has earned and not yet been paid for: gold for discoveries made
   // by combining, quests newly completed, and requests newly filled. Safe to call any number of times.
   function settle(player: string): Rewards {
-    const rewards: Rewards = { gold: 0, quests: [] };
-    const discovered = listDiscovered(player);
-    // Things bought or given were not made by the player, so they pay no discovery gold.
-    const bought = new Set([...store.getLedgerRefs(player, "shop"), ...store.getLedgerRefs(player, "gift")]);
-    // What has been paid already is read once. Asking the ledger about each thing in turn is slow.
-    const paid = new Set(store.getLedgerRefs(player, "discovery"));
-    // Buildings that pay extra for discoveries of their kind, as they stand at this moment.
-    const paying = perksGiven(standingBuildings(data, store, player), "discovery-gold");
-    const meal = store.getMeal(player, store.getDay(player).state.number - 1);
-    for (const entry of discovered) {
-      if (starting.has(entry.id) || bought.has(entry.id) || paid.has(entry.id)) continue;
-      const gold = discoveryGold(entry, data.balance);
-      if (!store.addLedger(player, gold, "discovery", entry.id)) continue;
-      rewards.gold += gold;
-      // A meal at the Tavern last night makes today's discoveries pay more, in gold and in XP.
-      if (meal) {
-        const more = Math.ceil(gold * meal.lift - 1e-9);
-        if (more > 0 && store.addLedger(player, more, "meal", entry.id)) rewards.gold += more;
-        const moreXp = Math.ceil(entry.xp * meal.lift - 1e-9);
-        if (moreXp > 0) store.changeStats(player, { bonusXp: moreXp });
+    return store.atomically(() => {
+      const rewards: Rewards = { gold: 0, quests: [] };
+      const discovered = listDiscovered(player);
+      // Things bought or given were not made by the player, so they pay no discovery gold.
+      const bought = new Set([...store.getLedgerRefs(player, "shop"), ...store.getLedgerRefs(player, "gift")]);
+      // What has been paid already is read once. Asking the ledger about each thing in turn is slow.
+      const paid = new Set(store.getLedgerRefs(player, "discovery"));
+      // Buildings that pay extra for discoveries of their kind, as they stand at this moment.
+      const paying = perksGiven(standingBuildings(data, store, player), "discovery-gold");
+      const meal = store.getMeal(player, store.getDay(player).state.number - 1);
+      for (const entry of discovered) {
+        if (starting.has(entry.id) || bought.has(entry.id) || paid.has(entry.id)) continue;
+        const gold = discoveryGold(entry, data.balance);
+        if (!store.addLedger(player, gold, "discovery", entry.id)) continue;
+        rewards.gold += gold;
+        // A meal at the Tavern last night makes today's discoveries pay more, in gold and in XP.
+        if (meal) {
+          const more = Math.ceil(gold * meal.lift - 1e-9);
+          if (more > 0 && store.addLedger(player, more, "meal", entry.id)) rewards.gold += more;
+          const moreXp = Math.ceil(entry.xp * meal.lift - 1e-9);
+          if (moreXp > 0) store.changeStats(player, { bonusXp: moreXp });
+        }
+        const extra = extraDiscoveryGold(gold, entry.tags, paying);
+        if (extra > 0 && store.addLedger(player, extra, "perk", entry.id)) rewards.gold += extra;
       }
-      const extra = extraDiscoveryGold(gold, entry.tags, paying);
-      if (extra > 0 && store.addLedger(player, extra, "perk", entry.id)) rewards.gold += extra;
-    }
-    const lastLevel = store.getStats(player).lastLevel;
-    // A quest pays once its condition is met and the player has reached its level. Its XP can
-    // raise that level, which opens more quests, so this goes round until a pass pays nothing.
-    let state = measure(player);
-    for (let paidAny = true; paidAny; ) {
-      paidAny = false;
-      for (const quest of data.quests) {
-        if (state.paid.has(quest.id) || quest.level > state.level || !isDone(quest, state)) continue;
-        if (!store.addLedger(player, quest.gold, "quest", quest.id)) continue;
-        rewards.gold += quest.gold;
-        rewards.quests.push({ id: quest.id, title: quest.title, gold: quest.gold, xp: quest.xp });
-        paidAny = true;
+      // A request is filled the moment the player has the thing, however they came by it. This
+      // comes before the quests, since a quest may count requests filled or the Fondness they bring.
+      const have = new Set(discovered.map((entry) => entry.id));
+      const people = new Map(store.listPeople(player).map((person) => [person.id, person]));
+      for (const request of store.listRequests(player)) {
+        if (request.state !== "open" || !have.has(request.entryId)) continue;
+        store.finishRequest(request.id);
+        store.addLedger(player, request.gold, "request", String(request.id));
+        store.changeStats(player, { rep: data.balance.events.request.rep });
+        const person = people.get(request.personId);
+        if (person) store.updatePerson(person.id, { fondness: person.fondness + data.balance.events.request.fondness });
+        rewards.gold += request.gold;
+        rewards.quests.push({ id: `request-${request.id}`, title: `A favor for ${person?.name ?? "a friend"}`, gold: request.gold, xp: 0 });
       }
-      if (paidAny) state = measure(player);
-    }
-    // Whatever the player is still short of their old level is made up for good, so that the
-    // next XP they earn counts on top of it.
-    if (state.short > 0) store.changeStats(player, { bonusXp: state.short });
-    // A request is filled the moment the player has the thing, however they came by it.
-    const have = new Set(discovered.map((entry) => entry.id));
-    const people = new Map(store.listPeople(player).map((person) => [person.id, person]));
-    for (const request of store.listRequests(player)) {
-      if (request.state !== "open" || !have.has(request.entryId)) continue;
-      store.finishRequest(request.id);
-      store.addLedger(player, request.gold, "request", String(request.id));
-      store.changeStats(player, { rep: data.balance.events.request.rep });
-      const person = people.get(request.personId);
-      if (person) store.updatePerson(person.id, { fondness: person.fondness + data.balance.events.request.fondness });
-      rewards.gold += request.gold;
-      rewards.quests.push({ id: `request-${request.id}`, title: `A favor for ${person?.name ?? "a friend"}`, gold: request.gold, xp: 0 });
-    }
-    if (state.level > lastLevel) store.changeStats(player, { lastLevel: state.level });
-    return rewards;
+      const lastLevel = store.getStats(player).lastLevel;
+      // A quest pays once its condition is met and the player has reached its level. Its XP can
+      // raise that level, which opens more quests, so this goes round until a pass pays nothing.
+      let state = measure(player);
+      for (let paidAny = true; paidAny; ) {
+        paidAny = false;
+        // A trade's lesson counts once the person who teaches it has arrived.
+        const arrived = new Set(state.people.map((person) => person.job));
+        const due = [...data.quests, ...lessons.filter(({ job }) => arrived.has(job)).map(({ quest }) => quest)];
+        for (const quest of due) {
+          if (state.paid.has(quest.id) || quest.level > state.level || !isDone(quest, state)) continue;
+          if (!store.addLedger(player, quest.gold, "quest", quest.id)) continue;
+          rewards.gold += quest.gold;
+          rewards.quests.push({ id: quest.id, title: quest.title, gold: quest.gold, xp: quest.xp });
+          paidAny = true;
+        }
+        // A story beat is played once it is open (its Fondness gate, and the beats it waits on),
+        // the player has reached its level, and its condition, if it has one, is met. Code pays
+        // it; the model only writes the words.
+        for (const person of data.cast.people) {
+          const here = state.people.find((each) => each.job === person.job);
+          if (!here) continue;
+          for (const id of openBeats(person, here.fondness, state.beatsDone)) {
+            const beat = person.beats.find((item) => item.id === id)!;
+            if (beat.level > state.level) continue;
+            if (beat.done) {
+              const { have, need } = measureCondition(beat.done, state);
+              if (have < need) continue;
+            }
+            const gold = beat.reward.kind === "gold" ? beat.reward.gold : 0;
+            if (!store.addLedger(player, gold, "beat", beat.id)) continue;
+            rewards.gold += gold;
+            rewards.quests.push({ id: beat.id, title: beat.title, gold, xp: beatXp(beat.id) });
+            paidAny = true;
+          }
+        }
+        if (paidAny) state = measure(player);
+      }
+      // A trade is taught once its person's lesson is done and their Fondness has reached
+      // `town.teachAt`. Taught is for good: Fondness falling later does not take it back.
+      const taught = new Set(store.listTaught(player));
+      for (const person of state.people) {
+        const job = person.job!;
+        if (taught.has(job) || !data.jobs.has(job)) continue;
+        const lessonDone = lessons.filter((lesson) => lesson.job === job).every(({ quest }) => state.paid.has(quest.id));
+        if (isTaught({ starter: starters.has(job), held: false, lessonDone, fondness: person.fondness }, data.balance.town)) store.addTaught(player, job);
+      }
+      // Whatever the player is still short of their old level is made up for good, so that the
+      // next XP they earn counts on top of it.
+      if (state.short > 0) store.changeStats(player, { bonusXp: state.short });
+      if (state.level > lastLevel) store.changeStats(player, { lastLevel: state.level });
+      return rewards;
+    });
   }
 
   function listRequestViews(player: string): RequestView[] {
@@ -262,6 +328,12 @@ export function createProgress(deps: {
     };
   }
 
+  // Whether a trade has been taught: the starter job always is, and so is one taught since (or
+  // held by a saved game before trades were taught).
+  function isJobTaught(player: string, job: string): boolean {
+    return starters.has(job) || store.listTaught(player).includes(job);
+  }
+
   // The job a player has taken up, as long as it is still one they have discovered.
   function jobOf(player: string, jobId: string | null): { id: string; name: string } | null {
     const job = jobId ? data.jobs.get(jobId) : undefined;
@@ -271,10 +343,21 @@ export function createProgress(deps: {
   // Takes up a job the player has discovered. From then on it is the job events and the shop go
   // by, and it stays theirs until they take up a different one.
   function chooseJob(player: string, jobId: string): { job: { id: string; name: string }; rewards: Rewards } {
-    const job = listDiscovered(player).find((entry) => entry.id === jobId && entry.kind === "job");
-    if (!job) throw new RuleError("You can only take up a job you have discovered.");
-    store.setJob(player, job.id);
-    return { job: { id: job.id, name: job.name }, rewards: settle(player) };
+    return store.atomically(() => {
+      const job = listDiscovered(player).find((entry) => entry.id === jobId && entry.kind === "job");
+      if (!job) throw new RuleError("You can only take up a job you have discovered.");
+      if (!isJobTaught(player, job.id)) {
+        const person = store.listPeople(player).find((each) => each.job === job.id);
+        throw new RuleError(
+          person
+            ? `${person.name} has not taught you the trade yet. Finish their lesson and get to know them a little better.`
+            : `Nobody in town can teach you to be a ${job.name} yet.`,
+          "not-taught",
+        );
+      }
+      store.setJob(player, job.id);
+      return { job: { id: job.id, name: job.name }, rewards: settle(player) };
+    });
   }
 
   function standing(player: string) {
@@ -291,7 +374,7 @@ export function createProgress(deps: {
       job,
       // One shift a day, from noon until night, and only once a job is taken up.
       shiftReady: shiftOpen(day.state, data.balance.day, job !== null),
-      day: dayView(day.state, data.balance.day, { lastLedger: day.lastLedger, tonight: tonightView(data, store, player), extraCandles: extraCandles(standingBuildings(data, store, player)) }),
+      day: dayView(day.state, data.balance.day, { lastLedger: day.lastLedger, tonight: tonightView(data, store, player), extraTime: extraTime(standingBuildings(data, store, player)) }),
       rep: stats.rep,
       repBand: repBandFor(stats.rep, data.balance).name,
       requests: listRequestViews(player),
@@ -310,23 +393,31 @@ export function createProgress(deps: {
 
   // Learning costs gold, and needs a focus and the level the spell's tier asks for.
   function learn(player: string, spellId: string): { spell: GameEntry; cost: number; rewards: Rewards } {
-    const entries = listDiscovered(player);
-    const spell = entries.find((entry) => entry.id === spellId && entry.kind === "spell");
-    if (!spell) throw new RuleError("You can only learn a spell you have discovered.");
-    if (!entries.some((entry) => entry.kind === "focus")) throw new RuleError("You need a focus to learn a spell.", "no-focus");
-    if (store.getLearned(player).includes(spell.id)) throw new RuleError(`You already know ${spell.name}.`);
-    settle(player);
-    const needed = levelForSpellTier(spell.tier, data.balance);
-    const { level } = measure(player);
-    if (level < needed) throw new RuleError(`${spell.name} takes level ${needed} to learn. You are level ${level}.`, "level-too-low");
-    // The price the view showed: the combiner fills it for this player, from the town they have.
-    const cost = spell.learnPrice ?? spell.learnCost ?? learnCostForTier(spell.tier, data.balance);
-    const gold = store.getGold(player);
-    if (cost > gold) throw new RuleError(`Learning ${spell.name} costs ${cost} gold. You have ${gold}.`, "not-enough-gold");
-    store.addLedger(player, -cost, "learn", spell.id);
-    store.addLearned(player, spell.id);
-    return { spell, cost, rewards: settle(player) };
+    return store.atomically(() => {
+      const entries = listDiscovered(player);
+      const spell = entries.find((entry) => entry.id === spellId && entry.kind === "spell");
+      if (!spell) throw new RuleError("You can only learn a spell you have discovered.");
+      if (!entries.some((entry) => entry.kind === "focus")) throw new RuleError("You need a focus to learn a spell.", "no-focus");
+      if (store.getLearned(player).includes(spell.id)) throw new RuleError(`You already know ${spell.name}.`);
+      settle(player);
+      const needed = levelForSpellTier(spell.tier, data.balance);
+      const { level } = measure(player);
+      if (level < needed) throw new RuleError(`${spell.name} takes level ${needed} to learn. You are level ${level}.`, "level-too-low");
+      // The price the view showed: the combiner fills it for this player, from the town they have.
+      const cost = spell.learnPrice ?? spell.learnCost ?? learnCostForTier(spell.tier, data.balance);
+      const gold = store.getGold(player);
+      if (cost > gold) throw new RuleError(`Learning ${spell.name} costs ${cost} gold. You have ${gold}.`, "not-enough-gold");
+      store.addLedger(player, -cost, "learn", spell.id);
+      store.addLearned(player, spell.id);
+      return { spell, cost, rewards: settle(player) };
+    });
   }
 
-  return { getProgress, settle, learn, chooseJob };
+  // How far along each of these quests is, measured once for the lot (for lessons on the People tab).
+  function measureQuests(player: string, quests: Quest[]): { have: number; need: number }[] {
+    const state = measure(player);
+    return quests.map((quest) => measureCondition(quest.done, state));
+  }
+
+  return { getProgress, settle, learn, chooseJob, isJobTaught, measureQuests };
 }

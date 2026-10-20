@@ -14,6 +14,8 @@ import {
   comboSchema,
   dayTextSchema,
   townsfolkSchema,
+  castSchema,
+  type Cast,
   happeningSchema,
   entrySchema,
   eventSeedSchema,
@@ -53,6 +55,7 @@ import {
   type StorybookItem,
   type Tag,
 } from "../shared/schema";
+import { castProblems, fitCast, lessonFor } from "../shared/cast";
 import type { TownWords } from "../shared/town";
 
 export type GameData = {
@@ -71,6 +74,8 @@ export type GameData = {
   buildings: Map<string, Building>;
   // Names for the people who arrive in town, and what they say when called on.
   townsfolk: Townsfolk;
+  // The hand-written townsfolk, one for each trade that has one, with their lessons and stories.
+  cast: Cast;
   // The one-night happenings, in the order they are written.
   happenings: Happening[];
   quests: Quest[];
@@ -193,6 +198,7 @@ export function buildGameData(raw: {
   dayText?: DayText;
   buildings?: Building[];
   townsfolk?: Townsfolk;
+  cast?: Cast;
   happenings?: Happening[];
   quests?: Quest[];
   eventSeeds?: EventSeed[];
@@ -506,10 +512,22 @@ export function buildGameData(raw: {
       }
     }
   }
-  for (const quest of quests) {
+  // A quest may wait on a lesson as well as on another quest: a cast member's own, or the
+  // made-by-code one for a trade with no written person. Lessons are checked here too.
+  const lessons = jobs.flatMap((job) => lessonFor(job, raw.cast ?? { people: [] }));
+  const waitable = new Set([...questIds, ...lessons.map((lesson) => lesson.id)]);
+  for (const quest of [...quests, ...lessons]) {
     if (quest.done.type === "built" && buildings.length > 0 && !buildingIds.has(quest.done.building)) {
       problems.push(`quest "${quest.id}" asks for unknown building "${quest.done.building}"`);
     }
+    if ((quest.done.type === "built" || quest.done.type === "buildings") && (quest.done.tier ?? 1) > town.tiers.length) {
+      problems.push(`quest "${quest.id}" asks for a building at tier ${quest.done.tier}, and buildings have ${town.tiers.length}`);
+    }
+    if (quest.done.type === "quest-done" && (!waitable.has(quest.done.quest) || quest.done.quest === quest.id)) {
+      problems.push(`quest "${quest.id}" waits on unknown quest "${quest.done.quest}"`);
+    }
+    const job = quest.done.type === "fondness" || quest.done.type === "requests" ? quest.done.job : undefined;
+    if (job !== undefined && !jobs.some((each) => each.id === job)) problems.push(`quest "${quest.id}" names unknown job "${job}"`);
   }
   if (town.deedsByLevel.length !== balance.levels.cap) problems.push("town.deedsByLevel must have one number for each level");
   if (town.deedsByLevel.some((deeds, index) => deeds < (town.deedsByLevel[index - 1] ?? 0))) problems.push("town.deedsByLevel must never go down as the level rises");
@@ -521,6 +539,21 @@ export function buildGameData(raw: {
   if (raw.townsfolk) {
     const names = raw.townsfolk.people.map((person) => person.name);
     if (new Set(names).size !== names.length) problems.push("the townsfolk list names someone twice");
+  }
+  const cast = fitCast(raw.cast ?? { people: [] }, { jobs: new Set(jobs.map((job) => job.id)), buildings: new Set(buildings.map((building) => building.id)) });
+  {
+    problems.push(
+      ...castProblems(cast, {
+        jobs: new Set(jobs.map((job) => job.id)),
+        buildings: new Map(buildings.map((building) => [building.id, building])),
+        questIds: new Set((raw.quests ?? []).map((quest) => quest.id)),
+        pool: new Set((raw.townsfolk?.people ?? []).map((person) => person.name)),
+        level: balance.levels.cap,
+      }),
+    );
+  }
+  for (const [action, when] of Object.entries(balance.day.access)) {
+    if (when === "anytime" && balance.day.costs[action as keyof typeof balance.day.costs] > 0) problems.push(`day.costs.${action} must be 0, because day.access lets it be taken at any time`);
   }
   if (balance.day.noon >= balance.day.length) problems.push("the day's noon must come before its length, so that there is an afternoon");
   const { qualities, ranks } = balance.shifts;
@@ -594,11 +627,12 @@ export function buildGameData(raw: {
     jobSkins: new Map(jobSkins.map((skin) => [skin.job, skin])),
     buildings: new Map(buildings.map((building) => [building.id, building])),
     happenings: raw.happenings ?? [],
+    cast,
     townsfolk: raw.townsfolk ?? { people: [{ name: "Pip Thistlewood", pronoun: "they" }], callingLines: { default: ["{name} is glad of the company."] } },
     dayText: raw.dayText ?? {
       dusk: ["Dusk."],
       turnedIn: ["You turn in early."],
-      night: { "last-candle": ["The last candle is spent."], bed: ["You go to bed."], "midnight-oil": ["The evening has gone."] },
+      night: { "out-of-time": ["The sand has run out."], bed: ["You go to bed."], "midnight-oil": ["The evening has gone."] },
       morning: ["Morning."],
       shopRestocked: ["The shop has new stock."],
       newOrders: ["There are new orders on the board."],
@@ -647,6 +681,7 @@ export function readGameFiles(rootDir: string) {
     dayText: readJson(join(rootDir, "data/day-text.json"), dayTextSchema),
     buildings: readJson(join(rootDir, "data/buildings.json"), z.array(buildingSchema)),
     townsfolk: readJson(join(rootDir, "data/townsfolk.json"), townsfolkSchema),
+    cast: readJson(join(rootDir, "data/cast.json"), castSchema),
     happenings: readJson(join(rootDir, "data/tonight.json"), z.array(happeningSchema)),
     quests: readJson(join(rootDir, "data/quests.json"), z.array(questSchema)),
     eventSeeds: readJson(join(rootDir, "data/event-seeds.json"), z.array(eventSeedSchema)),

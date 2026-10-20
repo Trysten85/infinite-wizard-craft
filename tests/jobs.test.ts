@@ -112,6 +112,7 @@ describe("taking up a job", () => {
 
   it("is kept from then on, whatever jobs are discovered afterwards", () => {
     const game = withTwoJobs();
+    game.store.addTaught("ann", "farmer");
     expect(game.progress.chooseJob("ann", "farmer").job).toEqual({ id: "farmer", name: "Farmer" });
     expect(game.progress.getProgress("ann").job).toEqual({ id: "farmer", name: "Farmer" });
     game.store.addDiscovery("ann", "herb");
@@ -123,7 +124,9 @@ describe("taking up a job", () => {
 
   it("can be changed by taking up a different job", () => {
     const game = withTwoJobs();
+    game.store.addTaught("ann", "farmer");
     game.progress.chooseJob("ann", "farmer");
+    game.store.addTaught("ann", "blacksmith");
     game.progress.chooseJob("ann", "blacksmith");
     expect(game.progress.getProgress("ann").job).toEqual({ id: "blacksmith", name: "Blacksmith" });
   });
@@ -141,6 +144,7 @@ describe("taking up a job", () => {
     const discovered = game.combiner.listDiscovered("ann");
     const before = snapshotPlayer(data, discovered, 3, game.progress.getProgress("ann").job?.id ?? null);
     expect(before.job).toBeNull();
+    game.store.addTaught("ann", "farmer");
     game.progress.chooseJob("ann", "farmer");
     const after = snapshotPlayer(data, discovered, 3, game.progress.getProgress("ann").job?.id ?? null);
     expect(after.job).toMatchObject({ id: "farmer", wantedTags: data.jobs.get("farmer")!.wantedTags });
@@ -160,6 +164,7 @@ describe("taking up a job", () => {
     const game = newGame(1, { ...canned, write: (brief) => (briefs.push(brief), canned.write(brief)) });
     for (const id of ["person", "forge", "farmer", "blacksmith"]) game.store.addDiscovery("ann", id);
     await game.events.test("ann", "small_thief");
+    game.store.addTaught("ann", "farmer");
     game.progress.chooseJob("ann", "farmer");
     await game.events.test("ann", "small_thief");
     expect(briefs.map((brief) => brief.player.job)).toEqual([null, "Farmer"]);
@@ -171,6 +176,7 @@ describe("taking up a job", () => {
     const before = (await (await app.request("/api/players/ann")).json()) as Record<string, any>;
     expect(before.progress.job).toBeNull();
 
+    game.store.addTaught("ann", "blacksmith");
     const taken = await app.request("/api/players/ann/job", post({ job: "blacksmith" }));
     expect(taken.status).toBe(200);
     const body = (await taken.json()) as Record<string, any>;

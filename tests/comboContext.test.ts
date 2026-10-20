@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { benchSchema } from "../src/server/bench";
-import { createMadeFrom, exampleLine, pickExamples, storybookFor, thingName } from "../src/server/comboContext";
+import { approvedExamples, createMadeFrom, DONT_EXAMPLES, dontLine, exampleLine, pickExamples, storybookFor, thingName } from "../src/server/comboContext";
 import { openStore } from "../src/server/store";
 import { slugify, type GameEntry } from "../src/shared/schema";
 import { data } from "./helpers";
@@ -128,5 +128,35 @@ describe("the examples shown with a pair", () => {
     for (const example of examples.filter((item) => !item.authored)) {
       expect(tested.has(example.inputs.map((input) => input.toLowerCase()).sort().join("+")), exampleLine(example)).toBe(false);
     }
+  });
+});
+
+describe("examples from approved pairs", () => {
+  const approved = [
+    { inputs: ["air", "air"] as [string, string], result: "Wind", tags: ["utility", "energy"], status: "approved" },
+    { inputs: ["fire", "fire"] as [string, string], result: "Campfire", tags: ["utility"], status: "approved" },
+    { inputs: ["water", "water"] as [string, string], result: "Lake", tags: ["liquid"], status: "approved" },
+    { inputs: ["sand", "spirits"] as [string, string], result: null, tags: [], status: "needs_alternatives" },
+    { inputs: ["bat-guano", "bat-guano"] as [string, string], result: "Fertilizer", tags: ["reagent"], status: "approved" },
+    { inputs: ["earth", "earth"] as [string, string], result: "Fertilizer", tags: ["mineral"], status: "approved" },
+  ];
+  const shown = approvedExamples(data.entries, approved, new Set(["water+water"]));
+
+  it("leave out held-out pairs and unfinished ones, and carry tags and no description", () => {
+    expect(shown.map((example) => example.inputs.join(" + "))).not.toContain("Water + Water");
+    expect(shown.map((example) => example.result)).not.toContain(null);
+    expect(shown).toHaveLength(4);
+    expect(exampleLine(shown[0]!)).toBe("Air + Air = Wind (utility, energy)");
+  });
+
+  it("show a crowded result only to a pair that shares an ingredient, and one example a result", () => {
+    const crowded = new Set(["fertilizer"]);
+    expect(pickExamples(shown, entry("sand"), entry("water"), false, 8, crowded).map((example) => example.result)).not.toContain("Fertilizer");
+    expect(pickExamples(shown, entry("bat-guano"), entry("water"), false, 8, crowded).map((example) => example.result)).toContain("Fertilizer");
+    expect(pickExamples(shown, entry("sand"), entry("water"), false, 8).map((example) => example.result).filter((result) => result === "Fertilizer")).toHaveLength(1);
+  });
+
+  it("come with wrong answers to avoid, each beside the right one", () => {
+    expect(DONT_EXAMPLES.map(dontLine)).toEqual(["Water + Salt: not Brine. Saltwater.", "Steam + Salt: not Sea. Salt spray."]);
   });
 });

@@ -47,6 +47,10 @@ export type ComboDeps = {
   reservedIds?: Set<string>;
   // Good combinations to show beside the pair.
   examples?: ComboExample[];
+  // Results too many pairs give already, shown as examples only to a pair that shares an ingredient.
+  avoid?: Set<string>;
+  // Wrong answers shown beside the right ones, as lines.
+  dont?: string[];
   // What a thing was made from, and whether a name is already something another pair makes.
   madeFrom?: MadeFrom;
   exists?: (name: string) => boolean;
@@ -250,10 +254,11 @@ export function createComboSteps(deps: ComboDeps) {
         : "The result is an ordinary, real-world thing: a material, a place, a kind of weather, a food, a tool, a plant, or an animal.\nNo fairy-tale creatures and no enchanted objects.",
       ...(a.id === b.id ? [`Both ingredients are the same. The answer is what a great deal of ${a.name} makes, or the bigger thing it grows into.`] : []),
     ].join("\n\n");
-    const examples = pickExamples(deps.examples ?? [], a, b, magical, rules.examples);
+    const examples = pickExamples(deps.examples ?? [], a, b, magical, rules.examples, deps.avoid);
     // What the three questions are asked with: the examples, then the kind of thing wanted.
     const guidance = [
       ...(examples.length > 0 ? [["Good answers to other pairs, to show the kind of thing wanted:", ...examples.map((example) => `- ${exampleLine(example)}`)].join("\n")] : []),
+      ...(deps.dont && deps.dont.length > 0 ? [["Answers that look right and are not. Give the plain, real one:", ...deps.dont.map((line) => `- ${line}`)].join("\n")] : []),
       lane,
     ].join("\n\n");
     return { magical, pair, offered, usable, lane, guidance };
@@ -313,7 +318,7 @@ export function createComboSteps(deps: ComboDeps) {
     return describe(a, b, chosen, fairy !== null, reject);
   };
 
-  return { scene, pickStorybook, suggest, describe, generate };
+  return { scene, pickStorybook, suggest, describe, generate, tagsFor };
 }
 
 // Writes the words for a new combination, start to finish.

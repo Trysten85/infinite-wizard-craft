@@ -18,10 +18,12 @@ import { createProgress } from "./progress";
 import { RECIPE_KEY_FILE, renderRecipeKey } from "./recipeKey";
 import { createShifts } from "./shifts/service";
 import { createModelOrderWriter } from "./shifts/writer";
+import { createStory } from "./story/service";
+import { createModelStoryWriter } from "./story/writer";
 import { createShop } from "./shop";
 import { openStore } from "./store";
 import { discountShare } from "../shared/town";
-import { createTown, standingBuildings } from "./town";
+import { createTown, grantOwedStalls, standingBuildings } from "./town";
 
 const root = process.cwd();
 const port = Number(process.env.PORT ?? 3001);
@@ -56,6 +58,10 @@ const generate = createComboGenerator({
 });
 const blocklist = loadBlocklist(join(root, "Blocklist.md"));
 if (blocklist.size === 0) console.warn("Blocklist.md not found or empty: generated names are not being checked against it.");
+// Saves from before the town are given the stall they were using. Once, at start-up, so that no
+// read of the town ever writes.
+const granted = grantOwedStalls(data, store);
+if (granted.length > 0) console.log(`Gave the Market Stall to players saved before the town: ${granted.join(", ")}.`);
 const combiner = createCombiner({
   data,
   store,
@@ -71,9 +77,12 @@ const shop = createShop({ data, store, progress, listDiscovered: combiner.listDi
 const writer = createModelEventWriter({ client: turns.inBackground(createModelClient(model, "events")), log: store.logModelCall, voice, blocklist });
 const events = createEvents({ data, store, progress, day, listDiscovered: combiner.listDiscovered, writer, writeAhead: true });
 // Orders are put into words by the model, written ahead and checked against the board.
-const orderWriter = createModelOrderWriter({ client: turns.inBackground(createModelClient(model, "events")), log: store.logModelCall, voice, blocklist });
+const orderWriter = createModelOrderWriter({ client: turns.inBackground(createModelClient(model, "orders")), log: store.logModelCall, voice, blocklist });
 const shifts = createShifts({ data, store, progress, day, listDiscovered: combiner.listDiscovered, writer: orderWriter });
-const app = createApp(combiner, { progress, shop, day, town, events, shifts });
+// The words of the story beats a player has played, written out of sight from prompts/story.md.
+const storyWriter = createModelStoryWriter({ client: turns.inBackground(createModelClient(model, "events")), log: store.logModelCall, voice, story: readFileSync(join(root, "prompts/story.md"), "utf8"), blocklist });
+const story = createStory({ data, store, writer: storyWriter });
+const app = createApp(combiner, { progress, shop, day, town, events, shifts, story });
 
 serve({ fetch: app.fetch, port }, () => {
   const effort = model.effort.combos ? `, ${model.effort.combos} effort for combinations and ${model.effort.events} for events` : "";

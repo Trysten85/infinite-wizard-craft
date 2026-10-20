@@ -22,6 +22,9 @@ describe("orders that read alike", () => {
     expect(tooAlike("A quiet corner for someone who snores.", [other])).toMatch(/opens the same way/);
     expect(tooAlike("Two people who are not speaking need a corner, quiet.", [other])).toMatch(/much the same/);
     expect(tooAlike("The cellar door sticks, and the cask of something wet is behind it.", [other])).toBeNull();
+    // A short order is not refused for the couple of words it shares with a long one.
+    const long = "The baker on Crumb Lane wants bread that rises by itself, a cellar that stays cool, and a cat that keeps out of the flour.";
+    expect(tooAlike("Bread for the cellar party.", [long])).toBeNull();
   });
 
   it("are refused by the writer's check, which also wants every tag's words and no template phrase", () => {
@@ -50,6 +53,7 @@ describe("a board written ahead", () => {
   function working() {
     const game = newGame();
     for (const id of ["person", "spirits", "innkeeper"]) game.store.addDiscovery("ann", id);
+    game.store.addTaught("ann", "innkeeper");
     game.progress.chooseJob("ann", "innkeeper");
     game.setDay("ann", { sun: NOON });
     return game;
@@ -87,6 +91,7 @@ describe("the plain board", () => {
     for (let seed = 1; seed <= 30; seed++) {
       const game = newGame(seed);
       for (const id of ["person", "spirits", "innkeeper"]) game.store.addDiscovery("ann", id);
+      game.store.addTaught("ann", "innkeeper");
       game.progress.chooseJob("ann", "innkeeper");
       game.setDay("ann", { sun: NOON });
       const openers = game.shifts.board("ann").orders.map((order) => order.text.split(". It calls for")[0]);
@@ -103,6 +108,7 @@ describe("a board the model wrote", () => {
     for (let seed = 1; seed <= 20; seed++) {
       const game = newGame(seed);
       for (const id of ["person", "spirits", "innkeeper"]) game.store.addDiscovery("ann", id);
+      game.store.addTaught("ann", "innkeeper");
       game.progress.chooseJob("ann", "innkeeper");
       game.setDay("ann", { sun: NOON });
       // Words of the model's own, which never contain the subject they were drafted from.
@@ -127,6 +133,7 @@ describe("a board the model wrote", () => {
   it("tops a part-filled board up without repeating a subject still on it", async () => {
     const game = newGame();
     for (const id of ["person", "spirits", "innkeeper"]) game.store.addDiscovery("ann", id);
+    game.store.addTaught("ann", "innkeeper");
     game.progress.chooseJob("ann", "innkeeper");
     game.setDay("ann", { sun: NOON });
     // One order filled, so the board is topped up around the two still open.

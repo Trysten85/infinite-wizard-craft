@@ -1,7 +1,7 @@
 import type {
-  Building,
   BuildingView,
   DayView,
+  EveningAction,
   GameEntry,
   NeedView,
   QualityId,
@@ -11,7 +11,7 @@ import type {
 } from "../../src/shared/schema";
 import { qualityName } from "./day";
 import { QUALITIES } from "../../src/shared/schema";
-import { buildingQuality, isStockable, type Stocked } from "../../src/shared/town";
+import { buildingQuality, isStockable, type Stocked, type Wanting } from "../../src/shared/town";
 
 // The street, as the page words it. What a plot costs, what a building needs, and whether any of
 // it is allowed are the server's. This only reads what the server sent and says it plainly.
@@ -48,6 +48,8 @@ export function emptyPlot(town: TownView): Plot | null {
 }
 
 const count = (amount: number, one: string, many: string) => `${amount} ${amount === 1 ? one : many}`;
+// The evening's time, as the player sees it: hourglasses, with no word for them.
+const hourglasses = (amount: number) => `${amount} ⌛`;
 
 function listed(words: string[]): string {
   if (words.length < 3) return words.join(" and ");
@@ -58,15 +60,33 @@ export function needText(need: NeedView): string {
   return need.progress ? `${need.label} (${need.progress.have} of ${need.progress.need})` : need.label;
 }
 
-// Why something that takes gold and candles can't be done right now, or "" when it can.
-// With no day served there are no candles to count, and only the gold is checked.
-function costBlock(cost: { gold: number; candles: number }, gold: number, day: DayView | undefined): string {
-  if (gold < cost.gold) return `You need ${cost.gold - gold} more gold.`;
-  if (!day || cost.candles === 0) return "";
-  if (day.phase !== "evening") return `Building is evening work, and takes ${count(cost.candles, "candle", "candles")}. Come back at dusk.`;
-  if (day.candles < cost.candles)
-    return `This takes ${count(cost.candles, "candle", "candles")}, and you have ${day.candles} left tonight.`;
+// How each action is named when the page says it waits for dusk.
+const DOING: Record<EveningAction, string> = {
+  visitor: "Sitting with a visitor",
+  meal: "A meal at the Tavern",
+  call: "Calling on someone",
+  hand: "Lending a hand",
+  enchant: "Casting on a building",
+  upgrade: "Building",
+  build: "Building",
+};
+
+// Why an action can't be taken now for the hour or the time it takes, or "" when it can. This
+// words the server's `refuseAction`: an "anytime" action has no hour and takes nothing from the
+// evening, and an "evening" one waits for dusk and needs enough time left. `cost` is the action's
+// own unless something (a plan) says otherwise. With no day served there is nothing to check.
+export function eveningBlock(action: EveningAction, day: DayView | undefined, cost = day?.costs[action] ?? 0): string {
+  if (!day || day.access[action] === "anytime") return "";
+  const takes = cost > 0 ? `, and takes ${hourglasses(cost)}` : "";
+  if (day.phase !== "evening") return `${DOING[action]} is evening work${takes}. Come back at dusk.`;
+  if (day.time < cost) return `This takes ${hourglasses(cost)}, and you have ${hourglasses(day.time)} left tonight.`;
   return "";
+}
+
+// Why something that takes gold and may take time can't be done right now, or "" when it can.
+function costBlock(action: EveningAction, cost: { gold: number; time: number }, gold: number, day: DayView | undefined): string {
+  if (gold < cost.gold) return `You need ${cost.gold - gold} more gold.`;
+  return eveningBlock(action, day, cost.time);
 }
 
 function needsBlock(needs: NeedView[]): string {
@@ -80,7 +100,7 @@ export function planBlock(plan: Plan, gold: number, day: DayView | undefined, ha
   const needs = needsBlock(plan.needs);
   if (needs) return needs;
   if (!hasPlot) return "You need an empty plot to raise it on.";
-  const cost = costBlock({ gold: plan.price, candles: plan.candles }, gold, day);
+  const cost = costBlock("build", { gold: plan.price, time: plan.time }, gold, day);
   // The server knows of something this page does not, such as a level.
   return cost || (plan.ready ? "" : "Not ready yet.");
 }
@@ -90,7 +110,7 @@ export function upgradeBlock(next: NonNullable<BuildingView["next"]>, gold: numb
   if (level < next.level) return `Opens at level ${next.level}.`;
   const needs = needsBlock(next.needs);
   if (needs) return needs;
-  const cost = costBlock({ gold: next.gold, candles: day?.costs.upgrade ?? 0 }, gold, day);
+  const cost = costBlock("upgrade", { gold: next.gold, time: day?.costs.upgrade ?? 0 }, gold, day);
   return cost || (next.ready ? "" : "Not ready yet.");
 }
 
@@ -116,8 +136,8 @@ export function plotText(plot: Plot, state: PlotState, town: TownView, gold: num
 }
 
 // What putting a discovery on a shelf would do to a building, said in the order board's manner.
-// The page does not know the lifts or the rank bonus a building has tonight (they are the
-// server's), so both stocks are read at no lift. That is enough to say which way it would go.
+// Both stocks are read with the lifts and bonuses the server sent on the building, so the
+// preview gives the exact quality the shelf would.
 // `from` and `to` are the building's quality before and after, with the lifts and bonuses it has tonight.
 export type StockChange = { direction: "better" | "worse" | "same"; covers: string[]; from: QualityId; to: QualityId };
 
@@ -134,8 +154,9 @@ export function stockChange(
   const after = building.stock
     .map((shelf, index) => (index === slot ? carried : shelf.entry?.id === carried.id ? undefined : held(shelf.entry?.id)))
     .filter((entry): entry is GameEntry => !!entry);
-  // A quality is only read from a building's wants, so that is all the stand-in needs.
-  const reads = { wants: building.wants } as Building;
+  // A quality is read from the wants and nothing else, which is all `Wanting` asks for, so there
+  // is no whole `Building` to stand in for here.
+  const reads: Wanting = { wants: building.wants };
   // `lifts` is what is already applied tonight, so it goes in whole and no second hand is added.
   const extra = {
     rankBonus: building.rankBonus,
@@ -174,11 +195,7 @@ export function canStock(entry: GameEntry): boolean {
 // is the server's to say, and it does so in its own sentence.
 export function handBlock(building: BuildingView, day: DayView | undefined): string {
   if (building.stock.every((shelf) => shelf.entry === null)) return "Its shelves are bare, so a hand would change nothing.";
-  if (!day) return "";
-  const candles = count(day.costs.hand, "candle", "candles");
-  if (day.phase !== "evening") return `Lending a hand is evening work, and takes ${candles}. Come back at dusk.`;
-  if (day.candles < day.costs.hand) return `This takes ${candles}, and you have ${day.candles} left tonight.`;
-  return "";
+  return eveningBlock("hand", day);
 }
 
 // What asking to take part in tonight's happening is called, when it is taken by asking. The
@@ -194,15 +211,6 @@ export function servesMeals(building: { meals?: boolean } | null | undefined): b
   return building?.meals === true;
 }
 
-// Why an evening action costing this many candles can't be done now, or "" when it can.
-export function eveningBlock(candles: number, day: DayView | undefined): string {
-  if (!day || candles === 0) return "";
-  const cost = count(candles, "candle", "candles");
-  if (day.phase !== "evening") return `This is evening work, and takes ${cost}. Come back at dusk.`;
-  if (day.candles < candles) return `This takes ${cost}, and you have ${day.candles} left tonight.`;
-  return "";
-}
-
 // Where tonight's visitor sits. The server says so on the event itself; before it is in hand,
 // they are at the Tavern once somewhere serves meals, which is how the server seats them, and at
 // the door otherwise.
@@ -215,7 +223,7 @@ export function visitorPlace(event: { place?: "door" | "tavern" } | null, town: 
 // One line of what the evening offers: what it is, what it costs, and whether it can be done now.
 export type Offer = { id: string; label: string; cost: string; ok: boolean };
 
-// Everything tonight offers and what each costs, so the player can choose where the candles go.
+// Everything tonight offers and what each costs, so the player can choose where the time goes.
 // `have.event` is the visitor in hand, if one is, so the line agrees with their card about where
 // they are sitting.
 export function eveningOffers(
@@ -225,21 +233,20 @@ export function eveningOffers(
 ): Offer[] {
   const standing = town.plots.flatMap((plot) => (plot.building ? [plot.building] : []));
   const free = town.plots.some((plot) => plot.owned && !plot.building);
-  const row = (id: string, label: string, candles: number): Offer => ({
-    id,
-    label,
-    cost: candles === 0 ? "free" : count(candles, "candle", "candles"),
-    ok: eveningBlock(candles, day) === "",
-  });
+  // A row for one of the day's actions, priced and gated as the server would. `tonight` is not one.
+  const row = (id: EveningAction | "tonight", label: string): Offer => {
+    const time = id === "tonight" ? 0 : day.costs[id];
+    return { id, label, cost: time === 0 ? "free" : hourglasses(time), ok: id === "tonight" || eveningBlock(id, day) === "" };
+  };
   const offers: Offer[] = [];
   if (have.visitor)
-    offers.push(row("visitor", `Sit with tonight's visitor${visitorPlace(have.event ?? null, town) === "tavern" ? " at the Tavern" : ""}`, day.costs.visitor));
-  if (town.townsfolk.length > have.called) offers.push(row("call", "Call on someone in town", day.costs.call));
-  if (standing.some(servesMeals)) offers.push(row("meal", "A meal at the Tavern, for gold", day.costs.meal));
+    offers.push(row("visitor", `Sit with tonight's visitor${visitorPlace(have.event ?? null, town) === "tavern" ? " at the Tavern" : ""}`));
+  if (town.townsfolk.length > have.called) offers.push(row("call", "Call on someone in town"));
+  if (standing.some(servesMeals)) offers.push(row("meal", "A meal at the Tavern, for gold"));
   if (standing.some((building) => building.stock.some((shelf) => shelf.entry)))
-    offers.push(row("hand", "Lend a hand at a building", day.costs.hand));
-  if (standing.length > 0 && have.spells > 0) offers.push(row("enchant", "Cast a spell on a building", day.costs.enchant));
-  if (free && town.plans.some((plan) => plan.ready)) offers.push(row("build", "Raise a building", day.costs.build));
-  if (tonightAction(day.tonight)) offers.push(row("tonight", day.tonight!.name, 0));
+    offers.push(row("hand", "Lend a hand at a building"));
+  if (standing.length > 0 && have.spells > 0) offers.push(row("enchant", "Cast a spell on a building"));
+  if (free && town.plans.some((plan) => plan.ready)) offers.push(row("build", "Raise a building"));
+  if (tonightAction(day.tonight)) offers.push(row("tonight", day.tonight!.name));
   return offers;
 }

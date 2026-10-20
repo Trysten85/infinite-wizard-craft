@@ -1,0 +1,25 @@
+{
+  "note": "Pairs set aside to score a round against. Never seeded and never shown to the model as examples until the round is scored. Chosen by hash, 20 of the approved pairs.",
+  "keys": [
+    "crown+food",
+    "crown+gold",
+    "crown+tree",
+    "crystal+glass",
+    "crystal+tea",
+    "food+herb",
+    "food+person",
+    "food+salt",
+    "gold+gold",
+    "gold+spellbook",
+    "iron+iron",
+    "metal+wilds",
+    "mud+rotted-leaves",
+    "person+sound",
+    "person+water",
+    "rotted-leaves+water",
+    "rotted-leaves+wilds",
+    "tree+wilds",
+    "water+water",
+    "water+wilds"
+  ]
+}
