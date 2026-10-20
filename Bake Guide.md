@@ -241,11 +241,68 @@ npm run cache -- delete fire+mud # delete one, and anything built from it (back 
 npm run cache -- calls           # recent model calls made by the game
 ```
 
+## Round 2 (2026-10-18)
+
+Round 1's 727 drafts had attractors (Fertilizer 25 times), modern results, worn-out phrases, and
+marks that could not be trusted (86% scored 4 or 5). Round 2 is specified in `Combo Bake 2.md`
+and `Combo Review Handoff.md`. The rule that runs through it: **a human decides; the model's
+marks only order the queue.** `approve <mark>` now refuses unless you add `--i-know`.
+
+The order of work:
+
+| Step | Command | What it does |
+|---|---|---|
+| 1. Seed | `npm run bake -- seed` (`--dry` to look first) | Reads `data/approved-combos.json`. Sets each approved pair to `fix` (its name settled, its description still to be written), sets aside the 20 held-out pairs in `data/combo-heldout.json`, and leaves the pairs that need alternatives as drafts with a note. Backs up the drafts file to `var/baked-combos.before-seed-<date>.json`. Safe to run again. |
+| 2. Describe | `npm run bake -- redescribe` | New description for every `fix` row, under the game's rules (worn-out phrases and over-long text are sent back), then `ok`. A pair cleared without tags gets the model's, noted `tags proposed by the model: confirm`. Restart the server after. |
+| 3. Score | `npm run bake -- score --way all` | Runs the 20 held-out pairs plus Water + Salt and Steam + Salt through each way of making combinations and writes `var/bake/round2/score-<way>.md`: how often it gave your answer, attractors, banned results, sentence and phrase checks, seconds a pair. Writes nothing to the drafts. |
+| 4. Regenerate | `npm run bake -- --round2 --way <winner>` | Works the pairs that are still plain drafts, keeping its own record in `var/bake/round2/pairs.jsonl`. Leaves settled rows, held-out pairs, and rows waiting on alternatives alone. |
+| 5. Review | `npm run review` | The keyboard tool (below). |
+| 6. Fix up | `npm run bake -- redescribe`, then restart the server | Writes descriptions for what you fixed. |
+
+**The ways** (`--way`): `pipeline` is round 1's steps (candidates, ranking, description). `single`
+is one reasoning-first call: what each input is, three candidates with reasons, the choice, the
+result or `no_result`, and a rationale for the reviewer. `single-lean` is the same without the
+three reasoning fields. The score decides which to keep. The rationale is never an example or a label.
+
+**What the model is shown:** the hand-written examples plus your approved pairs (never the
+held-out ones, never the model's own old words), a results-already-crowded filter so a favourite
+answer is not planted in every prompt, and two "not this" lines (Water + Salt: not Brine,
+Saltwater; Steam + Salt: not Sea, Salt spray).
+
+**The gate, before you see a row.** A pair whose pick is flagged (after the age of steam, not a
+real word, only says what went in, a reason that names only one ingredient, too long, worn-out
+words, a name used too often) gives way to the next best candidate, up to `generation.gateTries`.
+If none passes, the first pick stays as a draft with a note `needs alternatives`. A single-call
+`no_result` is kept as a draft named Nothing for you to confirm with `x`.
+
+**The review tool** (`npm run review`). It shows the pair and the result, never the description.
+`y` keeps, `n` rejects (then a failure type, then five alternatives), `x` nothing happens, `1`-`5`
+picks an alternative, `c` types your own, `t` adds a note (put a joke here: it seeds comedy mode
+later), `s` skips, `q` quits. Each verdict is saved as you make it and logged to
+`var/bake/round2/review.jsonl`. The queue is: tags the model proposed, to confirm; pairs waiting
+on alternatives; Priority 1 (pairs of two base things, 54 of them); then a fixed random 50 of the
+rest, to estimate the error rate. If that sample is mostly fine, stop. Everything else is
+reviewed on use, not now.
+
+**Held-out pairs** are chosen once, by hash, and never seeded or shown to the model until the
+round is scored. After scoring, set `keys` in `data/combo-heldout.json` to `[]` and run `seed`
+again to bring them in with the rest.
+
+Acceptance checks are printed by `npm run bake -- triage` and the score reports: no name for more
+than 3 pairs, zero banned results, descriptions at most two sentences, worn-out words under 5%,
+Water + Salt is Saltwater, Steam + Salt is not Sea, and your held-out approval rising each round.
+Stop when it stops rising. Three to five rounds is a ceiling, not a target.
+
 ## Where the code is
 
 | File | What |
 |---|---|
-| `src/tools/bake.ts` | The command: run, pause, resume, status, review, approve, reject |
+| `src/tools/bake.ts` | The command: run, pause, resume, status, review, approve, reject, seed, redescribe, score |
+| `src/tools/review.ts` | The keyboard review tool (`npm run review`) |
+| `src/server/bakeSeed.ts` | Pure: which approved pairs are seeded, held out, or queued |
+| `src/server/bakeScore.ts` | Pure: scoring a round against the held-out pairs |
+| `src/server/comboSingle.ts` | The single reasoning-first call |
+| `src/server/reviewQueue.ts`, `reviewAlternatives.ts` | Review order, what a key does, and the five alternatives |
 | `src/server/bake.ts` | Works one pair and writes its record |
 | `src/server/bakePairs.ts` | Which pairs, in which order |
 | `src/server/bakeRank.ts` | The marking step, and how the pick is settled |

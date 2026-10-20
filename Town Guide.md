@@ -50,7 +50,7 @@ the player can see.
 
 | Code owns | AI owns (later; plain text from data files first) |
 |---|---|
-| The sun, the phase of the day, candles, when night falls | The line that opens the evening and the night ledger's remarks |
+| The sun, the phase of the day, hourglasses, when night falls | The line that opens the evening and the night ledger's remarks |
 | Plots, prices, deeds, what a building needs, tiers | A building's own name ("The Second Kettle") |
 | Stock slots, quality, Cheer, takings, perks | A townsperson's name and what they say when called on |
 | Which one-night happening, and its effect | How the happening reads |
@@ -65,7 +65,7 @@ The day is a budget of the player's own actions. It has four parts.
 |---|---|
 | **Morning** | The player crafts. Each new discovery made by combining moves the sun one notch |
 | **Noon** | The sun reaches `noon`. The order board opens: one shift today, at the player's job |
-| **Evening** | The sun reaches `length`. The street lights up and the player has `candles` to spend in town |
+| **Evening** | The sun reaches `length`. The street lights up and the player has `time` to spend in town |
 | **Night** | The day closes. The ledger shows what the town took in. A new morning begins |
 
 ### The sun
@@ -85,12 +85,12 @@ The day is a budget of the player's own actions. It has four parts.
 
 ### The evening
 
-At dusk the player has `candles` evening actions. An action costs one candle unless the table
+At dusk the player has `time` evening actions. An action costs one hourglass unless the table
 says otherwise.
 
-| Action | Candles | Needs | What it does |
+| Action | Hourglasses | Needs | What it does |
 |---|---|---|---|
-| Sit with a stranger | 1 | A visitor waiting | Plays tonight's event. At the door until a Tavern stands, then at the Tavern. This holds from the first slice: once the day is in, a visitor is only seen from dusk and costs a candle. The test-event route is a tool and is never gated |
+| Sit with a stranger | 1 | A visitor waiting | Plays tonight's event. At the door until a Tavern stands, then at the Tavern. This holds from the first slice: once the day is in, a visitor is only seen from dusk and costs an hourglass. The test-event route is a tool and is never gated |
 | A meal at the Tavern | 1 | A Tavern, gold | Tomorrow's discoveries pay more. One meal an evening |
 | Call on a townsperson | 1 | Someone to call on | Fondness up. See "Townsfolk and regulars" |
 | Lend a hand | 1 | A building | That building's quality is one step better tonight. Once per building per evening |
@@ -105,17 +105,17 @@ buying from the shop, taking up a job, learning a spell.
 
 Night falls on the first of these:
 
-1. The last candle is spent.
+1. The last hourglass is spent.
 2. The player goes to bed. This is offered from dusk.
 3. **The midnight oil:** the player makes `nightAfter` discoveries in a row after dusk without
-   spending a candle between them. Spending a candle starts the count again. The discovery that
-   brings dusk on does not count; the count starts with the next one. Unspent candles are gone.
+   spending an hourglass between them. Spending an hourglass starts the count again. The discovery that
+   brings dusk on does not count; the count starts with the next one. Unspent hourglasses are gone.
    The page shows the count running down, so this is never a surprise.
 
 A player who only wants to craft can do so all night. They miss the evening, and nothing else.
 
 **Turning in early:** from noon the player may call it a day. This does not bring night: it
-moves the sun straight to dusk, and the evening then has `earlyCandles` candles. Night falls
+moves the sun straight to dusk, and the evening then has `earlyTime` hourglasses. Night falls
 after that in one of the three ways above. This is the way out for a player who is stuck for new
 discoveries.
 
@@ -161,7 +161,7 @@ Some evenings carry a one-night happening. It is the only thing a player can mis
 | `pedlar` | A travelling pedlar sets down a pack | One material the player lacks, two or more steps deeper than anything they have made, is for sale, with or without a Market Stall |
 | `lantern-festival` | Lanterns are going up along the street | An enchantment cast tonight lasts twice as long |
 | `harvest-supper` | Long tables are out in the lane | Tonight's meal gives twice the lift |
-| `musician` | Someone is tuning a fiddle | The first call on a townsperson costs no candle and counts double |
+| `musician` | Someone is tuning a fiddle | The first call on a townsperson costs no hourglass and counts double |
 | `stargazer` | A stranger has a brass tube pointed at the sky | A free hint toward a spell the player can nearly make |
 
 ### Draft numbers (`day` in `config/balance.json`)
@@ -171,9 +171,9 @@ Some evenings carry a one-night happening. It is the only thing a player can mis
 | `length` | 10 | Notches from dawn to dusk |
 | `noon` | 4 | Notch at which the order board opens |
 | `shiftNotches` | 2 | Notches a shift moves the sun |
-| `candles` | 3 | Evening actions |
-| `earlyCandles` | 1 | Candles when the player turns in early |
-| `nightAfter` | 6 | Discoveries past dusk, with no candle spent, before night falls by itself |
+| `time` | 3 | Evening actions |
+| `earlyTime` | 1 | Hourglasses when the player turns in early |
+| `nightAfter` | 6 | Discoveries past dusk, with no hourglass spent, before night falls by itself |
 | `tonight.fromDay` | 4 | First day a one-night happening may appear |
 | `tonight.chance` | 0.25 | Chance each day, before the reputation band's shift |
 | `events.repBands[].tonightChance` | Wobbly -0.10, Fine 0, Liked +0.05, Beloved +0.10 | Added to `tonight.chance`. It takes the place of `eventEvery`. Set in slice 4 (E1) |
@@ -189,7 +189,7 @@ added up to a day of about ten discoveries, so this is a change of shape more th
 
 - The town is one street, drawn side-on. Plots run along it in a row.
 - **Plots are bought with gold,** the next one along each time, at `town.plotPrices`. The first
-  is free.
+  costs 10 gold and waits on the player's first job (Trysten, 2026-10-15).
 - **Level sets how many plots may be owned** (`town.deedsByLevel`). Gaining a level hands the
   player a deed in that night's ledger. This is what a level-up now gives.
 - A building, once raised, stays where it is. A full pixel-art town map comes later, so keep
@@ -197,7 +197,7 @@ added up to a day of about ten discoveries, so this is a change of shape more th
 
 | Key | Draft |
 |---|---|
-| `town.plotPrices` | 0, 30, 60, 100, 150, 210, 280, 360, 450 |
+| `town.plotPrices` | 10, 30, 60, 100, 150, 210, 280, 360, 450 |
 | `town.deedsByLevel` | 2, 3, 5, 7, 9 |
 
 ### Townsfolk bring the buildings
@@ -256,7 +256,7 @@ What each gives back to crafting, by tier:
 | Tavern | Meals, and the evening's stranger sits here | A free rumour (a hint) every 3 days | The meal's lift is half as big again |
 | Smithy | Extra gold for discoveries tagged metal, mineral, or forging | The same, larger | The same, larger |
 | Herb Garden | Extra gold for discoveries tagged plant, reagent, or healing | With an Alchemist in town it becomes the Alchemist's, and grows a gift every 4 days | Gifts every 2 days |
-| Wizard's Tower | Spells cost 25% less to learn | Enchantments last 2 days longer | One more candle each evening |
+| Wizard's Tower | Spells cost 25% less to learn | Enchantments last 2 days longer | One more hourglass each evening |
 
 - The Herb Garden's tier 2 also needs the Alchemist to have arrived. A tier may name a job this
   way (`needsJob`).
@@ -285,7 +285,7 @@ What each gives back to crafting, by tier:
 | `rumour` | every (days) |
 | `gift` | tags, every (days) |
 | `enchant-days` | days |
-| `candles` | count |
+| `time` | count |
 | `meals` | lift, and the gold a meal costs |
 
 ### Stock and quality
@@ -377,10 +377,138 @@ This is what learned spells are for, and what makes a higher spell tier worth re
 
 ### The Tavern's meal
 
-- Costs `5 x level` gold and one candle. One an evening.
+- Costs `5 x level` gold and one hourglass. One an evening.
 - **Tomorrow, discoveries pay 20% more gold and XP.** It ends at the next night.
 - The XP part brings levels a little sooner. Trysten has accepted that as the numbers stand, so
   `levels.xpStep` is left alone.
+
+## Townsfolk as neighbours (DRAFT, 2026-10-18)
+
+Trysten's direction: most of the town is open all day, and townsfolk work the way Terraria's do,
+with a story beat from Enshrouded. Every number below is a draft for `config/balance.json`. Open
+questions are on the board under "Questions for design" (N-tickets).
+
+### When things are open
+
+| Time | Open |
+|---|---|
+| Morning to dusk | Crafting, building and raising, stocking, enchanting, lending a hand, the meal, plots, learning, the shop, and the shift (noon to dusk) |
+| Dusk and night | The visitor, calling on people, tonight's happening, story scenes, and scenes between two townsfolk at the Tavern |
+| Closed at dusk | The shop and the order board |
+
+- Daytime actions cost no hourglass. Their limits are gold and once-a-day rules (a hand once a
+  building a day, one meal a day). A raise finishes overnight.
+- Hourglasses are the evening's budget for people: the visitor, a call, a story scene, listening in
+  on two townsfolk. Nothing is lost by skipping them.
+
+### Time and the hourglass (replaces candles; Trysten, 2026-10-19)
+
+Candles were unclear about timing. The day is now shown as a sun-and-moon cycle, and the evening's
+budget as hourglasses with no name: "You have 2 ⌛ left." In code it is `time`.
+
+- **The sun** crosses the day, one notch for each new discovery and more for a shift. Noon is
+  marked on the track, and the Dusk end says "The shop and the order board close here."
+- **At dusk the moon** takes the sun's place, and the evening's ⌛ sit beside it. Sitting with the
+  visitor or calling on someone takes 1 ⌛. Night falls when the time is gone ("The sand has run
+  out"), when the player goes to bed, or after the midnight oil.
+- Turning in early gives a shorter evening, `day.earlyTime`.
+- **Names in code:** `day.time`, `day.earlyTime`, `timeLeft`, `timeMax`, `spendTime`, the `time`
+  perk, the refusal `no-time`, and the night reason `out-of-time`. The database column is still
+  `candles_spent`, and a saved ledger that says `last-candle` is read as `out-of-time`.
+- The in-game Candle item is a thing like any other and is not part of this.
+
+### Hiring (Trysten, 2026-10-19: replaces the arrival and homeless rules below)
+
+The building comes first, then the person.
+
+- **Craft the trade, then build.** Making a blacksmith gives the Smithy's plan. The player buys a
+  plot and raises the Smithy. There is no one in town for it yet.
+- **The next morning, someone comes to work there.** The building attracts them: one person to a
+  building, the hand-written person for that trade, with their arrival gate still applying. There
+  are no homeless townsfolk and nobody leaves at dusk.
+- **Hiring costs gold once,** more for a higher tier (`town.hireByTier`, draft 20, 50, 100). Raising a
+  staffed building tops the hire up by the difference. A hired person runs the building. An
+  unstaffed building earns nothing, for now (Trysten, 2026-10-19).
+- **They pay back every day.** A staffed building pays its takings each night, and more at higher
+  Fondness or a better building, so the hire is an investment.
+- **Apprenticeship is a choice.** Their lesson and Fondness (`town.teachAt`) let the player take
+  up the trade and work its shift. The player may hire and never apprentice.
+- The first plot asks only for a *discovered* trade (its plan), not for an arrived person.
+
+### Arrival, homes, and what a person gives (OLD: the arrival and homeless parts are superseded by "Hiring")
+
+- **Arrival:** discovering a job brings its plan, as now. The person arrives when their own
+  condition is also met, written per person in `data/townsfolk.json` (a level, a building
+  standing, a number of townsfolk, or a quest done). A few come through a visitor event
+  instead and settle after a quest. These are the town's Villagers: a name, side quests, and no
+  workshop.
+- **Homes:** a person's building is their home. Until it stands they are **homeless**: they wait
+  at the Tavern's door by day, give the worst prices, and leave at dusk, to come back the next
+  morning. Raising their building houses them for good.
+- **Their service:** a housed person opens something past the building's perk: commissions on
+  the order board in their job's tags, a hint toward a recipe, or a reforge of a stocked thing.
+  Each is data, and code decides the reward.
+- **Neighbours:** each job likes some jobs and dislikes others (data). A liked neighbour on the
+  next plot or two lifts that building's takings and its owner's Cheer a little, and a disliked
+  one lowers them by the same amount, never below zero. Position is the plot index.
+
+### Learning a trade
+
+- A job is taken up only once its person has **taught** it, so the shift for that job stays shut
+  until then. The starter job (the Wizard) is taught from the first day. A save that already has
+  a job keeps it.
+- Teaching needs Fondness `town.teachAt` (draft 4, below `town.regularAt`) and the person's first
+  lesson done: one or two quests of theirs, such as crafting something they ask for or bringing
+  a named material. Until then the person can be called on but gives no service.
+- A job with no written person yet gets a lesson built by code from its `wantedTags` (make two
+  things with those tags, then call on them), so nothing waits on writing.
+
+### The cast is hand-written
+
+- Named townsfolk are **data, not model output**: `data/townsfolk.json` (or `data/cast.json`),
+  checked by a schema in `src/shared/schema.ts`. Each has an id, a name, a pronoun, a job, a
+  one-line personality, liked and disliked jobs, an arrival condition, lesson quests, storyline
+  beats with Fondness gates, and rewards. The model writes only the lines around them.
+- The six buildings' people come first. The 30-name pool stays for Villagers and for jobs with no
+  written person.
+- The Story lane owns this content. Rules owns the schema and the maths, Backend serves it.
+
+### The People tab
+
+A bookmark beside Town. It lists everyone in town, housed or homeless, with Fondness against the
+regular and taught thresholds, their home (or "waiting at the Tavern"), their service, what they
+like, open quests with progress, and a hint of the next story beat (never the answer). One route,
+`GET /town/people`, builds it from the same rules.
+
+### Storylines and scenes
+
+- Each craftsperson has a storyline of 3 to 5 beats, in new data. Code owns the objective, the
+  Fondness gate and the reward. The model writes the lines.
+- A beat's reward is a tier unlock, a new commission, or a perk, and a beat may wait on another
+  person's beat, so the town depends on itself.
+- Storyline quests keep to the quest rule: all quests together pay two fifths of each level's XP.
+- At night two housed townsfolk may meet at the Tavern. Code picks the pair from their likes
+  and the outcome (a friendship, a rumour, a small gift to the town). The model writes the
+  exchange ahead, in the background, cached by pair. Listening in costs an hourglass, and the
+  result is in the morning ledger either way.
+
+### Essential buildings (DRAFT, Trysten 2026-10-19)
+
+`utility` is not a tag a building wants. It is a property of the building: does the town need it?
+The test is "would it shut during a fantasy plague?" A building that supplies goods or services
+people cannot do without is **essential**. One that people enjoy is not.
+
+| Essential | Not essential |
+|---|---|
+| Market Stall, Farm, Smithy, Herb Garden | Tavern, Wizard's Tower (and later a tea shop) |
+
+- It is a flag in `data/buildings.json` (`essential: true`), checked by the schema.
+- **Closures:** some one-night or few-day happenings (a plague scare, a storm, a curfew) close the
+  non-essential buildings for their length. They earn no takings meanwhile, and the ledger says so
+  in a line. Essential buildings keep earning. Nothing is ever lost for good.
+- **Building needs the essentials:** a Smithy standing makes raising any building cheaper by a
+  share (draft), as construction needs a blacksmith. A Carpenter's yard will do the same later.
+- Numbers and the happenings go in `config/balance.json` and `data/tonight.json`.
 
 ## The shop is earned
 
@@ -418,8 +546,8 @@ Nothing a player has is taken away.
 ## Tests to write
 
 - **The day:** each boundary of the sun (noon, dusk); what moves it and what does not; the shift
-  opening and not being saved up; candles spent and refused; the three ways night falls; the
-  midnight-oil count starting again when a candle is spent; turning in early; an ordinary visitor
+  opening and not being saved up; hourglasses spent and refused; the three ways night falls; the
+  midnight-oil count starting again when an hourglass is spent; turning in early; an ordinary visitor
   waiting; a one-night happening being announced, taken, and missed; never two days running.
 - **The town:** plot prices and deeds by level; a need met by a named thing and by tag and depth;
   `made` leaving out bought things; a discovery held by one building at a time; quality from
@@ -443,11 +571,11 @@ page can be drawn before the server answers.
 progress.day: {
   number, sun, length, noon,
   phase: "morning" | "afternoon" | "evening",
-  candles, candlesMax,
+  time, timeMax,
   nightIn,            // discoveries until night falls by itself; evening only
   canTurnIn,          // true from noon
-  turnInCandles,      // what the evening will have if the player turns in early
-  costs,              // every evening action's candle cost, read as day.costs.visitor
+  turnInTime,      // what the evening will have if the player turns in early
+  costs,              // every evening action's hourglass cost, read as day.costs.visitor
   shiftDone,          // today's shift has been worked
   tonight: { id, name, line, taken } | null,  // null until announced at noon
   lastLedger: Ledger | null                   // last night's, so the page can reopen it after a reload
@@ -468,7 +596,7 @@ TownView: {
   deeds: { have, max },
   cheer: { points, band },
   townsfolk: [{ person, job, name, housed, fondness, regular }],
-  plans: [{ building, name, price, candles, needs: [{ label, met }], ready }]
+  plans: [{ building, name, price, time, needs: [{ label, met }], ready }]
 }
 
 BuildingView: {
@@ -491,15 +619,15 @@ has not been worked. `progress.shiftIn` goes.
 | `POST /day/end` | Goes to bed, or turns in early before dusk |
 | `GET /town` | The `TownView` |
 | `POST /town/plots` | Buys the next plot |
-| `POST /town/build` with `{ plot, building }` | Raises a new building (2 candles) |
-| `POST /town/upgrade` with `{ plot }` | Raises it a tier (1 candle) |
+| `POST /town/build` with `{ plot, building }` | Raises a new building (2 ⌛) |
+| `POST /town/upgrade` with `{ plot }` | Raises it a tier (1 ⌛) |
 | `POST /town/stock` with `{ plot, slot, entry }` | Stocks a slot, or clears it with `entry: null` (free) |
-| `POST /town/hand` with `{ plot }` | Lends a hand (1 candle) |
-| `POST /town/enchant` with `{ plot, spell }` | Casts a spell on it (1 candle) |
-| `POST /town/meal` | A meal at the Tavern (1 candle, gold) |
-| `POST /town/call` with `{ person }` | Calls on someone (1 candle) |
+| `POST /town/hand` with `{ plot }` | Lends a hand (1 ⌛) |
+| `POST /town/enchant` with `{ plot, spell }` | Casts a spell on it (1 ⌛) |
+| `POST /town/meal` | A meal at the Tavern (1 ⌛, gold) |
+| `POST /town/call` with `{ person }` | Calls on someone (1 ⌛) |
 
-All under `/api/players/:player`. New refusal codes: `not-evening`, `no-candles`, `no-deed`,
+All under `/api/players/:player`. New refusal codes: `not-evening`, `no-time`, `no-deed`,
 `needs-missing`, `no-shop`, alongside `not-enough-gold` and `level-too-low`. The list of codes
 (`RuleCode`) moves from `src/server/combiner.ts` into `src/shared/schema.ts`, so the Rules lane
 owns it and the page can import it; `combiner.ts` re-exports it. Every refusal is
@@ -525,7 +653,8 @@ reload is readable from a GET.
    lift to gold and XP, and leave `levels.xpStep` alone.
 3. **`utility`.** The model puts it on a great many things, so it is left out of every building's
    wants. Is that right, or should some building want it?
-4. **The level cap.** With a town, level 5 comes between day 25 and day 30 and tier 3 opens at the
+4. **The level cap.** Settled 2026-10-19 by Trysten: stays at 5 for now. Scaling and late game wait until the full loop is settled.
+   (Earlier question:) With a town, level 5 comes between day 25 and day 30 and tier 3 opens at the
    same moment. Is the town the long game, or should levels go on?
-5. **Naming.** "Cheer" for town satisfaction, "candles" for evening actions, "deeds" for plot
+5. **Naming.** "Cheer" for town satisfaction, "time" for evening actions, "deeds" for plot
    allowances. A farmer's order already mentions "the inn on Crumb Lane"; is that the street?

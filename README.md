@@ -1,6 +1,7 @@
 # Infinite Wizard Craft
 
-Design: `Infinite Wizard Craft.md`. Build order: `Infinite Wizard Craft Phase Guide.md`.
+Design: `Infinite Wizard Craft.md`. Build order: `Infinite Wizard Craft Phase Guide.md`. The
+town's people and their story: `Story Guide.md`.
 
 ## Run
 
@@ -22,9 +23,9 @@ npm run typecheck
 |---|---|
 | `url` | Where Ollama answers. The host PC's address on the VirtualBox host-only network |
 | `model` | The model, which must already be pulled in Ollama |
-| `effort` | How hard a reasoning model thinks: `combos` for combinations, which the player waits on, `naming` for the one call in a combination that decides what the thing is, and `events`, which are written out of sight. `low`, `medium`, `high`, or `null` for a model that does not reason |
+| `effort` | How hard a reasoning model thinks: `combos` for combinations, which the player waits on, `naming` for the one call in a combination that decides what the thing is, `events`, which are written out of sight, and optionally `orders` for the order board, which falls back to `events`. `low`, `medium`, `high`, or `null` for a model that does not reason |
 | `keepAlive` | How long Ollama keeps the model loaded after a call |
-| `timeoutSeconds` | How long one call may take before it is given up and tried again |
+| `timeoutSeconds` | How long one call may take before it is given up and tried again: `combos` (naming too), `events`, and optionally `orders`, which falls back to `events` |
 | `background` | How event writing gives way to combinations (below) |
 
 Ollama answers one call at a time, so a combination would otherwise queue behind a whole event
@@ -102,7 +103,7 @@ The server owns gold, XP, level, quests, and learned spells. They are saved per 
 | `POST /api/players/:player/combine` | also `progress` and `rewards` |
 | `POST /api/players/:player/learn` with `{ spell }` | `{ spell, cost, rewards, progress }` |
 | `GET /api/players/:player/shop` | `{ slots }`, or 400 with code `no-shop` until a Market Stall stands |
-| `POST /api/players/:player/shop/buy` with `{ slot }` | `{ entry, rewards, progress, shop }` |
+| `POST /api/players/:player/shop/buy` with `{ slot }` | `{ entry, rewards, progress, shop }`, or 400 with code `shop-closed` from dusk until morning (the shelf can still be looked at) |
 
 - `progress` is `{ xp, level, levelInto, levelSpan, gold, learned, quests }`.
 - Each quest is `{ id, title, detail, track, level, gold, xp, state, progress? }`. `track` is `main`
@@ -152,7 +153,7 @@ the shop shelf from the shop routes. Learned spells saved in a browser are not c
 ### Events
 
 There is one visitor a day. They are written once the player has made something that day, are
-only seen from dusk, and sitting with them takes a candle (see "The day (routes)").
+only seen from dusk, and sitting with them takes an hourglass (see "The day (routes)").
 
 An event is a short conversation in two beats. Someone arrives with something on their mind, the
 player reacts, the person says what they are after, and the player answers.
@@ -193,14 +194,14 @@ player reacts, the person says what they are after, and the player answers.
     is on the way. It is written in the background from the day's start, so it is ready by dusk.
   - A visitor the player does not sit with waits: the same one is at the door the next evening,
     and nobody new is written until they have been seen.
-  - The candle (`day.costs.visitor`) is taken when the conversation ends, at the second beat or
+  - The hourglass (`day.costs.visitor`) is taken when the conversation ends, at the second beat or
     at the door, so night never falls in the middle of one. Responding is refused with
-    `no-candles` when too few are left.
+    `no-time` when too few are left.
   - If the server stops part-way through, the event is carried on from what was already written
     the next time that player does anything.
 - **Test route:** writes a fresh event and returns it as soon as the arrival is written (the
   second beats follow behind it, so answering straight away can wait). It works at any time of
-  day and costs no candle, it is not the day's visitor, and an event already waiting is replaced. It is a real event: playing it changes gold, standing, and fondness.
+  day and costs no hourglass, it is not the day's visitor, and an event already waiting is replaced. It is a real event: playing it changes gold, standing, and fondness.
   Seed ids are in `data/event-seeds.json`, plus `repeat` to bring back someone the player has met.
 
 ```
@@ -288,10 +289,10 @@ actions move the day.
 - **The sun** moves one notch for a new discovery made by combining, and `shiftNotches` for a
   shift (`afterAction`). It is morning until `noon`, afternoon until `length`, then evening.
 - **The shift** is open from noon until night, once a day (`shiftOpen`). It is not saved up.
-- **Candles** are the evening's actions. `refuseCandles` answers `not-evening` or `no-candles`.
-- **Night** falls when the last candle is spent, when the player goes to bed, or after
-  `nightAfter` discoveries past dusk with no candle spent between them (`nightFalls`).
-- **Turning in early** (from noon) brings dusk at once with `earlyCandles`, not night.
+- **Time** (shown as ⌛) is the evening's budget. `refuseAction` (and `refuseTime`) answers `not-evening` or `no-time`.
+- **Night** falls when the last hourglass is spent, when the player goes to bed, or after
+  `nightAfter` discoveries past dusk with no hourglass spent between them (`nightFalls`).
+- **Turning in early** (from noon) brings dusk at once with `earlyTime`, not night.
 - A day in progress is a `DayState`; `dayView` turns it into `progress.day` for the page.
 - Plain lines for dusk, night, and morning are in `data/day-text.json`.
 
@@ -336,7 +337,7 @@ the rules above.
 | `POST /api/players/:player/day/end` (no body) | `{ rewards, night, dusk, progress }` |
 
 - `progress.day` is a `DayView` on every `progress`: `{ number, sun, length, noon, phase,
-  candles, candlesMax, nightIn, canTurnIn, shiftDone, tonight, lastLedger, ... }`.
+  time, timeMax, nightIn, canTurnIn, shiftDone, tonight, lastLedger, ... }`.
 - **Every route that returns `progress` also returns `night` and `dusk`.** `night` is the
   `Ledger` when that action ended the day, otherwise null. `dusk` is a line to show when that
   action brought the evening on, otherwise null. Only combining, working a shift, the last
@@ -345,10 +346,10 @@ the rules above.
   Making something again, buying, learning, and gifts leave it alone.
 - **`day/end`** is one call for both ways of stopping. From dusk it is going to bed: `night`
   comes back. From noon it is turning in early: `dusk` comes back, and the evening has
-  `earlyCandles`. In the morning it is refused (400, code `rule`).
-- **Night** also falls by itself: on the candle that was the last (`night` on that response,
+  `earlyTime`. In the morning it is refused (400, code `rule`).
+- **Night** also falls by itself: on the hourglass that was the last (`night` on that response,
   for now only the last answer to a visitor), and on the `nightAfter`th new discovery after
-  dusk with no candle spent between them (`night` on that combine).
+  dusk with no hourglass spent between them (`night` on that combine).
 - When night falls the ledger is saved and the player is at dawn on the next day in the same
   step. `progress.day.lastLedger` is that ledger until the next night, so it survives a reload.
 - **Each morning** the shop has a new shelf, the order board opens again at noon, and a new
@@ -367,6 +368,7 @@ above.
 | Route | Returns |
 |---|---|
 | `GET /api/players/:player/town` | A `TownView`: `{ plots, deeds, cheer, townsfolk, plans }` |
+| `GET /api/players/:player/town/people` | A `PeopleView`: everyone in town, with home, Fondness against `regularAt` and `teachAt`, whether their trade is taught, likes and dislikes, their lesson with progress, and the next story beat's title and gate (never what it asks) |
 | `POST /api/players/:player/town/plots` (no body) | `{ plot, rewards, night, dusk, progress }` |
 | `POST /api/players/:player/town/build` with `{ plot, building }` | `{ rewards, night, dusk, progress }` |
 | `POST /api/players/:player/town/upgrade` with `{ plot }` | `{ rewards, night, dusk, progress }` |
@@ -385,44 +387,64 @@ above.
   are used up) or `not-enough-gold`. The first costs 10 gold, and a quest asks for it.
 - **Raising a building** needs a plot the player owns with nothing on it, the plan in hand, and
   no building of that kind standing already (all `rule`). Then, in this order: `level-too-low`,
-  `needs-missing` (the sentence lists what is missing), `not-enough-gold`, `not-evening`,
-  `no-candles`. It costs `day.costs.build` candles. Raising a tier is the same with
-  `day.costs.upgrade`. Either can take the last candle, and then `night` comes back.
+  `needs-missing` (the sentence lists what is missing), `not-enough-gold`. Whether it waits for
+  dusk and costs hourglasses is `day.access` and `day.costs` (both `anytime` and 0 since N2). The
+  gold is paid at once and the building **goes up overnight**: the plot carries
+  `raising: { building, name, tier, nights }` and `building: null` until `town.raiseNights`
+  nights have passed (after that night's takings), and the ledger says so in a line. A tier
+  works at the old tier until then, and cannot be raised again meanwhile.
 - **Stock** is a discovery on a shelf (a material or a spell the player has discovered), up to
   the tier's slots. Stocking is free and at any hour. A discovery is on one shelf at a time, so
   stocking it somewhere else moves it. Refusals are `rule`.
 - **Quality** is worked out once in `standingBuildings` (`src/server/town.ts`) from the stock,
   the tier, other buildings' `lifts` perks, a hand lent this evening, a Great or Perfect shift
   worked today (own building only), and the owner's rank (own building only: the one their
-  job runs). An empty building is Meh. **A hand** costs `day.costs.hand` candle, once a
-  building an evening, and is refused on bare shelves.
+  job runs). An empty building is Meh. **A hand** is once a building a day
+  (`day.limits.handsPerBuilding`), free at any hour since N2, and is refused on bare shelves.
 - **Cheer** is `townCheer`: points from every building's quality, in the bands under
   `town.cheer`. `TownView.cheer` and the night ledger's `cheer` carry `{ points, band }` (the
   ledger's is null on an empty street), and the band's share raises every building's takings.
 - **Takings** are paid by each standing building when night falls, through the gold ledger
   (reason `takings`, once a night a plot), at the quality it has tonight and raised by Cheer,
-  and listed in the ledger's `takings`. Meh still pays.
-- **Perks in force now, added:** `lifts`, `candles` (an extra evening candle, counted by
-  `progress.day.candles` and by when night falls), and `rumour` and `gift` (on every `every`th
+  and listed in the ledger's `takings`. Meh still pays. **Neighbours:** the building's person's
+  `likes` and `dislikes` (`data/cast.json`) of the trades within `town.neighbour.reach` plots
+  add or take a share (`neighbourShift`), capped either way.
+- **Perks in force now, added:** `lifts`, `time` (an extra evening hourglass, counted by
+  `progress.day.timeMax` and by when night falls), and `rumour` and `gift` (on every `every`th
   day, at night, listed in the ledger's `brought`).
-- **Townsfolk** are named from `data/townsfolk.json`, the next name nobody the player knows
-  has, with its pronoun. A person who came before names existed is renamed once.
+- **Townsfolk** of a trade with a written person (`data/cast.json`) are that person, with their
+  traits and facts, and arrive once their `arrival` condition holds too (`arrivalMet`); one who
+  came earlier under another name takes the cast identity, keeping their Fondness. Any other
+  trade's person is named from `data/townsfolk.json`, the next name nobody the player knows has.
+- **Homeless:** a townsperson whose home (`cast.home`, else their trade's building) is not
+  standing has gone for the night from dusk: they cannot be called on, and are never the
+  evening's visitor. `housed` in `TownView.townsfolk` says which.
+- **Teaching (N4):** a job can be taken up (`POST /job`) and its shift worked only once taught,
+  else `not-taught`. The starter job is always taught; a job a save held before N4 is taught
+  (`taught_jobs`, marked once). Otherwise: the person's lesson (`lessonFor`, paid as quests are,
+  ledger reason `quest`, once that person has arrived) is done and their Fondness has reached
+  `town.teachAt`. Taught is for good.
+- **Story beats** (`data/cast.json`) are played in `settle` once open (`openBeats`: Fondness gate
+  and `waitsOn`), the player has reached the beat's level, and its `done` condition (if any) is
+  met: ledger reason `beat`, listed in `rewards.quests`. A `gold` reward pays its gold and XP.
+  `commission`, `perk` and `plan` rewards are recorded and not yet in force (see the board).
 - **Calling on someone** (`/town/call`): +1 Fondness, a line from `callingLines` (the job's
-  own, else the default), `day.costs.call` candle, once a person an evening. Works for people
+  own, else the default), `day.costs.call` hourglass, once a person an evening, and settles (a call can
+  open a beat or finish teaching). Works for people
   met in events too. A person whose fondness reaches `town.regularAt` is a regular for good:
   a point of Cheer, and `town.regularTakings` more takings at the building they work (a person
   met in an event, the Tavern).
-- **A meal** (`/town/meal`, needs a Tavern): `5 x level` gold and `day.costs.meal` candle, once
-  an evening. The next day's new discoveries pay `lift` more gold and XP (ledger reason `meal`).
+- **A meal** (`/town/meal`, needs a Tavern): `5 x level` gold, once a day
+  (`day.limits.mealsPerDay`), free of hourglasses at any hour since N2. The next day's new discoveries pay `lift` more gold and XP (ledger reason `meal`).
 - **Enchanting** (`/town/enchant`): a learned spell that fits the building (`enchantmentFits`),
-  `day.costs.enchant` candle, one a building, a new one replaces the old. It adds
+  free at any hour since N2, one a building, a new one replaces the old. It adds
   `enchantBonus` to the quality, counts a point of Cheer, lasts `enchantmentDays`, and each
   night takes one off: the ledger says when one day is left and when it has faded.
 - **One-night happenings** (`data/tonight.json`): rolled the first time a day is looked at, by
   the day rules and the reputation band's `tonightChance`, never two days running, shown in
   `progress.day.tonight` from noon. It is taken by doing what it changes (the musician's free
   first call, the supper's doubled meal, the festival's doubled enchantment) or, for the
-  pedlar and the stargazer, by `/town/tonight` (no candle, evening only). Not taken by
+  pedlar and the stargazer, by `/town/tonight` (no hourglass, evening only). Not taken by
   night, it is named in the ledger's `missed`.
 - **Perks in force:** `opens-shop`, `shop-shelves` (the three tailored shelves, filled from
   the next morning), `shop-discount`, and `discovery-gold` (extra gold for a new discovery made
@@ -431,7 +453,7 @@ above.
   does nothing yet.
 - **In the view,** `enchantment` and `regular` are real, and `cheer` counts regulars and
   enchantments. `plans[].ready` and `next.ready` mean the level, the
-  needs, and the gold are there; they say nothing of the hour or the candles.
+  needs, and the gold are there; they say nothing of the hour or the hourglasses.
 - **Saved games:** a player who had bought from the shop and owns no plot is given the Market
   Stall on plot 0 at the tier with every shelf, the first time anything asks about their town.
   A saved player who never bought anything has no shop until they raise the stall.
@@ -585,6 +607,8 @@ npm run bake -- pause        # stop within a second and let go of the model
 npm run bake -- resume       # carry on
 npm run bake -- status       # how far it has got and how long is left
 npm run bake -- review       # write a reading list to var/bake/review.md, lowest marks first
+npm run bake -- seed         # round 2: put the approved pairs into the drafts (see Bake Guide.md)
+npm run review               # round 2: the keyboard review tool
 npm run bake -- approve 4    # approve every draft marked 4 or better
 npm run bake -- approve sand+water     # approve single pairs
 npm run bake -- reject sand+water      # turn single pairs down
