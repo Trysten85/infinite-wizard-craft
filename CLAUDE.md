@@ -26,6 +26,8 @@ Several Claude sessions work in this one working tree at the same time. Before s
 - **The dev server reloads rule changes onto the real save.** Back up `var/game.db` before
   changing progression, and try new rules on a copy with a made-up player.
 - **Source nvm before `npm` or `tsx`.** The system Node is too old to run the server.
+- **Keep the top of `Work Board.md` ("At a glance") current, in plain words.** Trysten reads that
+  section only. Ticket codes (N3a, A4, B5) are for sessions, and never stand alone there.
 - Questions about the design go under "Questions for design" in `Work Board.md`.
 - **Shell output goes through RTK**, a token filter hooked on Bash (installed 2026-10-15). It
   condenses `git`, `grep`, `find`, `ls`, and test output. Watch for edge cases: truncated or

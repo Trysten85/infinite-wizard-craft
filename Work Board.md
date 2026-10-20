@@ -3,7 +3,64 @@
 The one list of what each session is building. The design behind the tickets is in
 `Town Guide.md`. Read the guide section a ticket names before starting it.
 
+## At a glance (for Trysten, in plain words)
+
+**The first section to read, and the only one written for a person.** The sessions keep it
+current: whoever finishes or starts something updates the line for it. The ticket codes in
+brackets are for the sessions; you can ignore them.
+
+**Last updated: 2026-10-19, by infinite-spell-craft-9c (the commit bot).**
+
+### What is done
+- The day, the street, buildings, stocking and quality, the evening's actions, and the
+  town page. All built, reviewed and committed.
+- The first plot costing 10 gold and needing a job, the visitor from dawn, old saves getting the
+  stall, and one learn price. Built and committed (A1 to A4).
+- Everything in the tree is now committed, including the big candle-to-moon rename, the cast and
+  their stories, the quests, and Backend's bake and review tooling. Most of it still needs
+  reviewing, and the commits say so.
+
+### What we are building now: the all-day town and the townsfolk
+| In plain words | Who | State |
+|---|---|---|
+| Open most things all day; the shop and the shift close at dusk (N1) | Rules, `-1c` | **Rules built, tests pass; waiting for review and for Backend to switch it on (N2)** |
+| Candles become time in code and ⌛ on the page (N8) | Rules, `-1c` | **Done, tests pass; waiting for each lane's review** |
+| The rules for a hand-written cast of townsfolk: personalities, lessons, storylines (N3a) | Rules, `-1c` | **Built, tests pass; waiting for review** |
+| Writing the six townsfolk and their stories (N3b) | Story Bot, `-e5` | **Free to fill in the data now** |
+| Townsfolk who arrive homeless, move in, and teach their trade (N2, N4) | Backend, `-5c` | Waiting on the rules above |
+| The People tab and the street changes (N5) | Page, `-d2` | Waiting on the rules above |
+| Essential buildings that stay open in a plague (N6) | Rules, `-1c` | Later |
+| The smaller quests, and the logic that checks quests (N7) | Quest Bot, `-f4` | Ready to start; works with Story |
+
+### Who is doing what
+| Session | Does | Right now |
+|---|---|---|
+| `-1c` | The rules and the gameplay loop | Cast rules and all-day rules done, unreviewed |
+| `-5c` Backend and LLM Bot | The server and the combo bake | Waiting for review; three bake jobs are stuck because the model computer is unreachable |
+| `-d2` Front End Bot | The page | Idle until the rules land |
+| `-e5` Story Bot | The townsfolk's stories | Idle until the cast rules land |
+| `-f4` Quest Bot | The smaller quests and quest logic | Ready to start; works with Story |
+| `-1e` | Code review | Reviewing |
+| `-9c` Commit Bot | Makes every commit, and keeps the history readable | Confirmed as the commit bot, not `-97`. Committed the backlog on 2026-10-18; Q3 is next |
+
+### Waiting on Trysten
+1. A go-ahead for `-1c` to start the two rules tickets, which unblocks everyone.
+2. The model computer (Ollama) needs to be reachable for the bake to continue. The VM can see
+   the host's network but the connection to port 11434 times out, which points at the host's
+   firewall.
+3. **Getting the code onto GitHub needs a token, not your password.** Everything is committed
+   and the remote is already set, but GitHub has not accepted account passwords for git since
+   2021, so the push fails no matter how often the password is changed. Make a token at
+   github.com/settings/tokens (classic, tick `repo`) and paste it at the `Password:` prompt, or
+   install `gh` and log in through the browser instead. Until that happens the only copies off
+   this machine are `~/iwc-history-2026-10-18.bundle` (committed history) and
+   `~/iwc-tree-snapshot-2026-10-19.tar.gz` (the whole tree, taken before the rename).
+
 ## How to use this board
+
+0. **Keep "At a glance" current and in plain words.** No ticket codes without a plain sentence
+   beside them. Trysten reads that section and nothing else. When you start, finish, or get
+   blocked on something, change its line there too.
 
 1. **Find your lane** in the table below. Take tickets from your lane only.
 2. **Claim before you start.** Change the ticket's status from `open` to `claimed by <your
@@ -49,7 +106,9 @@ committed and puts the SHA in the ticket's Notes.
 | Ticket | Files | Tests/typecheck | What landed, and what review changed |
 |---|---|---|---|
 
-Nothing waiting. The last row was committed on 2026-10-18; see the Log.
+Nothing waiting. Everything that stood here on 2026-10-19 is committed; see the Log for the
+three SHAs and for why N8 and the five lanes' work had to go in as one commit. A5 needed no
+code and is set to `done`.
 
 ## Lanes
 
@@ -60,6 +119,7 @@ Nothing waiting. The last row was committed on 2026-10-18; see the Log.
 | **Backend** | `src/server/store.ts`, the services, `src/server/app.ts`, `src/tools/`, the README's API notes, their tests | Rule maths, data content, `gameData.ts`, `shifts/orders.ts`, page |
 | **Page** | `web/`, `tests/web*` | Anything under `src/server` |
 | **Bake** | Reviewed rows in `data/baked-combos.json`, the bake tools | Everything else |
+| **Commit** | The git history: every commit and its message, `Process.md`, the commit conventions, `.gitignore`, the remote | Every other lane's work. It commits their files; it never writes them |
 
 Rules goes first in each slice, because Backend and Page build on its types. Page can start from
 the types alone.
@@ -71,10 +131,13 @@ restarted, so check `ListAgents`):
 |---|---|
 | Design | not heard from since the restart (was infinite-spell-craft-0a) |
 | Rules, and the gameplay loop | infinite-spell-craft-90 (was -20, -f6/-23) |
-| Backend | Backend and LLM Bot (was -05, -33 / -7e) |
-| Page | Front End Bot (was -20, -48/-e6) |
-| Bake | Backend and LLM Bot (parked; was -05, -33, signed `-e8` and `-7e` below) |
-| Review | infinite-spell-craft-1e (code review: architecture and planning; reviews, does not own files) |
+| Backend | Backend and LLM Bot, infinite-spell-craft-5c (was -05, -33 / -7e) |
+| Page | Front End Bot, infinite-spell-craft-ae (was -20, -48/-e6) |
+| Bake | Backend and LLM Bot, infinite-spell-craft-5c (round 2, un-parked 2026-10-18; was -05, -33, signed `-e8` and `-7e` below) |
+| Review | **Review Bot**, infinite-spell-craft-97 (was -1e, same session, renamed on a restart — the review notes below signed `-1e` are mine). Code review: architecture and planning. Reviews every ticket at `done, unreviewed`, fixes what it finds in the working tree, then adds a row to "Ready to commit" and stops. Owns no files and commits nothing |
+| Commit | **Commit Bot**, infinite-spell-craft-9c, session `a466cb88-3747-4456-8286-418e0cc834c2` (claimed 2026-10-17). The only session the hook lets run `git commit`; `-97` is not it. Takes work only from "Ready to commit" above, stages exactly the files a row names, writes the message, commits, and clears the row. Owns no code and reviews nothing, so if your ticket is finished, leave it in the tree and say so on the board — it does not need a message. What a commit here should say is in `Process.md` |
+| Story | **Story Bot**, infinite-spell-craft-e5: the cast and their storylines in `data/townsfolk.json` (or `data/cast.json`), lessons, calling lines, and the prompts for story and Tavern lines. Owns the **overarching quests**: each person's arc and the town-wide thread that links them. Content only; does not touch `src/` or `web/` |
+| Quest | **Quest Bot**, infinite-spell-craft-f4 (Trysten, 2026-10-19): the **smaller quests** (`data/quests.json`: the town quests, side quests, the template lessons for jobs with no written person) and **all quest logic**: the `done` condition types in `src/shared/schema.ts` and how `measureCondition` in `src/server/progress.ts` counts them. Small exact edits in those two shared files. Works with Story: Story writes the big arcs, Quest builds the pieces and conditions they need |
 
 Standing rules are in `CLAUDE.md`.
 
@@ -358,23 +421,63 @@ pay takings at night, and the shop is earned.
     takings in the night's ledger, and a Farm raised the next evening. The page sends the plot
     it shows on the Raise button, so Backend never has to pick one.
 
-### S5 · Bake · blocked: the bake is parked on Trysten's word
-- **What:** approve the town's staples first.
-- **Depends on:** nothing. Nothing depends on it.
-- **Guide:** "What is guaranteed and what is found".
-- **Touches:** `data/baked-combos.json`.
-- **Done when:** the drafts for these pairs have been reviewed first, under whatever name
-  Trysten's verdict gives them: steam + spirits, tree + spirits, fire + mud, mud + sand, earth +
-  forge, steam + animal, water + food, life + spirits, light + iron, fire + tea, iron + herb,
-  steam + tree, metal + glass. No building needs any of them by name, and no test waits on them.
-  Approved things carrying `brewing`, `enchanting`, or `knowledge` would make those wants easier
-  to find, which is the only reason to review these first. Spirits + Person ("Bartender") is
-  left for S2 to settle.
-- **Notes:** parked on Trysten's word (2026-10-11): the combo bake is not a priority now and may
-  be overwritten by quest and main gameplay work. All 727 pairs are drafts with a suggested
-  verdict in `data/combo-triage.csv`, waiting on his review. Nothing baked is in the game. The
-  town should not wait on this ticket: tier 1 needs are hand-written, and a player's own
-  discoveries carry the wanted tags whether or not any baked row is approved.
+### S5 · Bake · superseded by round 2 (B1-B8 below)
+- **Notes:** parked 2026-10-11; un-parked 2026-10-18 on Trysten's word (he added `Combo Bake 2.md`
+  and `Approved Combos.md`). The old "Done when" (13 staples first) is replaced by the plan in
+  `~/.claude/plans/jsut-added-combo-bake-streamed-squid.md`. Town still never waits on the bake:
+  nothing baked goes live until its description is rewritten and it is approved.
+
+### Bake round 2 · Bake (claimed by the Backend and LLM Bot, 2026-10-18)
+Decided with Trysten: carve 20 held-out pairs from the 61 approved; keep the current pipeline and
+add the spec's single reasoning-first call as a second mode, A/B on the held-out set. A judge
+model picking among many candidates is out of scope for this round.
+- **B1 · seed the cache** · claimed: code done, live step waiting on the model. `npm run bake --
+  seed` has run: 48 approved pairs are `fix` rows, 20 are held out (`data/combo-heldout.json`), 5
+  are queued for alternatives; the old drafts are in `var/baked-combos.before-seed-2026-10-19.json`.
+  `npm run bake -- redescribe` writes their new descriptions and puts them in the game; it needs
+  the Ollama box at the `url` in `config/model.json`, which was not reachable from here.
+  Files: `src/server/bakeSeed.ts`, `src/tools/bake.ts`, `src/server/bake.ts` (`describePair`),
+  `src/shared/schema.ts` (`source`), `data/approved-combos.json`, `data/combo-heldout.json`,
+  `data/baked-combos.json`, `tests/bakeSeed.test.ts`, `tests/bake.test.ts`.
+- **B2 · automatic gates** · done, unreviewed. New triage flags (`reason names only one
+  ingredient`, `middling mark`, `no tags`), `isHardFlag`, and a gate in `bakePair` that gives
+  way to the next best candidate up to `generation.gateTries` (3) and otherwise queues the pair
+  with a note. `blanket` added to `data/overused-words.json`. Files: `src/server/bakeTriage.ts`,
+  `src/server/bake.ts`, `src/shared/schema.ts`, `config/balance.json`, `data/overused-words.json`,
+  `tests/bakeTriage.test.ts`, `tests/bake.test.ts`. **Not done:** the spec's modern-name list in
+  `data/banned-results.json` (the existing list is kept; Rules may want to extend it).
+- **B3 · retrieval from approved rows, and "don't" examples** · done, unreviewed. `approvedExamples`,
+  `DONT_EXAMPLES`, an `avoid` set and one-per-result in `pickExamples`; `combo.examples` 6 to 8.
+  Used by the bake and score tools only. **The live game still uses the hand-written examples**:
+  wiring approved examples into `main.ts` waits on the A/B. Files: `src/server/comboContext.ts`,
+  `src/server/comboGenerator.ts`, `config/balance.json`, `tests/comboContext.test.ts`.
+- **B4 · single-call mode** · done, unreviewed. `src/server/comboSingle.ts` and `--way single |
+  single-lean`; a pair with no sensible result is kept as a draft row named Nothing to confirm.
+  The game path is unchanged. Files: `src/server/comboSingle.ts`, `src/server/bake.ts`,
+  `tests/bakeSingle.test.ts`.
+- **B5 · held-out scorer and A/B** · claimed: code done, the live run waits on the model.
+  `npm run bake -- score --way all` writes `var/bake/round2/score-<way>.md`. Files:
+  `src/server/bakeScore.ts`, `src/tools/bake.ts`, `tests/bakeScore.test.ts`.
+- **B6 · regenerate the remaining pairs** · claimed: `--round2` run mode is in (own record file,
+  leaves settled, held-out and queued pairs alone); the run waits on B5's winner and the model.
+  `approve <mark>` now needs `--i-know`.
+- **B7 · keyboard review tool** · done, unreviewed. `npm run review`. Smoke-run against the real
+  file with a piped `q` (nothing saved); the interactive keys cannot be driven from a test, so
+  the logic lives in tested pure modules. Queue today: 109 pairs (5 alternatives, 54 priority 1,
+  50 sample). Files: `src/tools/review.ts`, `src/server/reviewQueue.ts`,
+  `src/server/reviewAlternatives.ts`, `package.json`, `tests/reviewQueue.test.ts`,
+  `tests/reviewAlternatives.test.ts`.
+- **B8 · acceptance checks and the Bake Guide** · done, unreviewed. `acceptanceChecks` now holds
+  Water + Salt to Saltwater and Steam + Salt to not Sea; the Bake Guide has a Round 2 section and
+  the README lists the new commands. Files: `src/server/bakeTriage.ts`, `Bake Guide.md`,
+  `README.md`.
+- **Small edits made in Rules files, exact lines only:** `bakedComboSchema` gains an optional
+  `source`; `generation.gateTries` (3) added to the schema and `config/balance.json`;
+  `generation.examples` 6 to 8; `blanket` and `blankets` added to `data/overused-words.json`.
+  No `combo.mode`: the way is the `--way` flag on the bake tool. `data/banned-results.json` is
+  untouched. Rules: shout if you object.
+- **FYI:** `data/tags.json` has 30 tags, the spec says 32 (`fantasy-tag-vocabulary.md` is not in
+  the repo).
 
 ---
 
@@ -429,7 +532,15 @@ quality, Cheer, and takings move.
     night, with no state saved; the choice of thing is random among what the player lacks and
     could reach. A hand on bare shelves is refused rather than wasted.
 
-### Q3 · Page · claimed by infinite-spell-craft-ae (Front End Bot)
+### Q3 · Page · done, unreviewed
+- **Reviewed** 2026-10-19 by infinite-spell-craft-1e: the pass is right, and the three "Done
+  when" claims check out (drag onto a `slot:` zone, Cheer in the street header, quality beside
+  takings in `web/src/NightLedger.tsx`). One fix made in the tree: `stockChange` asserted a stub
+  `{ wants } as Building` into the shared rule, which was true only while `buildingScore` reads
+  nothing but `wants` — the day it reads a second field the page alone would have read
+  `undefined`, with no type error and no failing test. The rule now asks for `Wanting`
+  (`Pick<Building, "wants">`), so the stub needs no cast and any widening breaks the build
+  instead. Waiting in "Ready to commit".
 - **What:** the inside of a building.
 - **Depends on:** Q1 for the maths. Q2 to see it live.
 - **Guide:** "Stock and quality", "Cheer".
@@ -437,7 +548,14 @@ quality, Cheer, and takings move.
   quality preview as the shift's order board does it (`web/src/shiftPreview.ts`).
 - **Done when:** stocking feels like the order board's pick-and-match; Cheer and its band show
   on the street; the night ledger lists each building's quality beside its takings.
-- **Notes:**
+- **Notes:** done 2026-10-18 by Front End Bot (infinite-spell-craft-ae), not committed. The work
+  itself landed with E3 and the Q1 review: a discovery dragged onto a shelf is stocked
+  (`slot:` zone → `stockShelf`), and each shelf shows the exact change (`stockChange` with the
+  building's `lifts`, `rankBonus`, `enchantBonus`) in `web/src/Shelves.tsx`; Cheer and its band
+  are in the street header (`web/src/Town.tsx`); the ledger lists quality beside takings
+  (`web/src/NightLedger.tsx`). This pass: `web/src/town.ts` (a stale "no lift" comment) and
+  `web/src/day.ts` + `tests/webDay.test.ts` (`visitorCue`'s `place` is now required, per review
+  E3's note). 839 tests, typecheck clean.
 
 ---
 
@@ -675,6 +793,41 @@ Add a line: ticket id, your session name, the question. Answers are written bene
   - Code review bot added (Review lane, infinite-spell-craft-1e). Ask it about architecture and
     planning before landing a ticket that changes a shared shape.
 
+- **N2 · infinite-spell-craft-5c (Backend):** four things N2 met that the guide leaves open.
+  1. **A first plot can deadlock.** The first plot needs a townsperson who has *arrived*
+     (A1-1 pinned it to arrivals). The cast's Blacksmith arrives only with a building standing
+     (`arrival.buildings: 1`). A player whose only trade so far is the blacksmith can never buy
+     a plot, so never a building. Should the plot ask for a *discovered* trade instead, or
+     should no first-tier person wait on a building?
+  2. **Homeless and calls.** Homeless townsfolk leave at dusk, and calls are evening-only, so a
+     homeless person can never be called on, and so never gain Fondness that way, while the
+     guide says "until then the person can be called on but gives no service". As built, the
+     leaving wins. Should calls on the homeless be allowed by day, or leaving wait?
+  3. **Services** (commissions on the order board, hints, reforges) and the homeless' "worst
+     prices" have no data, numbers, or rules yet. Whose ticket is that: N6, or a new one for
+     Rules then Backend?
+  4. **Small calls made in code:** a "shared" home is never homeless; a trade with no building
+     has no home to wait for, so never leaves; neighbours change takings only, not Cheer
+     (Cheer is town-wide); the store keeps one meal and one hand a day, so `day.limits` above
+     1 would need a store change.
+
+
+- **N4 · infinite-spell-craft-5c (Backend):** what N4 needs before its last two parts can be built.
+  1. **Story scenes cost a candle?** The guide lists "a story scene" among the evening's people
+     actions, but a beat is played by code in `settle` the moment its condition is met, at any
+     hour, as quests are. As built, beats play themselves and the scene is read in the People
+     tab. If watching a beat should be an evening action, it needs a `scene` row in `day.access`.
+  2. **The Tavern pair scene** needs rules: which pairs (likes only, or dislikes rarely: Story's
+     question 3), how often (every night? a chance?), what each outcome does in code (a
+     friendship: Fondness for both? a rumour: a hint, like the stargazer's? a gift: a discovery?),
+     and a `listen` row in `day.access` with its cost. Rules first, then Backend writes it.
+  3. **Villagers** (Aldous, Pim, Vesper in `Story Guide.md`) have no data file or schema: who
+     they are, which seed or happening brings them, and the quest after which they settle.
+  4. **Beat rewards** `perk`, `plan` and `commission` are recorded but do nothing yet (see N4a).
+     A perk needs a place in `perksAt`/`perksOf` per player; an early plan needs `refuseTier` to
+     read it; a commission waits on services (N2's question 3).
+
+
 ## Slice 5: answers of 2026-10-15
 
 ### A1 · Rules · done
@@ -745,7 +898,13 @@ Add a line: ticket id, your session name, the question. Answers are written bene
     so what is shown is what is taken. Test that the two agree.
   - **Page (A5):** show `learnPrice ?? learnCost` in `web/src/spells.ts`.
 
-### A5 · Page · done, unreviewed
+### A5 · Page · done
+- **Reviewed** 2026-10-19 by infinite-spell-craft-1e: no code needed. This code was reviewed in
+  the A1-A5 pass and every finding against it is already fixed in `1bf0c0c` — the Buy button
+  disabled on `!!progress.job` while the server counts arrived townsfolk (A1-1, the real bug),
+  `plotText`'s permissive `hasJob = true` default (E3-3), `plotNeedsJob` restating the server's
+  rule (E3-4), and the spellbook showing the undiscounted price (A4-3). Nothing to stage; the row
+  in "Ready to commit" asks only for the status.
 - **What:** show the first plot's gate (`no-job`) and its price; show the learn price once A4
   lands; and fix the turn-in-early warning, which says the shift is lost when it stays open
   until night.
@@ -753,6 +912,281 @@ Add a line: ticket id, your session name, the question. Answers are written bene
   and what it costs, with the button off until a job is taken (`plotNeedsJob`). The spellbook
   shows `learnPrice` (falling back to `learnCost`). The turn-in-early copy needed no change:
   "Call it a day" says nothing of orders, and a test holds that.
+
+## Slice 6: an all-day town and townsfolk as neighbours (2026-10-18)
+
+Trysten's direction, written up in "Townsfolk as neighbours" in `Town Guide.md`. Draft numbers go
+in `config/balance.json`. Back up `var/game.db` before any progression change.
+
+### N1 · Rules · done, unreviewed
+- **What:** the access table (what is open when) and its tests; the shop and the order board
+  close at dusk; daytime actions stop costing candles and gain once-a-day limits; a raise
+  finishes overnight; the arrival conditions, likes and dislikes, and neighbour maths.
+- **Touches:** `config/balance.json` (`day`), `src/shared/schema.ts`, `src/shared/town.ts`,
+  `data/townsfolk.json`, tests; `npm run pace` rechecked for level 5 between day 25 and 30.
+- **Also (Trysten, 2026-10-19): candles become the sun and the moon.** Rename `candles` to
+  `moonSteps` (and `earlyCandles` to `earlyMoonSteps`, `day.costs` keys keep their names),
+  `no-candles` to `no-moon`, and every line in `data/day-text.json` and `data/`, so that no text
+  says "candle". Add the labelled track to the views: the phase name (Morning, Noon, Afternoon,
+  Dusk, Night), the moon steps left, and what closes at dusk. See "The sun and the moon" in the
+  guide. **Split out as N8 below**, because the word is in about 430 places across every lane.
+- **Notes:** the rules are done 2026-10-19 by infinite-spell-craft-1c: `npm test` (890) and
+  typecheck pass; no commit; the save was backed up (`var/game.before-allday-2026-10-19.db`).
+  - **Landed:** `day.access` (per action, `anytime` or `evening`), `day.limits` (`mealsPerDay`,
+    `handsPerBuilding`), `town.raiseNights` (1), `town.neighbour` (`reach`, `liked`, `disliked`,
+    `cap`); in `src/shared/day.ts` `shopOpen` and `refuseAction`; `shiftOpen` now closes at dusk
+    (a player who turns in early gives the shift up, so the page's warning is now true); in
+    `src/shared/cast.ts` `arrivalMet` and `neighbourShift`. The loader refuses an `anytime`
+    action that still costs candles.
+  - **The switch is not flipped:** `day.access` is `evening` for every action, so the game
+    plays as before, except that the shift now closes at dusk. **N2 flips it.**
+  - **For Backend (N2):** call `refuseAction` instead of `refuseCandles`; set `access` to
+    `anytime` and the cost to 0 for meal, hand, enchant, upgrade and build; keep visitor and call as
+    `evening`; stop the shop at dusk with `shopOpen`; enforce `limits`; make a raise finish after
+    `town.raiseNights` nights; add `neighbourShift` to a building's takings; use `arrivalMet` for
+    who arrives; update the tests that expect these to be evening-only.
+  - **Pace:** `npm run pace` reaches level 5 on about day 31, a little past the guide's 25 to 30.
+    I did not check whether that moved with this change; the shift closing earlier is the only
+    behaviour change so far. Worth a look when N2 lands, since candle costs change then.
+
+### N9 · Rules, then Backend · open (Trysten, 2026-10-19: hiring)
+- **What:** the building comes first and the person second. See "Hiring" in `Town Guide.md`.
+  A trade crafted gives its plan; the first plot asks for a *discovered* trade (this removes the
+  blacksmith deadlock in N2 question 1); the person arrives the morning after their building
+  stands; hiring costs gold once (`town.hire`); a staffed building pays its takings each night
+  and an unstaffed one earns nothing; apprenticeship is optional.
+- **Rework for Backend:** the homeless state and "leave at dusk" built in N2 go away; the arrival
+  moves from "job discovered" to "building stood overnight"; `arrival.buildings` in the cast
+  needs a look with Story.
+- **Trysten, 2026-10-19:** the hire costs more with the building's tier, and an unstaffed
+  building earns nothing for now.
+- **Rules part done, unreviewed** (infinite-spell-craft-1c): `town.hireByTier` (`[20, 50, 100]`,
+  draft) in `config/balance.json`; `hireCost`, `hireTopUp` (raising a staffed building tops the hire
+  up by the difference) and `staffedTakings` in `src/shared/town.ts`; tests in `tests/town.test.ts`.
+  Backend wires them in: the hire route, `staffed` per building, and takings through
+  `staffedTakings`.
+
+### N8 · all lanes, one pass · done, unreviewed
+- **Done 2026-10-19 by infinite-spell-craft-1c, on Trysten's word (time in code, ⌛ on the
+  page, no name).** 916 tests and typecheck pass; no commit; save backed up
+  (`var/game.before-time-sweep-2026-10-19.db`). **This replaces the moon names below.**
+- **Backend's review (infinite-spell-craft-5c, 2026-10-19):** checked `src/server` (day, town,
+  store, events, shifts, story, progress): no stray "candle" but the two flagged on purpose
+  (`candles_spent`, and `readLedger` reading an old `last-candle` as `out-of-time`, both fine).
+  `check`/`spend` read cleanly with `refuseTime` and `no-time`. 916 tests, typecheck clean.
+  - **Names:** `day.time`, `day.earlyTime`, `timeLeft`, `timeMax`, `spendTime`, `extraTime`,
+    `refuseTime`, the `time` perk, `RuleCode` `no-time`, `NightReason` `out-of-time`,
+    `DayView.time`/`timeMax`/`turnInTime`, `TownView.plans[].time`.
+  - **Saves:** the `candles_spent` column keeps its name; `readLedger` in `src/server/store.ts`
+    reads an old `last-candle` ledger as `out-of-time` (tested).
+  - **Page:** hourglass icons replace the candles in the status bar; all copy says ⌛; the sun
+    meter's Dusk end says "The shop and the order board close here", and a line before dusk says
+    so too.
+  - **Left alone on purpose:** the Candle item and its recipes, `cold-candle`, the Court Mage's
+    description, the shop-shelf candle.
+  - **Each lane, please review your own files:** Backend `src/server/`, Page `web/` and
+    `tests/web*`, Rules `src/shared/`, plus data and docs.
+- **What:** rename candles to the moon (`candles` to `moonSteps`, `earlyCandles` to
+  `earlyMoonSteps`, `no-candles` to `no-moon`, the `candles` perk, and every line of text and
+  UI that says candle) and add the labelled sun-and-moon track to the day view.
+- **How:** one session does it in a single mechanical sweep across `src/`, `web/`, `tests/`,
+  `data/`, `config/`, and the docs, while the other lanes pause, and runs the suite after.
+  Rules (`-1c`) will do it, and will say on the board when to stop editing.
+- **Depends on:** N2 and N5 finished or paused, so the sweep has nothing in flight to clash with.
+
+### N2 · Backend · done, unreviewed (infinite-spell-craft-5c, Backend and LLM Bot); services held, see Notes
+- **Depends on:** N1.
+- **What:** move the gating in `src/server/day.ts` and `src/server/town.ts`; homeless arrivals
+  who leave at dusk and are housed by their building; services (commissions, hints, reforges);
+  an overnight raise; a migration for saves with a raise or candles in flight.
+- **Notes:** 2026-10-19 by infinite-spell-craft-5c. `npm test` (894) and typecheck pass. No
+  commit. Save backed up (`var/game.before-n2-2026-10-19.db`); tried on a copy of it.
+  - **Landed:** `day.check`/`day.spend` take the action and go by `refuseAction`; an `anytime`
+    action takes no candle and leaves the day alone. **The switch is flipped** in
+    `config/balance.json`: meal, hand, enchant, upgrade and build are `anytime` at cost 0;
+    visitor and call stay `evening`. `day.limits` are enforced for meals and hands. The shop
+    sells nothing from dusk (`shopOpen`, new code `shop-closed` in `RuleCode`), and its shelf
+    can still be looked at. **A raise finishes overnight:** `town_plots.raising` (migration: a
+    nullable column, so no save has one in flight), `TownView.plots[].raising` (optional, like
+    `lifts`, until the page's fixtures carry it), finished after the night's takings by
+    `finishRaises`, with a ledger line. `neighbourShift` is in every building's takings
+    (`townState().neighbours`). Arrival goes by the cast: a written person arrives once
+    `arrivalMet`, with their name, pronoun, traits and facts (so the visitor writer has them,
+    as Story asked); a saved townsperson of that trade takes the cast identity and keeps their
+    Fondness. Homeless townsfolk (`homeOf`/`isHomeless`) are gone from dusk: no calls, and
+    never the evening's visitor.
+  - **On the real save:** names change. Trysten's "The Wizard" is now Ignatius Puddlewick and
+    "The Merchant" Ferris Tally; Jason's herbalist and innkeeper become Quince Mallow and
+    Marigold Tumble. Every Fondness there is 0, so nothing else moves. `npm run pace` is
+    unchanged (level 5 about day 29 to 31): N2 moves no sun.
+  - **Files:** `src/server/day.ts`, `src/server/town.ts`, `src/server/shop.ts`,
+    `src/server/store.ts`, `src/server/events/service.ts`, `src/shared/schema.ts` (`shop-closed`,
+    `TownView.plots[].raising`), `config/balance.json` (`day.access`, `day.costs`), `README.md`,
+    `tests/helpers.ts` (`newGame` takes optional `data`), `tests/day.test.ts`,
+    `tests/dayService.test.ts`, `tests/evening.test.ts`, `tests/townQuests.test.ts`,
+    `tests/townService.test.ts`, `tests/townStock.test.ts`.
+  - **For Page (N5):** build/upgrade/meal/hand/enchant work by day with no candle; a plot shows
+    `raising` until morning; `shop/buy` can answer `shop-closed`; `day.costs.build` is now 0, so
+    the plan's `candles` reads 0.
+  - **Held, for Design (see Questions):** services (commissions, hints, reforges) and the
+    homeless' "worst prices" have no data or rule yet, so nothing is built for them.
+
+
+### N6 · Rules · open
+- **What:** the `essential` flag on buildings and its schema check; closure happenings that shut
+  non-essential buildings for their length; the Smithy's share off raising any building; tests.
+  Then Backend applies closures in the night ledger. See "Essential buildings" in the guide.
+
+### N7 · Quest · done, unreviewed
+- **What:** the smaller quests and the quest logic. New `done` condition types the arcs need
+  (`built` with a `tier`, a person's Fondness, a lesson done, a thing crafted for a person), their
+  measuring in `measureCondition`, and the template lessons for jobs with no written person.
+  Works from what Story asks for in `Story Guide.md` ("For Rules"). Quest rewards keep to the
+  two-fifths-of-XP test. Does not write the cast or the arcs (Story) or the cast schema (Rules).
+- **Notes:** 2026-10-19, infinite-spell-craft-f4 (Quest Bot). Typecheck clean; 870 of 871 tests
+  pass. The one failure is `tests/cast.test.ts` ("lets a beat wait on another person's beat"),
+  which is N3a's new untracked work in progress, not this ticket's.
+  - **Landed:** four `done` changes in `src/shared/schema.ts`: `built` takes an optional `tier`;
+    `quest-done { quest }` (another quest paid, such as a lesson); `fondness { job, fondness }`
+    (that job's townsperson has at least this much); `requests { count, job? }` (things made for
+    someone who asked). They are measured in `measureCondition` in `src/server/progress.ts`.
+    `settle` now fills requests before it pays quests, so a request filled, and the Fondness it
+    brings, count in the same settling. `src/server/gameData.ts` refuses a `quest-done` that
+    names an unknown quest or the quest itself, an unknown job, and a building tier past
+    `town.tiers`. Tests are in `tests/townQuests.test.ts`.
+  - **Files:** `src/shared/schema.ts`, `src/server/progress.ts`, `src/server/gameData.ts`, and
+    `tests/townQuests.test.ts` (only the quest lines in each; the other edits in those files are
+    other sessions').
+  - **For N3a (Rules):** `quest-done` checks against `data.quests` and the `quest` ledger refs. If
+    lessons or beats live in the cast and are paid under another ledger reason, widen the check
+    and `state.paid` to cover them, or tell me and I will. Story says `waitsOn` and the arrival
+    field may make `quest-done` unneeded for beats; it stays useful for side quests either way.
+  - **Template lessons:** built by -1c under N3a (`templateLesson`/`lessonFor` in
+    `src/shared/cast.ts`), so N7 does not build them.
+  - **Later the same day:** `quest-done` may also name a lesson, either a cast member's own or the
+    made-by-code `lesson-<job>` for a trade with no written person. `gameData.ts` gathers those
+    through `lessonFor` and runs the quest checks over lessons as well as quests. A lesson
+    counts as done once its id is in the `quest` ledger. **For N4 (Backend):** if a finished
+    lesson is stored any other way, `state.paid` in `measure` needs to read it too. 872/872
+    tests and typecheck pass.
+
+### N3a · Rules · done, unreviewed
+- **Depends on:** N1.
+- **What:** the cast schema in `src/shared/schema.ts` (personality, likes and dislikes, arrival
+  condition, lesson quests, storyline beats with Fondness gates, rewards), `town.teachAt`, the
+  `taught` rule with the `not-taught` refusal, and the template lesson builder for jobs with no
+  written person. Tests, including the two-fifths-of-XP rule for story quests.
+- **Notes:** done 2026-10-19 by infinite-spell-craft-1c. `npm test` (871) and typecheck pass. No
+  commit. Files: `src/shared/schema.ts`, new `src/shared/cast.ts`, `src/server/gameData.ts`,
+  `config/balance.json` (`town.teachAt` 4), new `data/cast.json` (empty), `tests/cast.test.ts`,
+  `tests/quests.test.ts`, `tests/town.test.ts`.
+  - **For Story (N3b):** fill `data/cast.json` as `{ "people": [ ... ] }`. A person has `id`, `name`,
+    `pronoun`, `job`, `home` (a building id or `shared`), `personality`, `voice`, `traits`,
+    `facts`, `likes`, `dislikes`, `arrival` (`level`, `buildings`, `townsfolk`, `quest`, all
+    optional), `lesson` (a list of ordinary quests, at least one), `beats`, `callingLines`. A beat
+    has `id`, `title`, `level`, `gate` (Fondness), `waitsOn` (beat ids, from any person), optional
+    `done` (any quest condition), `reward`, `premise`, `line`, optional `thread`. Rewards are
+    `gold` (`gold`, `xp`), `commission` (`tags`), `perk` (any building perk), or `plan`
+    (`building`, `tier` 2 or more). The loader checks ids, names, trades, jobs, buildings,
+    quests, waits and circles, and prints what is wrong. Names must not be in the old arrival pool.
+  - **Fitting:** `fitCast` (in `src/shared/cast.ts`) leaves out a person whose job or home is
+    missing from a trimmed test world, and drops opinions, plans and waits that name something
+    missing, as buildings and skins are. A test holds the shipped cast to the real data, so a
+    misspelling still fails there. 875 tests pass with Story's seven people in.
+  - **XP is one shared budget:** a lesson's `xp` and a `gold` beat's `xp` count toward the same
+    two fifths of each level as `data/quests.json`. The quest test sums them.
+  - **For Quest Bot (N7):** the quest conditions are now `questDoneSchema` in
+    `src/shared/schema.ts`, shared by quests, lessons, and beats. `built` now takes a `tier` (N7).
+  - **For Backend (N4):** `isTaught`/`refuseTrade` (`not-taught`), `lessonFor`, `templateLesson`,
+    `openBeats` and `castXpAtLevel` are in `src/shared/cast.ts`. `town.teachAt` is 4.
+  - **Not done here:** storing who was taught or which beats are done (Backend, N4). The
+    `built` tier condition was done by Quest Bot (N7).
+
+### N3b · Story · done, unreviewed (infinite-spell-craft-e5, Story Bot)
+- **Depends on:** N3a for the schema (start from the shape in "Townsfolk as neighbours").
+- **What:** the six buildings' people, each with a personality, likes and dislikes, a lesson that
+  ends in teaching the trade, and a 3 to 5 beat storyline; the prompts and voice notes for beat
+  dialogue and the Tavern scenes between two townsfolk.
+- **Notes:** started 2026-10-18 before N3a, from the shape in the guide. Trysten settled three
+  things: one fixed character per trade in every game; each person's arc stands alone, with a
+  gentle town-wide thread through them (no destiny); the design goes in a new `Story Guide.md`.
+  The guide comes first. The data waits on N3a's schema, so the content fits whatever shape
+  Rules lands.
+  - 2026-10-19, Trysten's split: Story keeps the arcs and how they connect. Quest Bot (N7) owns
+    the smaller quests and every `done` condition. The conditions the arcs need were sent to -f4:
+    `built` with a `tier` is new, a `beat-done` condition depends on N3a's `waitsOn`, and
+    everything else is an existing type.
+  - **Done 2026-10-19, unreviewed.** `npm test` (880) and typecheck pass.
+    - **The cast:** `data/cast.json` holds seven people: the six buildings' people, plus Tansy,
+      the Alchemist, who shares the Herb Garden. It has 27 beats, 13 lesson quests, and four
+      calling lines each. Rules fixed the loader to fit the cast to a trimmed world (`fitCast`).
+    - **Prompts:** `prompts/story.md` is the beat and Tavern-scene guide. N4's writers read it
+      beside `prompts/voice.md`.
+    - **New test:** `tests/castContent.test.ts` checks that every building's trade has a person,
+      that no cast text has digits or `!`, that each person has three to five beats and calling
+      lines with `{name}`, and that the thread's finale waits on a piece from each building's
+      person.
+    - **XP:** every lesson pays 0 XP and 5 gold. Only two level-5 beats pay XP (100 and 50), so
+      the budget for levels 1 to 4 is left to Quest Bot. Perks and gold are drafts for Rules to
+      tune.
+    - **For N4 (Backend):** pass each person's `traits` and `facts` to the visitor writer when a
+      townsperson is the visitor (today they arrive with neither). Tansy arrives from level 3,
+      because `arrival.quest` cannot name a lesson.
+    - **Files:** `data/cast.json`, `prompts/story.md`, `tests/castContent.test.ts`,
+      `Story Guide.md`, and `README.md` (one pointer line).
+
+### N4 · Backend · N4a and beat scenes done, unreviewed; pair scene and Villagers held for design (infinite-spell-craft-5c)
+- **Depends on:** N2, N3a, N3b.
+- **What:** refuse `chooseJob` and the shift for an untaught job (a `taught` flag per person and
+  a migration so saved jobs stay taught); `GET /town/people`; story beats by Fondness, the nightly pair scene written ahead and cached by pair, and
+  Villagers who settle after a quest.
+
+- **Notes:** split in two. **N4a** is everything code owns; **N4b** is the model's part.
+  - **N4a · done, unreviewed** (2026-10-19, infinite-spell-craft-5c). `npm test` (906) and
+    typecheck pass; no commit; save backed up (`var/game.before-n4-2026-10-19.db`), tried on a copy.
+    - **Teaching:** `taught_jobs` table, seeded once with the job each saved player holds (on the
+      real save: Trysten's tea-shop owner, Jason's innkeeper). `progress.isJobTaught` (starter, or
+      taught). `chooseJob` refuses `not-taught` naming the person; the shift refuses `not-taught`
+      and the board is not `ready`. `settle` pays each arrived person's lesson (as quests, so
+      `quest-done` sees it, and its XP counts) and marks the trade taught once the lesson is done
+      and Fondness reaches `town.teachAt`. A call now settles, so it can finish teaching.
+    - **Beats:** played in `settle` (`openBeats`, the beat's level, its `done`), ledger reason
+      `beat`, listed in `rewards.quests`; a `gold` reward pays gold and XP (counted in XP).
+      **`commission`, `perk` and `plan` rewards are recorded but not in force:** a perk or an
+      early plan needs Rules to say how a per-player perk joins `perksAt`/`perksOf` and how
+      `refuseTier` reads an early plan; commissions wait on services (N2's held question).
+    - **`GET /town/people`:** `PeopleView`/`PersonView` in `src/shared/schema.ts`.
+    - **On the real save:** lessons already met are paid at the next start (5 gold each, no XP).
+    - **Files:** `src/server/store.ts`, `src/server/progress.ts`, `src/server/town.ts`,
+      `src/server/shifts/service.ts`, `src/server/app.ts`, `src/shared/schema.ts`, `README.md`,
+      new `tests/teaching.test.ts`, and `addTaught` before `chooseJob` in `tests/{dayService,
+      events,orderWriter,jobs,shiftService,shop,townStock}.test.ts`.
+  - **N4b · beat scenes done, unreviewed; the rest held for design.** `npm test` (912) and
+    typecheck pass.
+    - **Beat scenes:** `src/server/story/writer.ts` (from `prompts/story.md` and the voice guide,
+      the person exactly as written in the cast, checked: no numbers or game words, at most
+      seven sentences, voice and blocklist) and `src/server/story/service.ts` (written out of
+      sight after any request about the player, once a beat; the plain `line` stands until then
+      and if the model fails, and is not retried). Kept in `beat_scenes`. `PersonView.scenes`
+      lists each played beat with its words. Wired in `main.ts` (the `events` model key).
+      Files: `src/server/story/{writer,service}.ts`, `src/server/store.ts`, `src/server/app.ts`,
+      `src/server/main.ts`, `src/server/town.ts`, `src/shared/schema.ts`, `tests/story.test.ts`.
+    - **Held: the Tavern pair scene and Villagers.** Nothing is written for them yet, because
+      the rules they need are not anywhere: see "Questions for design" (N4).
+
+### N5 · Page · claimed by infinite-spell-craft-ae (Front End Bot)
+- **Depends on:** N1 for the types, N2 to see it live.
+- **What:** the street shows who lives where and who is homeless; the People tab (Fondness,
+  home, service, likes, open quests, next-beat hint); the day and evening split.
+- **Notes:** in progress. First part, uncommitted, from reviewing N8: N1 closes the order board
+  at dusk and turning in moves the sun to dusk, so `bedOffer`'s "Call it a day" now warns that a
+  waiting shift closes; the bedtime "orders go with them" line is gone (dead after dusk); the
+  order cue and closed board say "closed at dusk" in the evening. Files: `web/src/day.ts`,
+  `tests/webDay.test.ts`. Second part: with `day.access` from Rules, `eveningBlock(action, day)`
+  words the server's `refuseAction` (an "anytime" action has no hour; an "evening" one waits for
+  dusk even when free), and `costBlock`, `handBlock` and `eveningOffers` go through it. Files:
+  `web/src/town.ts`, `web/src/Town.tsx`, `tests/webTown.test.ts`. Rules' fixture edits in both
+  web tests checked. Still to do: who lives where, and the People tab.
 
 ## Review
 
@@ -940,8 +1374,89 @@ from the day rather than assuming it.
 - **S1-S10 · for their lanes.** Next up, on Trysten's word: **S1**, gold that can go missing
   between `addLedger` and `addPlot`.
 
+- **N1 to N5 · infinite-spell-craft-90 (design):** three choices stand as drafts until Trysten
+  says otherwise. (1) A raise finishes overnight. (2) The shift closes at dusk, not at night.
+  (3) A disliked neighbour only lowers takings and Cheer a little, and costs nothing else.
+  Trysten has answered: daytime build, stock, enchant, hand and meal; a building is its owner's
+  home; arrival is discovery plus a condition.
+
+- **N3b · infinite-spell-craft-e5 (Story):** five questions from `Story Guide.md`, each with a
+  draft I will write to unless told otherwise.
+  1. **Saved games.** Saved players already have townsfolk named from the pool. Draft: they keep
+     those names, and the cast's traits, facts, and arcs attach by job. (Backend: `arrive()`
+     binds a trade to its cast character for new arrivals only.)
+  2. **Tier unlock as a beat reward** puts a Fondness gate before tier 2, and the guide promises
+     a building can always be raised. Draft: the beat brings the tier's plan early, and tier 2
+     never waits on a beat.
+  3. **Dislike pairs at the Tavern.** Can a disliked pair meet now and then, for a rare
+     friendship? Draft: yes, rarely.
+  4. **Mending a dislike** as a new beat reward kind (Dunstan and Quince, after the smoke).
+     Draft: not yet, flavour only.
+  5. **Two wizards.** The player is a Wizard and Ignatius is the town's. Draft: fine, since he
+     is retired.
+  - **For N3a (Rules):** the guide's "For Rules" section has the shape this content needs. Every
+    objective uses an existing `done` type except that `built` needs an optional `tier`.
+    `waitsOn` crosses people. Traits and facts are included so the visitor writer gets them.
+
+### Backend's answers to the review (2026-10-19, Backend and LLM Bot) · done, unreviewed
+
+844 tests, typecheck clean. Nothing committed.
+
+- **S1 · done, unreviewed.** `transaction` in `store.ts` nests (savepoints, a depth counter
+  declared before the migrations use it) and is exposed as `store.atomically(fn)`, synchronous
+  only. Every multi-write action runs inside one: `town.ts` (`buyPlot`, `build`, `upgrade`,
+  `stock`, `hand`, `call`, `meal`, `enchant`, `tonight`), `shop.ts` `buy`, `progress.ts`
+  (`settle`, `chooseJob`, `learn`), `shifts/service.ts` `work`, `day.ts` (`fall`, `after`,
+  `spend`, `end`), and `events/service.ts` (`finish`, plus the write tail after the heart is
+  written; never across an `await`). Tests: nesting and rollback in `tests/store.test.ts`; a
+  store that breaks on `addPlot` / `addMeal` leaves gold and candles untouched in
+  `tests/townService.test.ts`. One effect to know: a refusal thrown after `arrive` has written
+  now undoes that arrival too; the next read does it again.
+- **A3-1, A3-2 · done, unreviewed.** The grant left `standingBuildings`, which only reads again.
+  `grantOwedStalls(data, store)` in `town.ts` runs once at start-up from `main.ts`, over
+  `store.listOwedStalls()`, without the shop-ledger clause. `buyPlot` no longer reads the town
+  first for it. Checked on a copy of `var/game.db`: nobody is owed any more (Jaclyn and Test had
+  their stalls by the old path), so the first start with this changes nothing. Tests rewritten
+  on a real pre-town database (`preTown` in `tests/townService.test.ts`), including that viewing
+  the town writes nothing.
+- **A4-1 · kept as it is.** `learnShare` stays optional: `tests/townService.test.ts` pins
+  shown-equals-charged through the real wiring, and making it required would churn other lanes'
+  tests for little.
+- **O-5 · done, unreviewed.** `ModelJob` has `orders`; `effort.orders` and `timeoutSeconds.orders`
+  are optional in `config/model.json` and fall back to `events` (`settingsFor` in
+  `src/server/llm/config.ts`, tested in `tests/model.test.ts`). `main.ts` uses it; README says so.
+- **O-6 · done, unreviewed.** `tooAlike` measures shared words against both orders together, not
+  the shorter; a test holds a short order sharing two words with a long one.
+- **Files:** `src/server/store.ts`, `src/server/town.ts`, `src/server/shop.ts`,
+  `src/server/progress.ts`, `src/server/day.ts`, `src/server/shifts/service.ts`,
+  `src/server/events/service.ts`, `src/server/main.ts`, `src/server/llm/config.ts`,
+  `src/server/shifts/writer.ts`, `README.md`, `tests/store.test.ts`, `tests/townService.test.ts`,
+  `tests/orderWriter.test.ts`, `tests/model.test.ts`.
+- **Bake round 2** is separate: B2, B3, B4, B7, B8 done, unreviewed; B1, B5, B6 wait on the model
+  box (`config/model.json` `url` was unreachable from here). Its files are listed under each B ticket.
+
 ## Log
 
+- 2026-10-19: the commit bot committed the whole tree in three commits: `ee788ef` the guides
+  (`Story Guide.md`, `Combo Bake 2.md`, and the N8 vocabulary reaching the prose), `b1a3ca8` the
+  code -- N8 plus N1, N3a, N3b, N7, Backend's bake and review subsystem, and Q3, 77 files -- and
+  the commit carrying this line, the board. Verified at 918 tests over 53 files, typecheck clean,
+  on a tree
+  that had not been written to for three minutes.
+  **Why the code is one commit and not six.** The board asked for a split by lane, and the
+  snapshot was attempted before the sweep, as asked. It could not be taken: at 00:30 the tree
+  had 24 failures, because the server had moved to the hand-written cast while two older test
+  files still expected the generated names. Rather than commit a red "safety snapshot" -- the
+  one commit a future panic reaches for -- the tree was saved outside git at
+  `~/iwc-tree-snapshot-2026-10-19.tar.gz` and the sweep went ahead on that. The sweep then
+  renamed about 430 places across every lane's uncommitted work, interleaving the rename with
+  each lane's edits in the same files and often the same hunks, so the per-lane boundary no
+  longer existed in the tree to be staged. **The lesson for next time: a sweep this wide wants a
+  green tree and a commit before it starts, not after.** Only `Q3` has been reviewed; the rest
+  is committed as a floor to stand on and is marked unreviewed in the message.
+  Also left uncommitted on purpose: `Approved Combos.md`, 995 lines of JSON under a Markdown
+  name, byte-for-byte identical to the committed `data/approved-combos.json`. Delete or rename
+  it; nothing is lost either way.
 - 2026-10-18: the commit bot cleared the backlog that had built up in the tree, as six commits:
   `2aabf29` the RTK rule, `7a95015` the commit chain and its hook, `b4960b0` the design map's
   cozy tone override and the parked law system, `e1c57fc` the jobs and quest-seed drafts,
