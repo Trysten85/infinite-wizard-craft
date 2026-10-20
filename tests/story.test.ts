@@ -47,6 +47,9 @@ describe("a played beat's scene", () => {
   function played(): ReturnType<typeof newGame> {
     const game = newGame(1, undefined, { data: world });
     for (const id of ["person", "farmer"]) game.store.addDiscovery("ann", id);
+    // Hester comes to work once a Farm stands.
+    game.store.addPlot("ann", 0);
+    game.store.setBuilding("ann", 0, "farm", 1);
     game.town.arrive("ann");
     const hesterHere = game.store.listPeople("ann").find((person) => person.job === "farmer")!;
     game.store.updatePerson(hesterHere.id, { fondness: 1 });

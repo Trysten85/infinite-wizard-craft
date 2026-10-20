@@ -12,6 +12,7 @@ import type {
 import { qualityName } from "./day";
 import { QUALITIES } from "../../src/shared/schema";
 import { buildingQuality, isStockable, type Stocked, type Wanting } from "../../src/shared/town";
+import { timeAmount as hourglasses } from "./timeMark";
 
 // The street, as the page words it. What a plot costs, what a building needs, and whether any of
 // it is allowed are the server's. This only reads what the server sent and says it plainly.
@@ -48,8 +49,6 @@ export function emptyPlot(town: TownView): Plot | null {
 }
 
 const count = (amount: number, one: string, many: string) => `${amount} ${amount === 1 ? one : many}`;
-// The evening's time, as the player sees it: hourglasses, with no word for them.
-const hourglasses = (amount: number) => `${amount} ⌛`;
 
 function listed(words: string[]): string {
   if (words.length < 3) return words.join(" and ");
@@ -114,10 +113,15 @@ export function upgradeBlock(next: NonNullable<BuildingView["next"]>, gold: numb
   return cost || (next.ready ? "" : "Not ready yet.");
 }
 
+// Whether the player has discovered a trade, which is what the first plot asks for (`no-job`).
+// The server counts the jobs among the same discoveries the page is sent, not whoever has come
+// to town (nobody comes until a building stands) and not the job the player has taken up.
+export function hasTrade(entries: Iterable<GameEntry>): boolean {
+  for (const entry of entries) if (entry.kind === "job") return true;
+  return false;
+}
+
 // What a plot is, in a sentence, for a plot with no building on it.
-// The first plot needs a trade in town, which the server holds to (`no-job`). The server counts
-// the townsfolk who have arrived with a job, so `hasTrade` is `town.townsfolk.length > 0` and
-// not whichever job the player has taken up: a job discovered is already enough.
 export function plotNeedsJob(plot: Plot, state: PlotState, hasTrade: boolean): boolean {
   return state === "for-sale" && plot.index === 0 && !hasTrade;
 }
@@ -189,6 +193,23 @@ export function stockChangeText(change: StockChange): string {
 // Whether a discovery can be stocked at all: materials and spells, never elements or jobs.
 export function canStock(entry: GameEntry): boolean {
   return isStockable(entry);
+}
+
+// Who runs a building, and whether the player can hire them now. Nobody comes until the morning
+// after it stands; once they have, hiring costs gold once, and until then it earns nothing.
+// The price is the server's (`staff.hireCost`).
+export function staffLine(building: BuildingView, gold: number): { text: string; hire: { name: string; cost: number; short: number } | null } {
+  const staff = building.staff;
+  if (!staff) return { text: "", hire: null };
+  if (staff.hired && staff.person) return { text: `${staff.person.name} runs it.`, hire: null };
+  if (!staff.person)
+    return { text: "Nobody works here yet. Someone comes the morning after a building stands, and until then it earns nothing.", hire: null };
+  const short = Math.max(0, staff.hireCost - gold);
+  const need = short > 0 ? ` You need ${short} more gold.` : "";
+  return {
+    text: `${staff.person.name} has come to work here. Until you hire them it earns nothing.${need}`,
+    hire: { name: staff.person.name, cost: staff.hireCost, short },
+  };
 }
 
 // Why a hand can't be lent at this building right now, or "" when it can. The once-a-night limit

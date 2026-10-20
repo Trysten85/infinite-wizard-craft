@@ -15,12 +15,50 @@ npm test           # rule tests
 npm run typecheck
 ```
 
+## Everyday commands
+
+Source nvm first (`source ~/.nvm/nvm.sh`). The system Node is too old.
+
+**Test saves.** Each scenario in `data/test-saves.json` becomes a player you open the game as,
+for example `smithy-built`, `dusk-visitor` or `tansy-day-two`. Stop the game server first,
+because the tool refuses while it is running.
+
+```
+npm run saves                  # back up var/game.db, wipe it, and build every scenario
+npm run saves -- smithy-built  # rebuild one scenario and leave the others as they are
+npm run saves -- --list        # what each scenario is for
+```
+
+Each run keeps the old save as `var/game.before-test-saves-<date>.db`. To add a state, add a
+scenario to `data/test-saves.json` and run `npm run saves -- <its player>`.
+
+**Fast timing.** This lays `config/balance.fast.json` over the real numbers, for a 4-step day,
+a happening every night, and raises that finish at once. The server prints a line saying it is on.
+
+```
+BALANCE=fast npm run dev       # the whole game on fast timing
+BALANCE=fast npm run saves     # build the test saves on fast timing too
+```
+
+**The model switch.** `"enabled": false` in `config/model.json` turns the model off. While it
+is off, a new combination answers "Hey, fix the model", and evenings use canned visitors. Set
+it to `true` and restart the server once Ollama answers again.
+
+**Checks before calling a ticket done.**
+
+```
+npm test
+npm run typecheck
+npm run pace                   # how long each level takes, in days
+```
+
 ## The model
 
 `config/model.json` says which model the game uses and how:
 
 | Setting | What |
 |---|---|
+| `enabled` | Whether the model is in use (off for now). While `false`, any call to it answers 503 with code `model-off` and a sentence starting "Hey, fix the model:", which the server also prints at start. The visitor comes from the canned writer, orders and story beats keep their plain words, and cached, baked and hand-written combinations still work: only a brand-new pair needs the model. Left out, it is on |
 | `url` | Where Ollama answers. The host PC's address on the VirtualBox host-only network |
 | `model` | The model, which must already be pulled in Ollama |
 | `effort` | How hard a reasoning model thinks: `combos` for combinations, which the player waits on, `naming` for the one call in a combination that decides what the thing is, `events`, which are written out of sight, and optionally `orders` for the order board, which falls back to `events`. `low`, `medium`, `high`, or `null` for a model that does not reason |
@@ -368,7 +406,10 @@ above.
 | Route | Returns |
 |---|---|
 | `GET /api/players/:player/town` | A `TownView`: `{ plots, deeds, cheer, townsfolk, plans }` |
+| `GET /api/test-saves` | Dev only: `{ saves: [{ player, about }] }` from `data/test-saves.json`, for the page's picker. Off with `TEST_SAVES=off` |
+| `POST /api/test-saves/:player/reset` | Dev only: rebuilds that test save in place, as `npm run saves -- <player>` does, after anything being written for it finishes. `{ player, progress }`. A player not in `data/test-saves.json` is refused (400), so a real save is never wiped |
 | `GET /api/players/:player/town/people` | A `PeopleView`: everyone in town, with home, Fondness against `regularAt` and `teachAt`, whether their trade is taught, likes and dislikes, their lesson with progress, and the next story beat's title and gate (never what it asks) |
+| `POST /api/players/:player/town/hire` with `{ plot }` | `{ cost, rewards, night, dusk, progress }`. Hires the person who has come to run the building: `hireCost(tier)` gold, once. Refused with `rule` (nothing stands, nobody has come yet, already hired) or `not-enough-gold` |
 | `POST /api/players/:player/town/plots` (no body) | `{ plot, rewards, night, dusk, progress }` |
 | `POST /api/players/:player/town/build` with `{ plot, building }` | `{ rewards, night, dusk, progress }` |
 | `POST /api/players/:player/town/upgrade` with `{ plot }` | `{ rewards, night, dusk, progress }` |
@@ -412,13 +453,16 @@ above.
 - **Perks in force now, added:** `lifts`, `time` (an extra evening hourglass, counted by
   `progress.day.timeMax` and by when night falls), and `rumour` and `gift` (on every `every`th
   day, at night, listed in the ledger's `brought`).
-- **Townsfolk** of a trade with a written person (`data/cast.json`) are that person, with their
-  traits and facts, and arrive once their `arrival` condition holds too (`arrivalMet`); one who
-  came earlier under another name takes the cast identity, keeping their Fondness. Any other
-  trade's person is named from `data/townsfolk.json`, the next name nobody the player knows has.
-- **Homeless:** a townsperson whose home (`cast.home`, else their trade's building) is not
-  standing has gone for the night from dusk: they cannot be called on, and are never the
-  evening's visitor. `housed` in `TownView.townsfolk` says which.
+- **Townsfolk (N9, hiring):** a trade crafted gives its building's plan; nobody comes with it.
+  The morning after a building stands, the person who runs it (`runBy` at its tier) comes to
+  work there: the trade's written person (`data/cast.json`, their `arrival` gate still applies),
+  else a name from `data/townsfolk.json`. One person to a building; a trade with no building
+  brings nobody. A saved townsperson of a written trade takes the cast identity, keeping their
+  Fondness. **Hiring** (`/town/hire`) costs `hireCost(tier)` once; raising a hired building
+  charges `hireTopUp` with the tier's gold. A building pays takings only while someone is hired
+  (`staffedTakings`). `BuildingView.staff` says who, whether hired, and the hire's cost. Saved
+  games' townsfolk who already stood in their building were hired once at start-up
+  (`hireStanding`). There is no homeless state and nobody leaves at dusk.
 - **Teaching (N4):** a job can be taken up (`POST /job`) and its shift worked only once taught,
   else `not-taught`. The starter job is always taught; a job a save held before N4 is taught
   (`taught_jobs`, marked once). Otherwise: the person's lesson (`lessonFor`, paid as quests are,
@@ -609,6 +653,9 @@ npm run bake -- status       # how far it has got and how long is left
 npm run bake -- review       # write a reading list to var/bake/review.md, lowest marks first
 npm run bake -- seed         # round 2: put the approved pairs into the drafts (see Bake Guide.md)
 npm run review               # round 2: the keyboard review tool
+npm run saves                # test saves: back up var/game.db, wipe it, and build every scenario in
+                             # data/test-saves.json, one player each (stop the dev server first)
+npm run saves -- smithy-hired  # rebuild one; `-- --list` says what each is for
 npm run bake -- approve 4    # approve every draft marked 4 or better
 npm run bake -- approve sand+water     # approve single pairs
 npm run bake -- reject sand+water      # turn single pairs down

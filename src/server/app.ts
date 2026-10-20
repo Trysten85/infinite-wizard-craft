@@ -4,10 +4,11 @@ import { idSchema, responseTypeSchema } from "../shared/schema";
 import { RuleError, type Combiner } from "./combiner";
 import type { DayService, DayTurn } from "./day";
 import type { EventService } from "./events/service";
-import { GenerationError } from "./llm/generate";
+import { GenerationError, ModelOff } from "./llm/generate";
 import type { ProgressService } from "./progress";
 import type { ShiftService } from "./shifts/service";
 import type { StoryService } from "./story/service";
+import type { TestSaveService } from "./testSaves";
 import type { ShopService } from "./shop";
 import type { TownService } from "./town";
 
@@ -34,6 +35,8 @@ function refuse(c: Context, err: unknown) {
   if (err instanceof RuleError) {
     return c.json({ error: err.message, code: err.code }, err.code === "no-result" ? 422 : 400);
   }
+  // The model is turned off: the player sees the reminder itself, so it is fixed.
+  if (err instanceof ModelOff) return c.json({ error: err.message, code: "model-off" }, 503);
   if (err instanceof GenerationError) {
     console.error(err.message);
     return c.json({ error: "The model could not produce a result. Try again." }, 502);
@@ -47,7 +50,7 @@ const SAME_DAY: DayTurn = { night: null, dusk: null };
 
 export function createApp(
   combiner: Combiner,
-  services?: { progress: ProgressService; shop: ShopService; day: DayService; town?: TownService; events?: EventService; shifts?: ShiftService; story?: StoryService },
+  services?: { progress: ProgressService; shop: ShopService; day: DayService; town?: TownService; events?: EventService; shifts?: ShiftService; story?: StoryService; testSaves?: TestSaveService },
 ) {
   const app = new Hono();
 
@@ -83,6 +86,26 @@ export function createApp(
   });
 
   app.get("/api/jobs", (c) => c.json({ jobs: combiner.listJobs() }));
+
+  // Dev only: the test saves, for the page's picker, and starting one over without stopping the
+  // server. A player not named in data/test-saves.json is refused, so a real save is never wiped.
+  const testSaves = services?.testSaves;
+  if (testSaves) {
+    app.get("/api/test-saves", (c) => c.json({ saves: testSaves.list() }));
+    app.post("/api/test-saves/:player/reset", async (c) => {
+      const player = playerSchema.safeParse(c.req.param("player"));
+      if (!player.success) return invalid(c);
+      try {
+        // Anything still being written out of sight for the player finishes first, so it
+        // cannot land in the save after it has been rebuilt.
+        await Promise.all([services.events?.idle(player.data), services.shifts?.idle(player.data), services.story?.idle(player.data)]);
+        await testSaves.reset(player.data);
+        return c.json({ player: player.data, progress: services.progress.getProgress(player.data) });
+      } catch (err) {
+        return refuse(c, err);
+      }
+    });
+  }
 
   app.post("/api/players/:player/combine", async (c) => {
     const request = await read(c, combineBodySchema);
@@ -222,6 +245,18 @@ export function createApp(
         try {
           const raised = town.upgrade(request.player, request.body.plot);
           return c.json({ ...raised, progress: progress.getProgress(request.player) });
+        } catch (err) {
+          return refuse(c, err);
+        }
+      });
+
+      // Hires the person who has come to run the building on a plot. Gold once, by its tier.
+      app.post("/api/players/:player/town/hire", async (c) => {
+        const request = await read(c, upgradeBodySchema);
+        if (!request) return invalid(c);
+        try {
+          const hired = town.hire(request.player, request.body.plot);
+          return c.json({ ...hired, ...SAME_DAY, progress: progress.getProgress(request.player) });
         } catch (err) {
           return refuse(c, err);
         }

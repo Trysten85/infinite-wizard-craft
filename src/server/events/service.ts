@@ -7,7 +7,7 @@ import { GenerationError } from "../llm/generate";
 import { levelForSpellTier, type GameData } from "../gameData";
 import { buildPath } from "../paths";
 import { repBandFor, type ProgressService } from "../progress";
-import { isHomeless, standingBuildings } from "../town";
+import { standingBuildings } from "../town";
 import type { Person, Store, StoredEvent } from "../store";
 import {
   eligibleSeeds,
@@ -102,12 +102,8 @@ export function createEvents(deps: {
   // visitor (see `everyoneOf`), but they are not counted against the cap, so a town full of
   // them never crowds out new arrivals.
   const castOf = (player: string) => store.listPeople(player).filter((person) => person.job === null);
-  // Everyone who can come to the door: the cast and the townsfolk. A townsperson with no home
-  // yet leaves the town at dusk, so is never the evening's visitor.
-  const everyoneOf = (player: string) => {
-    const built = standingBuildings(data, store, player);
-    return store.listPeople(player).filter((person) => person.job === null || !isHomeless(data, built, person.job));
-  };
+  // Everyone who can come to the door: the cast and the townsfolk.
+  const everyoneOf = (player: string) => store.listPeople(player);
   const pendingEvent = (player: string) => store.listEvents(player).find((event) => event.state === "pending");
   // An event still being written out of sight.
   const hiddenEvent = (player: string) => store.listEvents(player).find((event) => event.state === "writing");
@@ -470,7 +466,7 @@ export function createEvents(deps: {
           fondness,
           lastDay: today,
           status: Math.abs(fondness) >= rules.settledAt ? "settled" : person.status,
-          ...(flagged ? { flag, flagDay: today + 2 } : {}),
+          ...(flagged ? { flag, flagDay: today + data.balance.events.followUpDays } : {}),
         });
       }
 

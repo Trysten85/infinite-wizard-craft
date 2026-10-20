@@ -10,20 +10,22 @@ import { createMadeFrom } from "./comboContext";
 import { createComboGenerator } from "./comboGenerator";
 import { createDay } from "./day";
 import { createEvents } from "./events/service";
-import { createModelEventWriter } from "./events/writer";
+import { createCannedEventWriter, createModelEventWriter } from "./events/writer";
 import { loadGameData } from "./gameData";
-import { createModelClient, readModelConfig } from "./llm/config";
+import { createModelClient, modelOffMessage, readModelConfig } from "./llm/config";
 import { createModelTurns } from "./llm/turns";
 import { createProgress } from "./progress";
 import { RECIPE_KEY_FILE, renderRecipeKey } from "./recipeKey";
 import { createShifts } from "./shifts/service";
 import { createModelOrderWriter } from "./shifts/writer";
 import { createStory } from "./story/service";
+import { createTestSaves } from "./testSaves";
+import { testSavesSchema } from "../shared/schema";
 import { createModelStoryWriter } from "./story/writer";
 import { createShop } from "./shop";
 import { openStore } from "./store";
 import { discountShare } from "../shared/town";
-import { createTown, grantOwedStalls, standingBuildings } from "./town";
+import { createTown, grantOwedStalls, hireStanding, standingBuildings } from "./town";
 
 const root = process.cwd();
 const port = Number(process.env.PORT ?? 3001);
@@ -61,6 +63,9 @@ if (blocklist.size === 0) console.warn("Blocklist.md not found or empty: generat
 // Saves from before the town are given the stall they were using. Once, at start-up, so that no
 // read of the town ever writes.
 const granted = grantOwedStalls(data, store);
+// N9: saved games' townsfolk who already stand in their building are taken on as hired, once.
+const hiredOnStart = hireStanding(data, store);
+if (hiredOnStart.length > 0) console.log(`Taken on as hired: ${hiredOnStart.join("; ")}.`);
 if (granted.length > 0) console.log(`Gave the Market Stall to players saved before the town: ${granted.join(", ")}.`);
 const combiner = createCombiner({
   data,
@@ -74,17 +79,24 @@ const progress = createProgress({ data, store, listDiscovered: combiner.listDisc
 const day = createDay({ data, store, progress });
 const town = createTown({ data, store, progress, day, listDiscovered: combiner.listDiscovered });
 const shop = createShop({ data, store, progress, listDiscovered: combiner.listDiscovered });
-const writer = createModelEventWriter({ client: turns.inBackground(createModelClient(model, "events")), log: store.logModelCall, voice, blocklist });
+// While the model is off, the visitor is written by the canned writer, so evenings still work.
+const writer = model.enabled ? createModelEventWriter({ client: turns.inBackground(createModelClient(model, "events")), log: store.logModelCall, voice, blocklist }) : createCannedEventWriter();
 const events = createEvents({ data, store, progress, day, listDiscovered: combiner.listDiscovered, writer, writeAhead: true });
 // Orders are put into words by the model, written ahead and checked against the board.
-const orderWriter = createModelOrderWriter({ client: turns.inBackground(createModelClient(model, "orders")), log: store.logModelCall, voice, blocklist });
+// While the model is off, orders keep their plain template words.
+const orderWriter = model.enabled ? createModelOrderWriter({ client: turns.inBackground(createModelClient(model, "orders")), log: store.logModelCall, voice, blocklist }) : undefined;
 const shifts = createShifts({ data, store, progress, day, listDiscovered: combiner.listDiscovered, writer: orderWriter });
 // The words of the story beats a player has played, written out of sight from prompts/story.md.
-const storyWriter = createModelStoryWriter({ client: turns.inBackground(createModelClient(model, "events")), log: store.logModelCall, voice, story: readFileSync(join(root, "prompts/story.md"), "utf8"), blocklist });
+// While the model is off, a beat's scene is its plain line.
+const storyWriter = model.enabled ? createModelStoryWriter({ client: turns.inBackground(createModelClient(model, "events")), log: store.logModelCall, voice, story: readFileSync(join(root, "prompts/story.md"), "utf8"), blocklist }) : undefined;
 const story = createStory({ data, store, writer: storyWriter });
-const app = createApp(combiner, { progress, shop, day, town, events, shifts, story });
+// Dev only: the test saves (data/test-saves.json), listed for the page and started over in place.
+// Off with TEST_SAVES=off.
+const testSaves = process.env.TEST_SAVES === "off" ? undefined : createTestSaves({ data, store, saves: testSavesSchema.parse(JSON.parse(readFileSync(join(root, "data/test-saves.json"), "utf8"))) });
+const app = createApp(combiner, { progress, shop, day, town, events, shifts, story, testSaves });
 
 serve({ fetch: app.fetch, port }, () => {
   const effort = model.effort.combos ? `, ${model.effort.combos} effort for combinations and ${model.effort.events} for events` : "";
   console.log(`Game server on http://localhost:${port} (model ${model.model} at ${model.url}${effort})`);
+  if (!model.enabled) console.log(`\n*** ${modelOffMessage(model)} ***\n`);
 });

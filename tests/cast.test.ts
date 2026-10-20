@@ -216,10 +216,12 @@ describe("fitting the cast to a game with fewer jobs", () => {
 });
 
 describe("who arrives when", () => {
-  const here = { level: 3, buildings: 2, townsfolk: 4, questsDone: new Set(["first-job"]) };
+  const here = { day: 2, level: 3, buildings: 2, townsfolk: 4, questsDone: new Set(["first-job"]) };
 
   it("needs every condition given, and nothing for a person with none", () => {
-    expect(arrivalMet({}, { ...here, level: 1, buildings: 0, townsfolk: 0, questsDone: new Set() })).toBe(true);
+    expect(arrivalMet({}, { ...here, day: 1, level: 1, buildings: 0, townsfolk: 0, questsDone: new Set() })).toBe(true);
+    expect(arrivalMet({ day: 2 }, here)).toBe(true);
+    expect(arrivalMet({ day: 3 }, here)).toBe(false);
     expect(arrivalMet({ level: 3, buildings: 2, townsfolk: 4, quest: "first-job" }, here)).toBe(true);
     expect(arrivalMet({ level: 4 }, here)).toBe(false);
     expect(arrivalMet({ buildings: 3 }, here)).toBe(false);
@@ -255,5 +257,19 @@ describe("neighbours", () => {
 
   it("changes nothing for a building whose owner has no written person", () => {
     expect(neighbourShift(1, "tinker", street([0, "farmer"]), cast, rules)).toBe(0);
+  });
+});
+
+describe("the test saves", () => {
+  it("name only things, jobs and buildings the game has, and one player each", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { testSavesSchema } = await import("../src/shared/schema");
+    const { testSaveProblems } = await import("../src/shared/testSaves");
+    const saves = testSavesSchema.parse(JSON.parse(readFileSync("data/test-saves.json", "utf8")));
+    const world = { entries: new Set(data.entries.keys()), jobs: new Set(data.jobs.keys()), buildings: new Set(data.buildings.keys()) };
+    expect(testSaveProblems(saves, world)).toEqual([]);
+    expect(saves.scenarios.map((scenario) => scenario.player)).toContain("tansy-day-two");
+    const bad = { scenarios: [...saves.scenarios, { player: "fresh", about: "x", steps: [{ do: "build" as const, plot: 0, building: "castle" }] }] };
+    expect(testSaveProblems(bad, world)).toEqual(["two test saves are called fresh", "fresh: build names the unknown building castle"]);
   });
 });

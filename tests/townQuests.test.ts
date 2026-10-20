@@ -24,12 +24,11 @@ describe("the town quests' conditions", () => {
       { type: "evenings", count: 2 },
     ]);
     expect(state().every((item) => item !== "done")).toBe(true);
-    // The farmer's person comes as soon as the trade is found; the blacksmith's waits on a building.
-    game.store.addDiscovery("ann", "farmer");
-    game.town.arrive("ann");
+    // A person comes to work once their building stands.
     game.store.addPlot("ann", 0);
     game.store.addPlot("ann", 1);
     game.store.setBuilding("ann", 0, "smithy", 1);
+    game.town.arrive("ann");
     expect(state()).toEqual(["done", "done", "done", "upcoming", "done", "upcoming"]);
     game.store.setBuilding("ann", 0, "smithy", 2);
     game.dusk("ann");

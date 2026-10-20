@@ -174,6 +174,7 @@ describe("a building's quality", () => {
 describe("Cheer and takings", () => {
   it("is a point a quality step, in bands that raise what every building pays", () => {
     const game = street("smithy", "farm");
+    for (const plot of [0, 1]) game.store.setHire("ann", plot, 1);
     expect(game.town.view("ann").cheer).toEqual({ points: 0, band: "Quiet" });
     thing(game, "a", ["metal", "forging"]);
     thing(game, "b", ["mineral", "industrial"]);

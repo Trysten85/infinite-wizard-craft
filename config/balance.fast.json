@@ -1,0 +1,13 @@
+{
+  "day": {
+    "length": 4,
+    "noon": 2,
+    "tonight": { "fromDay": 1, "chance": 1 }
+  },
+  "town": {
+    "raiseNights": 0
+  },
+  "events": {
+    "followUpDays": 1
+  }
+}

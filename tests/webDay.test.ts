@@ -9,7 +9,9 @@ import {
   phaseName,
   qualityName,
   sunShare,
+  sunReadout,
   sunText,
+  sunTicks,
   takingsTotal,
   tonightNews,
   visitorCue,
@@ -98,6 +100,32 @@ describe("tonightNews", () => {
     expect(tonightNews(today, today.number)).toBeNull();
     expect(tonightNews(day({ ...afternoon, tonight: { ...tonight, taken: true } }), null)).toBeNull();
     expect(tonightNews(afternoon, null)).toBeNull();
+  });
+});
+
+describe("sunTicks", () => {
+  it("marks the notches passed, the one the sun is on, and those ahead", () => {
+    expect(sunTicks(day({ length: 4, sun: 2 }))).toEqual(["past", "past", "now", "ahead"]);
+    expect(sunTicks(day({ length: 3, sun: 0 }))).toEqual(["now", "ahead", "ahead"]);
+  });
+
+  it("has every notch passed from dusk", () => {
+    expect(sunTicks(day({ ...evening, length: 3 }))).toEqual(["past", "past", "past"]);
+  });
+});
+
+describe("sunReadout", () => {
+  it("counts down to noon and to dusk in the morning", () => {
+    expect(sunReadout(day({ sun: 1 }))).toBe("1 of 10 · noon in 3 discoveries, dusk in 9 discoveries");
+    expect(sunReadout(day({ sun: 3 }))).toBe("3 of 10 · noon in 1 discovery, dusk in 7 discoveries");
+  });
+
+  it("counts down to dusk alone from noon", () => {
+    expect(sunReadout(day({ ...afternoon, sun: 9 }))).toBe("9 of 10 · Dusk in 1 discovery");
+  });
+
+  it("says the sun is down in the evening", () => {
+    expect(sunReadout(evening)).toBe("Dusk has come. The sun is down.");
   });
 });
 

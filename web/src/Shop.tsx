@@ -1,6 +1,7 @@
 import type { ShopSlot, ShopView } from "../../src/shared/schema";
 import { EntryBubble } from "./EntryBubble";
 import { Gold } from "./Gold";
+import { Icon, Said } from "./icons";
 import { kindLabel } from "./kinds";
 import { Shopkeeper } from "./Shopkeeper";
 
@@ -33,6 +34,21 @@ export function Shop({ view, gold, buying, onBuy }: Props) {
 
       <Shopkeeper />
       <p className="shop-note">{view ? "New stock each morning." : "The shopkeeper is setting out his stock."}</p>
+    </section>
+  );
+}
+
+// The shop's page before the shop is open: what opens it, in the server's words.
+export function ShopLocked({ reason }: { reason: string }) {
+  return (
+    <section className="shop shop-locked" aria-label="Shop, locked">
+      <h2 className="page-title">The Shop</h2>
+      <p className="shop-lock">
+        <Icon name="padlock" />
+      </p>
+      <p className="shop-note">
+        <Said text={reason} />
+      </p>
     </section>
   );
 }

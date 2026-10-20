@@ -287,7 +287,10 @@ export type RuleCode =
   // The shop is shut from dusk until morning (`shopOpen`).
   | "shop-closed"
   // A job whose person has not yet taught it, so its shift cannot be worked.
-  | "not-taught";
+  | "not-taught"
+  // The model is turned off (config/model.json), so nothing new can be written. The sentence
+  // says how to fix it.
+  | "model-off";
 
 // What a player just earned, for the page to announce. A filled request is listed among the
 // quests, and pays no XP.
@@ -545,6 +548,8 @@ export const balanceSchema = z.strictObject({
     memory: z.number().int().min(1),
     // A person whose fondness reaches this far either way has had their story.
     settledAt: z.number().int().min(1),
+    // Days after a flagged visit that its follow-up falls due.
+    followUpDays: z.number().int().min(1),
   }),
   // The day is a budget of the player's own actions. Nothing here is a timer.
   day: z.strictObject({
@@ -811,6 +816,8 @@ export const castMemberSchema = z.strictObject({
   dislikes: z.array(idSchema),
   // When they arrive, besides their job being discovered. Every part given must hold.
   arrival: z.strictObject({
+    // The day, counted from 1, on or after which they come.
+    day: z.number().int().min(1).optional(),
     level: z.number().int().min(1).optional(),
     buildings: countSchema.optional(),
     townsfolk: countSchema.optional(),
@@ -823,6 +830,33 @@ export const castMemberSchema = z.strictObject({
 });
 export type CastMember = z.infer<typeof castMemberSchema>;
 export const castSchema = z.strictObject({ people: z.array(castMemberSchema) });
+
+// A test save: a named player played to a state by the real game code, one step at a time, so it
+// survives changes to the save's shape. `npm run saves` builds them all into var/game.db.
+export const testSaveStepSchema = z.discriminatedUnion("do", [
+  z.strictObject({ do: z.literal("discover"), ids: z.array(idSchema).min(1) }),
+  z.strictObject({ do: z.literal("gold"), amount: z.number().int().min(1) }),
+  z.strictObject({ do: z.literal("level"), level: z.number().int().min(1) }),
+  z.strictObject({ do: z.literal("takeJob"), job: idSchema }),
+  z.strictObject({ do: z.literal("buyPlot") }),
+  z.strictObject({ do: z.literal("build"), plot: z.number().int().min(0), building: idSchema }),
+  z.strictObject({ do: z.literal("hire"), plot: z.number().int().min(0) }),
+  // Raises a standing building one tier, with whatever the tier asks for made on the way.
+  z.strictObject({ do: z.literal("upgrade"), plot: z.number().int().min(0) }),
+  // Ends the day this many times, so overnight things happen.
+  z.strictObject({ do: z.literal("night"), count: z.number().int().min(1).default(1) }),
+  z.strictObject({ do: z.literal("setDay"), sun: z.number().int().min(0).optional(), spent: z.number().int().min(0).optional() }),
+  z.strictObject({ do: z.literal("fondness"), job: idSchema, to: z.number().int().min(0) }),
+  z.strictObject({ do: z.literal("lessonDone"), job: idSchema }),
+  z.strictObject({ do: z.literal("call"), job: idSchema }),
+  // A canned visitor waiting, with no model asked.
+  z.strictObject({ do: z.literal("visitor") }),
+]);
+export type TestSaveStep = z.infer<typeof testSaveStepSchema>;
+export const testSavesSchema = z.strictObject({
+  scenarios: z.array(z.strictObject({ player: idSchema, about: z.string().min(1), steps: z.array(testSaveStepSchema) })),
+});
+export type TestSaves = z.infer<typeof testSavesSchema>;
 export type Cast = z.infer<typeof castSchema>;
 
 // The plain lines the day is written in until the model writes them.
@@ -833,6 +867,9 @@ export const dayTextSchema = z.strictObject({
   morning: z.array(z.string().min(1)).min(1),
   shopRestocked: z.array(z.string().min(1)).min(1),
   newOrders: z.array(z.string().min(1)).min(1),
+  // How the evening's time is shown to the player, in sentences the server writes. The page has
+  // its own constant (web/src/timeMark.ts), which a test holds to this.
+  timeMark: z.string().min(1),
 });
 export type DayText = z.infer<typeof dayTextSchema>;
 
@@ -850,8 +887,11 @@ export type BuildingView = {
   name: string;
   tier: number;
   quality: QualityId;
-  // What it will pay tonight.
+  // What it will pay tonight: nothing while nobody is hired to run it.
   takings: number;
+  // Who runs it (N9): the person who has come to work there, if anyone yet, whether they are
+  // hired, and what hiring them costs now. Always sent; optional until the page's fixtures carry it.
+  staff?: { person: { id: number; name: string } | null; hired: boolean; hireCost: number };
   // It serves meals at this tier, so a meal can be had here and the evening's visitor sits here.
   // The server goes by the `meals` perk and says so here, so the page never names a building by id.
   meals: boolean;
@@ -880,9 +920,9 @@ export type PersonView = {
   // Where they live, or null for a trade with no building to wait for. "shared" lodges in town.
   home: { building: string; name: string } | "shared" | null;
   housed: boolean;
-  // No home standing yet: they wait at the Tavern's door by day and leave at dusk.
-  homeless: boolean;
-  awayTonight: boolean;
+  // Hired to run the building their trade runs (N9), and which one that is.
+  hired: boolean;
+  worksAt: { plot: number; building: string; name: string } | null;
   fondness: number;
   regular: boolean;
   taught: boolean;

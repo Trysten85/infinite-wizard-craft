@@ -52,8 +52,9 @@ describe("the cast", () => {
 
   it("runs the town thread through the six buildings' people, and ends it with a finale that waits on every piece", () => {
     const thread = people.flatMap((person) => person.beats.filter((beat) => beat.thread).map((beat) => ({ person, beat })));
-    // The finale is the one thread beat with nothing to do: it is done once its pieces are.
-    const finales = thread.filter(({ beat }) => !beat.done);
+    // The finale is the one thread beat that waits on other people's beats and has nothing to do
+    // itself: it is done once its pieces are. (A first beat with no objective is not a finale.)
+    const finales = thread.filter(({ person, beat }) => !beat.done && beat.waitsOn.some((id) => !person.beats.some((own) => own.id === id)));
     expect(finales).toHaveLength(1);
     const pieces = thread.filter(({ beat }) => finales[0]!.beat.waitsOn.includes(beat.id));
     expect(pieces).toHaveLength(finales[0]!.beat.waitsOn.length);

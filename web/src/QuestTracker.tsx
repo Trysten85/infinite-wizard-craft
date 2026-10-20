@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { HintView, QuestProgress, RequestView } from "../../src/shared/schema";
 import { activeQuest, isOpen } from "./activeQuest";
 import { Gold } from "./Gold";
+import { Icon, Said } from "./icons";
 
 // How many main quests and how many open side quests the box shows before the rest go behind
 // "More quests".
@@ -70,7 +71,7 @@ export function QuestTracker({ player, quests, requests, hints }: Props) {
           {done.length} / {quests.length}
         </span>
         <button className="hud-fold-button" aria-expanded={!minimized} aria-label={minimized ? "Show all quests" : "Minimize quests"}>
-          {minimized ? "▾" : "▴"}
+          <Icon name={minimized ? "caretDown" : "caretUp"} />
         </button>
       </header>
 
@@ -172,7 +173,9 @@ function QuestList({ title, quests, activeId, onPick }: ListProps) {
                   {quest.state === "locked" ? (
                     <span className="quest-detail">Opens at level {quest.level}.</span>
                   ) : (
-                    quest.state !== "done" && <span className="quest-detail">{quest.detail}</span>
+                    quest.state !== "done" && <span className="quest-detail">
+                      <Said text={quest.detail} />
+                    </span>
                   )}
                   {quest.progress && quest.state !== "done" && (
                     <span className="quest-progress">

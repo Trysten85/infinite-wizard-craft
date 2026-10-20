@@ -47,7 +47,8 @@
     "spellCheck": { "chance": 0.75, "blockedTags": ["control"] },
     "maxActivePeople": 10,
     "memory": 4,
-    "settledAt": 8
+    "settledAt": 8,
+    "followUpDays": 2
   },
   "day": {
     "length": 10,

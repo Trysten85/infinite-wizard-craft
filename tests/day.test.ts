@@ -480,3 +480,10 @@ describe("a ledger saved while the evening's time was candles", () => {
     expect(readLedger(JSON.stringify({ ...old, fell: "bed" })).fell).toBe("bed");
   });
 });
+
+describe("the evening's time mark", () => {
+  it("is one line in data/day-text.json, the same as the page's constant", async () => {
+    const { TIME_MARK } = await import("../web/src/timeMark");
+    expect(data.dayText.timeMark).toBe(TIME_MARK);
+  });
+});

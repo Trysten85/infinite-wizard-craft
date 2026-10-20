@@ -13,11 +13,18 @@ const hester = data.cast.people.find((person) => person.job === "farmer")!;
 type Game = ReturnType<typeof newGame>;
 const farmer = (game: Game) => game.store.listPeople("ann").find((person) => person.job === "farmer")!;
 const fond = (game: Game, fondness: number) => game.store.updatePerson(farmer(game).id, { fondness });
+// Hester comes to work once a Farm stands (N9): one stands on plot 0.
+function farmStands(game: Game): void {
+  if (game.store.listPlots("ann").some((plot) => plot.building === "farm")) return;
+  game.store.addPlot("ann", 0);
+  game.store.setBuilding("ann", 0, "farm", 1);
+}
 
 describe("learning a trade", () => {
   it("is needed before the job is taken up, and the person who teaches it is named", () => {
     const game = newGame();
     for (const id of ["person", "farmer"]) game.store.addDiscovery("ann", id);
+    farmStands(game);
     game.town.arrive("ann");
     expect(() => game.progress.chooseJob("ann", "farmer")).toThrowError(expect.objectContaining({ code: "not-taught", message: expect.stringContaining(hester.name) }));
   });
@@ -25,6 +32,7 @@ describe("learning a trade", () => {
   it("comes from the lesson done and Fondness at the teaching line, and is kept for good", () => {
     const game = newGame();
     for (const id of ["person", "farmer"]) game.store.addDiscovery("ann", id);
+    farmStands(game);
     game.town.arrive("ann");
     // Fondness alone does not teach.
     fond(game, teachAt);
@@ -47,6 +55,7 @@ describe("learning a trade", () => {
     game.progress.settle("ann");
     expect(game.store.getLedgerRefs("ann", "quest")).not.toContain(hester.lesson[0]!.id);
     for (const id of ["person", "farmer"]) game.store.addDiscovery("ann", id);
+    farmStands(game);
     game.town.arrive("ann");
     game.progress.settle("ann");
     expect(game.store.getLedgerRefs("ann", "quest")).toEqual(expect.arrayContaining(hester.lesson.map((quest) => quest.id)));
@@ -59,8 +68,7 @@ describe("learning a trade", () => {
   it("can be finished by the call that brings Fondness to the line", () => {
     const game = newGame();
     for (const id of ["person", "farmer", "tree", "food"]) game.store.addDiscovery("ann", id);
-    game.store.addPlot("ann", 0);
-    game.store.setBuilding("ann", 0, "farm", 1);
+    farmStands(game);
     game.town.arrive("ann");
     game.progress.settle("ann");
     fond(game, teachAt - 1);
@@ -118,6 +126,7 @@ describe("story beats", () => {
   function withHester(): Game {
     const game = newGame(1, undefined, { data: world });
     for (const id of ["person", "farmer"]) game.store.addDiscovery("ann", id);
+    farmStands(game);
     game.town.arrive("ann");
     game.progress.settle("ann");
     return game;
@@ -160,8 +169,7 @@ describe("the People tab", () => {
     const { createApp } = await import("../src/server/app");
     const game = newGame();
     for (const id of ["person", "farmer", "carpenter", "tree"]) game.store.addDiscovery("ann", id);
-    game.store.addPlot("ann", 0);
-    game.store.setBuilding("ann", 0, "farm", 1);
+    farmStands(game);
     game.town.arrive("ann");
     game.progress.settle("ann");
     const app = createApp(game.combiner, { progress: game.progress, shop: game.shop, day: game.day, town: game.town });
@@ -176,7 +184,8 @@ describe("the People tab", () => {
       personality: hester.personality,
       home: { building: "farm", name: "Farm" },
       housed: true,
-      homeless: false,
+      hired: false,
+      worksAt: { plot: 0, building: "farm", name: "Farm" },
       taught: false,
       fondness: 0,
     });
@@ -185,9 +194,7 @@ describe("the People tab", () => {
     expect(her.lesson.map((quest) => [quest.id, quest.done])).toEqual(hester.lesson.map((quest) => [quest.id, quest.id === "lesson-farmer-tree"]));
     // The next beat by title and gate only.
     expect(her.nextBeat).toEqual({ title: hester.beats[0]!.title, gate: hester.beats[0]!.gate, level: hester.beats[0]!.level });
-    // A trade with no written person and no building has no home to wait for.
-    const carpenter = view.people.find((person) => person.job === "carpenter")!;
-    expect(carpenter).toMatchObject({ home: null, housed: false, homeless: false, personality: null, nextBeat: null });
-    expect(carpenter.lesson.map((quest) => quest.id)).toEqual(["lesson-carpenter"]);
+    // A trade with no building brings nobody: a person comes only to work at a building.
+    expect(view.people.find((person) => person.job === "carpenter")).toBeUndefined();
   });
 });

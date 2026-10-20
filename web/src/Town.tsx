@@ -3,6 +3,8 @@ import type { PointerEvent } from "react";
 import type { DayView, GameEntry, NeedView, ShiftRules, TownView } from "../../src/shared/schema";
 import { qualityName, visitorCue } from "./day";
 import { Gold } from "./Gold";
+import { Icon, Said } from "./icons";
+import { TIME_MARK, timeAmount } from "./timeMark";
 import { Shelves } from "./Shelves";
 import { PlotArt } from "./Street";
 import {
@@ -11,10 +13,12 @@ import {
   eveningBlock,
   eveningOffers,
   handBlock,
+  staffLine,
   needText,
   planBlock,
   plotCaption,
   plotStates,
+  hasTrade,
   plotNeedsJob,
   plotText,
   servesMeals,
@@ -39,6 +43,7 @@ type Props = {
   onBuyPlot: () => void;
   onRaise: (plot: number, building: string) => void;
   onUpgrade: (plot: number) => void;
+  onHire: (plot: number) => void;
   onLeave: () => void;
   // What is on show for stocking: every discovery by id, what is being carried, the shelf it is
   // over as "plot:slot", and the order board's numbers (null until it has been read).
@@ -78,9 +83,9 @@ export function Town(props: Props) {
   const shownState = shown ? states[shown.index]! : null;
   // A plan goes on the picked plot if that is empty, and otherwise on the first empty one.
   const site = shown && shownState === "empty" ? shown : free;
-  // The first plot waits on a trade in town. This is the same list the server counts, so the
-  // page offers the plot exactly when buying it would be allowed.
-  const hasTrade = (town?.townsfolk.length ?? 0) > 0;
+  // The first plot waits on a trade discovered. The page is sent the same discoveries the server
+  // counts, so it offers the plot exactly when buying it would be allowed.
+  const traded = hasTrade(props.entries.values());
 
   return (
     <section className="town" aria-label="The town">
@@ -114,7 +119,12 @@ export function Town(props: Props) {
                         {plot.building && (
                           <span className="plot-tier">
                             {" "}
-                            {"★".repeat(plot.building.tier)} {qualityName(plot.building.quality)}
+                            <span className="tier-stars" role="img" aria-label={`tier ${plot.building.tier}`}>
+                              {Array.from({ length: plot.building.tier }, (_, star) => (
+                                <Icon key={star} name="star" />
+                              ))}
+                            </span>
+                            {qualityName(plot.building.quality)}
                           </span>
                         )}
                       </span>
@@ -132,7 +142,9 @@ export function Town(props: Props) {
       </div>
 
       {!town ? (
-        <p className="town-quiet">{problem || "Reading the street…"}</p>
+        <p className="town-quiet">
+          <Said text={problem || "Reading the street…"} />
+        </p>
       ) : (
         <div className="town-boxes">
           {day && (
@@ -157,9 +169,9 @@ export function Town(props: Props) {
               shownState && (
                 <>
                   <h3>Plot {shown.index + 1}</h3>
-                  <p>{plotText(shown, shownState, town, gold, hasTrade)}</p>
+                  <p>{plotText(shown, shownState, town, gold, traded)}</p>
                   {shownState === "for-sale" && (
-                    <button disabled={busy || gold < shown.price || plotNeedsJob(shown, shownState, hasTrade)} onClick={onBuyPlot}>
+                    <button disabled={busy || gold < shown.price || plotNeedsJob(shown, shownState, traded)} onClick={onBuyPlot}>
                       {shown.price === 0 ? "Claim this plot" : "Buy this plot"}
                       {shown.price > 0 && <Gold amount={shown.price} />}
                     </button>
@@ -183,7 +195,11 @@ export function Town(props: Props) {
                       Raise it{site && ` on plot ${site.index + 1}`}
                       <Gold amount={plan.price} />
                     </button>
-                    {block && <p className="town-why">{block}</p>}
+                    {block && (
+                      <p className="town-why">
+                        <Said text={block} />
+                      </p>
+                    )}
                   </li>
                 );
               })}
@@ -249,6 +265,7 @@ function Standing(props: StandingProps) {
   const next = building.next;
   const block = next ? upgradeBlock(next, gold, level, day) : "";
   const handWhy = handBlock(building, day);
+  const staff = staffLine(building, gold);
   // Only a discovery that can be stocked wakes the shelves, and only the picked building's.
   const stockable = carrying && canStock(carrying) ? carrying : null;
   const [overPlot, overSlot] = overShelf ? overShelf.split(":").map(Number) : [null, null];
@@ -260,6 +277,13 @@ function Standing(props: StandingProps) {
       <p>
         Pays <Gold amount={building.takings} label /> a night.
       </p>
+      {staff.text && <p className="town-staff">{staff.text}</p>}
+      {staff.hire && (
+        <button disabled={busy || staff.hire.short > 0} onClick={() => props.onHire(plot)}>
+          Hire {staff.hire.name}
+          <Gold amount={staff.hire.cost} />
+        </button>
+      )}
       <Shelves
         plot={plot}
         building={building}
@@ -274,7 +298,11 @@ function Standing(props: StandingProps) {
       <button disabled={busy || handWhy !== ""} onClick={() => onHand(plot)}>
         Lend a hand
       </button>
-      {handWhy && <p className="town-why">{handWhy}</p>}
+      {handWhy && (
+        <p className="town-why">
+          <Said text={handWhy} />
+        </p>
+      )}
       {building.enchantment && (
         <p className="town-enchant">
           {building.enchantment.spell.name} is cast on it, for {building.enchantment.daysLeft}{" "}
@@ -283,7 +311,9 @@ function Standing(props: StandingProps) {
       )}
       {servesMeals(building) && props.visitorWaiting && props.visitorPlace === "tavern" && day && (
         <>
-          <p className="town-visitor">{visitorCue(day, "tavern").text}</p>
+          <p className="town-visitor">
+            <Said text={visitorCue(day, "tavern").text} />
+          </p>
           <button disabled={busy || eveningBlock("visitor", day) !== ""} onClick={props.onSit}>
             Sit with them
           </button>
@@ -295,7 +325,7 @@ function Standing(props: StandingProps) {
             Have a meal
           </button>
           <p className="town-none">
-            {eveningBlock("meal", day) || "Costs gold by your level. Tomorrow's discoveries pay more."}
+            <Said text={eveningBlock("meal", day) || "Costs gold by your level. Tomorrow's discoveries pay more."} />
           </p>
         </>
       )}
@@ -307,7 +337,11 @@ function Standing(props: StandingProps) {
             Raise it a tier
             <Gold amount={next.gold} />
           </button>
-          {block && <p className="town-why">{block}</p>}
+          {block && (
+                      <p className="town-why">
+                        <Said text={block} />
+                      </p>
+                    )}
         </>
       ) : (
         <p className="town-none">It is as fine as a building gets.</p>
@@ -338,7 +372,7 @@ function Evening({
       <h3>{evening ? "This evening" : "This evening, from dusk"}</h3>
       {evening && (
         <p className="town-none">
-          You have {day.time} of {day.timeMax} ⌛ left.
+          <Said text={`You have ${day.time} of ${timeAmount(day.timeMax)} left.`} />
         </p>
       )}
       {day.tonight && (
@@ -351,7 +385,9 @@ function Evening({
         {offers.map((offer) => (
           <li key={offer.id} className={offer.ok ? "" : "closed"}>
             <span>{offer.label}</span>
-            <span className="offer-cost">{offer.cost}</span>
+            <span className="offer-cost">
+              <Said text={offer.cost} />
+            </span>
             {offer.id === "tonight" && asking && (
               <button disabled={busy || !evening} onClick={onTonight}>
                 {asking}
@@ -359,7 +395,9 @@ function Evening({
             )}
           </li>
         ))}
-        {offers.length === 0 && <li className="closed">Nothing to spend ⌛ on yet.</li>}
+        {offers.length === 0 && <li className="closed">
+            <Said text={`Nothing to spend ${TIME_MARK} on yet.`} />
+          </li>}
       </ul>
     </section>
   );
@@ -372,7 +410,11 @@ function CallOn({ called, day, busy, onCall }: { called: boolean; day?: DayView;
       <button disabled={busy || why !== ""} onClick={onCall}>
         Call on them
       </button>
-      {why && <p className="town-why">{why}</p>}
+      {why && (
+        <p className="town-why">
+          <Said text={why} />
+        </p>
+      )}
     </>
   );
 }

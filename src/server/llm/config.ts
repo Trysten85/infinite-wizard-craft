@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { z } from "zod";
+import { ModelOff } from "./generate";
 import { createOllamaClient } from "./ollama";
 import type { LlmClient } from "./types";
 
@@ -14,6 +15,10 @@ export type ModelJob = "combos" | "naming" | "events" | "orders";
 
 const effortSchema = z.enum(["low", "medium", "high"]);
 const modelConfigSchema = z.strictObject({
+  // Whether the model is reachable and in use. While false, every call to it throws a reminder
+  // ("Hey, fix the model: ..."), the visitor is written by the canned writer, orders and beats
+  // keep their plain words, and cached and baked combinations still work. Left out, it is on.
+  enabled: z.boolean().default(true),
   // The host PC's address on the VirtualBox host-only network.
   url: z.url(),
   model: z.string().min(1),
@@ -61,6 +66,19 @@ export function settingsFor(config: ModelConfig, job: ModelJob): { think: "low" 
   return { think: effort ?? undefined, timeoutMs: seconds * 1000 };
 }
 
+// The reminder shown while the model is off: where it should be, and how to turn it back on.
+export function modelOffMessage(config: Pick<ModelConfig, "url" | "model">): string {
+  return `Hey, fix the model: it is turned off, so nothing new can be written. It should be ${config.model} at ${config.url}. Start Ollama there, then set "enabled": true in config/model.json and restart the server.`;
+}
+
 export function createModelClient(config: ModelConfig, job: ModelJob): LlmClient {
+  if (!config.enabled) {
+    return {
+      model: config.model,
+      async complete() {
+        throw new ModelOff(modelOffMessage(config));
+      },
+    };
+  }
   return createOllamaClient({ baseUrl: config.url, model: config.model, keepAlive: config.keepAlive, ...settingsFor(config, job) });
 }

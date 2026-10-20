@@ -150,10 +150,11 @@ export function openBeats(person: CastMember, fondness: number, doneBeats: Reado
 
 // When a person arrives besides their job being discovered: every part of `arrival` that is given
 // must hold. A person with no conditions arrives at once.
-export type ArrivalWorld = { level: number; buildings: number; townsfolk: number; questsDone: ReadonlySet<string> };
+export type ArrivalWorld = { day: number; level: number; buildings: number; townsfolk: number; questsDone: ReadonlySet<string> };
 
 export function arrivalMet(arrival: CastMember["arrival"], world: ArrivalWorld): boolean {
   return (
+    (arrival.day === undefined || world.day >= arrival.day) &&
     (arrival.level === undefined || world.level >= arrival.level) &&
     (arrival.buildings === undefined || world.buildings >= arrival.buildings) &&
     (arrival.townsfolk === undefined || world.townsfolk >= arrival.townsfolk) &&

@@ -8,7 +8,7 @@ import { discoveryGold, xpToReach } from "../src/server/progress";
 import { comboKey, type GameEntry, type TownView } from "../src/shared/schema";
 import type { GameData } from "../src/server/gameData";
 import { openStore } from "../src/server/store";
-import { grantOwedStalls } from "../src/server/town";
+import { grantOwedStalls, hireStanding } from "../src/server/town";
 import { extraDiscoveryGold, learnPrice, takingsFor } from "../src/shared/town";
 import { data, newGame } from "./helpers";
 
@@ -72,41 +72,36 @@ function readyToBuild(): Game {
 }
 
 describe("townsfolk", () => {
-  it("arrive when their job is discovered, taken up or not, and bring their plan", () => {
+  it("do not come with the trade: crafting it gives the plan, and nobody is in town for it yet", () => {
     const game = newGame(1, undefined, { data: nobodyWaits });
     expect(game.town.view("ann")).toMatchObject({ townsfolk: [], plans: [] });
     give(game, ["blacksmith"]);
     const town = game.town.view("ann");
-    // The blacksmith's trade has a written person.
-    const first = data.cast.people.find((person) => person.job === "blacksmith")!;
-    expect(town.townsfolk).toEqual([{ person: expect.any(Number), job: "blacksmith", name: first.name, housed: false, fondness: 0, regular: false }]);
+    expect(town.townsfolk).toEqual([]);
     expect(town.plans).toHaveLength(1);
     expect(town.plans[0]).toMatchObject({ building: "smithy", name: "Smithy", price: building("smithy").price, time: costs.build, ready: false });
     expect(town.plans[0]!.needs).toEqual([{ label: "Forge", met: false }, { label: "Iron", met: false }]);
     expect(game.progress.getProgress("ann").job).toBeNull();
+  });
+
+  it("come the morning after their building stands: one person to a building, the trade's written person", () => {
+    const game = readyToBuild();
+    game.town.build("ann", 0, "smithy");
+    expect(game.town.view("ann").townsfolk).toEqual([]);
+    overnight(game);
+    const first = data.cast.people.find((person) => person.job === "blacksmith")!;
+    expect(game.town.view("ann").townsfolk).toEqual([{ person: expect.any(Number), job: "blacksmith", name: first.name, housed: true, fondness: 0, regular: false }]);
+    expect(game.store.listPeople("ann")[0]).toMatchObject({ job: "blacksmith", role: "Blacksmith", firstDay: game.day.today("ann").number, pronoun: first.pronoun });
     // They arrive once, however often the street is looked at.
     game.town.view("ann");
     expect(game.store.listPeople("ann")).toHaveLength(1);
-    expect(game.store.listPeople("ann")[0]).toMatchObject({ job: "blacksmith", role: "Blacksmith", firstDay: 1, pronoun: first.pronoun });
   });
 
-  it("arrive on the day the job was made, through the combine route", async () => {
+  it("only come with a building, though every trade with one gives its plan", () => {
     const game = newGame(1, undefined, { data: nobodyWaits });
-    const app = createApp(game.combiner, { progress: game.progress, shop: game.shop, day: game.day, town: game.town });
-    const recipe = [...data.combos.values()].find((combo) => combo.result === "blacksmith")!;
-    give(game, [...recipe.inputs, ...recipe.needs]);
-    game.setDay("ann", { number: 4 });
-    const body = JSON.stringify({ a: recipe.inputs[0], b: recipe.inputs[1] });
-    expect((await app.request("/api/players/ann/combine", { method: "POST", headers: { "Content-Type": "application/json" }, body })).status).toBe(200);
-    expect(game.store.listPeople("ann")).toMatchObject([{ job: "blacksmith", firstDay: 4 }]);
-  });
-
-  it("come with every job, though only six have a building to bring", () => {
-    const game = newGame(1, undefined, { data: nobodyWaits });
-    const jobs = [...data.jobs.keys()];
-    give(game, jobs);
+    give(game, [...data.jobs.keys()]);
     const town = game.town.view("ann");
-    expect(town.townsfolk.map((person) => person.job).sort()).toEqual([...jobs].sort());
+    expect(town.townsfolk).toEqual([]);
     expect(town.plans.map((plan) => plan.building).sort()).toEqual([...data.buildings.keys()].sort());
   });
 
@@ -114,8 +109,12 @@ describe("townsfolk", () => {
     const briefs: { takenNames: string[]; person: { returning: boolean; name?: string } }[] = [];
     const { createCannedEventWriter } = await import("../src/server/events/writer");
     const canned = createCannedEventWriter();
-    const game = newGame(1, { ...canned, write: (brief) => (briefs.push(brief), canned.write(brief)) });
-    give(game, [...data.jobs.keys()]);
+    const game = newGame(1, { ...canned, write: (brief) => (briefs.push(brief), canned.write(brief)) }, { data: nobodyWaits });
+    // Every building standing brings its person.
+    for (const [plot, id] of [...data.buildings.keys()].entries()) {
+      game.store.addPlot("ann", plot);
+      game.store.setBuilding("ann", plot, id, 1);
+    }
     game.town.arrive("ann");
     const townsfolk = game.store.listPeople("ann").map((person) => person.name);
     // With nobody met yet, a townsperson is who comes back.
@@ -193,7 +192,7 @@ describe("raising a building", () => {
     const going = game.town.view("ann");
     expect(going.plans).toEqual([]);
     expect(going.plots[0]).toMatchObject({ building: null, raising: { building: "smithy", name: "Smithy", tier: 1, nights: rules.raiseNights } });
-    expect(going.townsfolk[0]).toMatchObject({ job: "blacksmith", housed: false });
+    expect(going.townsfolk).toEqual([]);
     game.dusk("ann");
     const night = game.day.end("ann").night!;
     expect(night.lines).toContain("The Smithy stands, finished overnight.");
@@ -208,7 +207,9 @@ describe("raising a building", () => {
       name: "Smithy",
       tier: 1,
       quality: "meh",
-      takings: pays(1),
+      // Nobody is hired yet, so it earns nothing.
+      takings: 0,
+      staff: { person: { id: expect.any(Number), name: data.cast.people.find((person) => person.job === "blacksmith")!.name }, hired: false, hireCost: rules.hireByTier[0] },
       wants: building("smithy").wants,
       stock: [{ slot: 0, entry: null }, { slot: 1, entry: null }],
       enchantment: null,
@@ -240,7 +241,7 @@ describe("raising a building", () => {
     const game = readyToBuild();
     expect(() => game.town.build("ann", 3, "smithy")).toThrow(/do not own that plot/);
     expect(() => game.town.build("ann", 0, "castle")).toThrow(/no such building/);
-    expect(() => game.town.build("ann", 0, "farm")).toThrow(/Nobody in town knows how to run a Farm/);
+    expect(() => game.town.build("ann", 0, "farm")).toThrow(/no plan for a Farm/);
     game.town.build("ann", 0, "smithy");
     give(game, ["farmer", ...needsOf("farm")]);
     expect(() => game.town.build("ann", 0, "farm")).toThrow(/already going up on that plot/);
@@ -259,6 +260,8 @@ describe("raising a building", () => {
     game.setDay("ann", { spent: time });
     expect(game.town.build("ann", 0, "smithy").night).toBeNull();
     expect(game.day.end("ann").night!.takings).toEqual([]);
+    // Standing, its person comes in the morning; hired, it pays that night.
+    game.town.hire("ann", 0);
     overnight(game);
     expect(game.store.getLedgerRefs("ann", "takings")).toEqual(["2:0"]);
   });
@@ -305,7 +308,7 @@ describe("raising a tier", () => {
     expect(game.town.view("ann").plots[0]).toMatchObject({ building: { tier: 1 }, raising: { building: "smithy", tier: 2 } });
     expect(raise).toThrow(/already being raised/);
     overnight(game);
-    expect(game.town.view("ann").plots[0]!.building).toMatchObject({ tier: 2, takings: pays(2), stock: [{ slot: 0 }, { slot: 1 }, { slot: 2 }] });
+    expect(game.town.view("ann").plots[0]!.building).toMatchObject({ tier: 2, takings: 0, stock: [{ slot: 0 }, { slot: 1 }, { slot: 2 }] });
   });
 
   it("is refused where nothing stands and at the top, and not for the hour", () => {
@@ -332,6 +335,7 @@ describe("raising a tier", () => {
     game.dusk("ann");
     game.town.build("ann", 0, "herb-garden");
     overnight(game);
+    game.town.view("ann");
     for (const [index, tag] of ["plant", "healing"].entries()) made(game, `deep-herb-${index}`, tag, 6);
     expect(() => game.town.upgrade("ann", 0)).toThrowError(expect.objectContaining({ code: "needs-missing", message: expect.stringMatching(/An Alchemist in town/) }));
     give(game, ["alchemist"]);
@@ -346,8 +350,9 @@ describe("takings", () => {
   it("are paid by each building at night, through the ledger, once", () => {
     const game = readyToBuild();
     game.town.build("ann", 0, "smithy");
-    // It stands after tonight, and pays from the next night on.
+    // It stands after tonight, and pays from the next night on, once its person is hired.
     game.day.end("ann");
+    game.town.hire("ann", 0);
     game.dusk("ann");
     const before = game.progress.getProgress("ann").gold;
     const night = game.day.end("ann").night!;
@@ -636,6 +641,8 @@ describe("neighbours", () => {
       game.store.addPlot("ann", plot);
       game.store.setBuilding("ann", plot, id, 1);
     }
+    // Everyone hired, so each building earns.
+    for (const plot of [0, ...others.map(([plot]) => plot)]) game.store.setHire("ann", plot, 1);
     return game;
   }
   const stallTakings = (game: Game) => game.town.view("ann").plots[0]!.building!.takings;
@@ -657,5 +664,108 @@ describe("neighbours", () => {
     const shown = stallTakings(game);
     game.dusk("ann");
     expect(game.day.end("ann").night!.takings.find((row) => row.plot === 0)!.gold).toBe(shown);
+  });
+});
+
+describe("hiring", () => {
+  // A Smithy standing on plot 0 with its person come to work, and gold to spend.
+  function withSmithy(): Game {
+    const game = readyToBuild();
+    game.town.build("ann", 0, "smithy");
+    overnight(game);
+    game.town.view("ann");
+    return game;
+  }
+
+  it("costs gold once by the tier, after which the building pays its takings", () => {
+    const game = withSmithy();
+    expect(game.town.view("ann").plots[0]!.building).toMatchObject({ takings: 0, staff: { hired: false, hireCost: rules.hireByTier[0] } });
+    const before = game.store.getGold("ann");
+    const { cost, rewards } = game.town.hire("ann", 0);
+    expect(cost).toBe(rules.hireByTier[0]);
+    expect(game.store.getGold("ann")).toBe(before - cost + rewards.gold);
+    expect(game.store.getLedgerRefs("ann", "hire")).toEqual(["0:1"]);
+    expect(game.town.view("ann").plots[0]!.building).toMatchObject({ takings: pays(1), staff: { hired: true } });
+    expect(() => game.town.hire("ann", 0)).toThrow(/already runs/);
+    // The people view says so too.
+    expect(game.town.people("ann").people[0]).toMatchObject({ hired: true, worksAt: { plot: 0, building: "smithy" } });
+  });
+
+  it("is refused where nothing stands, before anyone has come, and without the gold", () => {
+    const game = readyToBuild();
+    expect(() => game.town.hire("ann", 0)).toThrow(/Nothing stands/);
+    game.store.addPlot("ann", 1);
+    game.store.setBuilding("ann", 1, "farm", 1);
+    // A Farm's person has not come yet when the view has not been looked at; hiring brings them in.
+    game.store.addLedger("ann", -game.store.getGold("ann"), "shop", "test-drain");
+    expect(() => game.town.hire("ann", 1)).toThrowError(expect.objectContaining({ code: "not-enough-gold" }));
+    expect(game.store.getLedgerRefs("ann", "hire")).toEqual([]);
+  });
+
+  it("is topped up by the difference when a hired building is raised a tier", () => {
+    const game = withSmithy();
+    game.town.hire("ann", 0);
+    level(game, 3);
+    const asked = rules.tiers[1]!.made!;
+    for (const [index, tag] of ["metal", "forging"].entries()) made(game, `deep-${index}`, tag, asked.depth + 2);
+    gold(game, 1000);
+    // The tier's price as the street shows it (a Smithy standing takes a share off raising).
+    const price = game.town.view("ann").plots[0]!.building!.next!.gold;
+    const before = game.store.getGold("ann");
+    const { rewards } = game.town.upgrade("ann", 0);
+    const topUp = rules.hireByTier[1]! - rules.hireByTier[0]!;
+    expect(game.store.getGold("ann")).toBe(before - price - topUp + rewards.gold);
+    expect(game.store.getLedgerRefs("ann", "hire")).toEqual(["0:1", "0:2"]);
+    overnight(game);
+    expect(game.town.view("ann").plots[0]!.building).toMatchObject({ tier: 2, takings: pays(2) });
+  });
+
+  it("takes on a saved game's townsfolk who already stand in their building, once", () => {
+    const dir = mkdtempSync(join(tmpdir(), "pre-hire-"));
+    const path = join(dir, "game.db");
+    try {
+      // A save from before hiring: buildings standing, one with its person there, and no hires table.
+      const old = openStore(path);
+      old.addPlot("ann", 0);
+      old.setBuilding("ann", 0, "farm", 1);
+      old.addPlot("ann", 1);
+      old.setBuilding("ann", 1, "smithy", 1);
+      old.addPerson("ann", { name: "Old Farmer", role: "Farmer", traits: [], facts: [], job: "farmer" }, 1);
+      const raw = new DatabaseSync(path);
+      raw.exec("DROP TABLE town_hires; DROP TABLE hires_seeded;");
+      raw.close();
+      const store = openStore(path);
+      expect(hireStanding(data, store)).toEqual(["ann: Farm"]);
+      expect([...store.listHires("ann")]).toEqual([[0, 1]]);
+      // Once only: the Smithy's person, come later, is hired the usual way.
+      store.addPerson("ann", { name: "Old Smith", role: "Blacksmith", traits: [], facts: [], job: "blacksmith" }, 1);
+      expect(hireStanding(data, store)).toEqual([]);
+      expect(hireStanding(data, openStore(path))).toEqual([]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("the model turned off", () => {
+  it("lets a known pair be made, and a new pair says how to fix it, through the route", async () => {
+    const { createCombiner } = await import("../src/server/combiner");
+    const { createModelClient, readModelConfig } = await import("../src/server/llm/config");
+    const { createComboGenerator } = await import("../src/server/comboGenerator");
+    const game = newGame();
+    const off = { ...readModelConfig(process.cwd(), {}), enabled: false };
+    const generate = createComboGenerator({ client: createModelClient(off, "combos"), log: () => {}, voice: "", tags: data.tags.values(), balance: data.balance, storybook: data.storybook, reservedIds: new Set(data.entries.keys()) });
+    const combiner = createCombiner({ data, store: game.store, generate });
+    const app = createApp(combiner, { progress: game.progress, shop: game.shop, day: game.day, town: game.town });
+    const combine = (a: string, b: string) => app.request("/api/players/ann/combine", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ a, b }) });
+    // A hand-written recipe needs no model.
+    const known = [...data.combos.values()].find((combo) => combo.inputs.every((id) => data.balance.startingEntries.includes(id)) && combo.needs.length === 0)!;
+    expect((await combine(known.inputs[0], known.inputs[1])).status).toBe(200);
+    // A pair with no recipe, no approved bake and no result saved would need the model.
+    const starting = data.balance.startingEntries;
+    const [a, b] = starting.flatMap((x) => starting.map((y) => [x, y] as const)).find(([x, y]) => !data.combos.has(comboKey(x, y)) && !data.noResults.has(comboKey(x, y)))!;
+    const fresh = await combine(a, b);
+    expect(fresh.status).toBe(503);
+    expect(await fresh.json()).toMatchObject({ code: "model-off", error: expect.stringMatching(/^Hey, fix the model:/) });
   });
 });

@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
-import { readModelConfig, settingsFor } from "../src/server/llm/config";
+import { createModelClient, modelOffMessage, readModelConfig, settingsFor } from "../src/server/llm/config";
+import { generateValidated, ModelOff } from "../src/server/llm/generate";
+import { z } from "zod";
 import { createModelTurns } from "../src/server/llm/turns";
 import type { LlmCompletion, LlmRequest } from "../src/server/llm/types";
 
@@ -101,5 +103,25 @@ describe("taking turns at the model", () => {
     const broken = { model: "broken", complete: vi.fn(async () => Promise.reject(new Error("no answer"))) };
     await expect(turns.inBackground(broken).complete(request)).rejects.toThrow("no answer");
     expect(broken.complete).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("the model turned off", () => {
+  const off = { ...readModelConfig(root, {}), enabled: false };
+
+  it("is how the shipped settings stand for now, and any call reminds whoever reads it to fix it", async () => {
+    expect(readModelConfig(root, {}).enabled).toBe(false);
+    const client = createModelClient(off, "combos");
+    await expect(client.complete({ system: "s", prompt: "p", temperature: 0 } as never)).rejects.toThrow(/^Hey, fix the model:/);
+    expect(modelOffMessage(off)).toContain(off.url);
+    expect(modelOffMessage(off)).toContain('"enabled": true');
+  });
+
+  it("is never retried: the reminder goes straight up", async () => {
+    const client = createModelClient(off, "events");
+    const calls: unknown[] = [];
+    const attempt = generateValidated(client, (call) => calls.push(call), { purpose: "t", system: "s", prompt: "p", schema: z.strictObject({ a: z.string() }), maxAttempts: 4, temperature: 0 });
+    await expect(attempt).rejects.toBeInstanceOf(ModelOff);
+    expect(calls).toHaveLength(0);
   });
 });

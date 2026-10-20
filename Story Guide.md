@@ -11,16 +11,131 @@ Settled by Trysten, 2026-10-18:
 - **Each person's arc stands alone, and a gentle thread runs through them:** Crumb Lane is not
   on the map. No destiny, no prophecy, and nothing is lost if the thread is never finished.
 
-## What the code owns and what the AI owns
+Settled by Trysten, 2026-10-19:
+
+- **The cast's story is hand-written.** Every beat scene, lesson, calling line, and Tavern scene
+  between townsfolk is written here and kept in data. The model writes none of it. It keeps
+  strangers who visit, small talk when a townsperson is the evening visitor, orders, and
+  combinations.
+- **The player is silent.** Townsfolk speak to them and react to what they have done.
+- **A beat pays the moment it is done.** Its scene waits at the person's door and plays when the
+  player visits that evening, for ⌛. Skipping it loses nothing, and it is kept in the People tab.
+
+## What the code owns and what the writing owns
 
 | Code owns | Story lane writes (data) | The model writes |
 |---|---|---|
-| Fondness gates, objectives, rewards, the XP share | Each person's name, pronoun, personality, traits, and fixed facts | The lines of a beat, in the person's voice |
-| When someone arrives, who is housed, who meets whom | Lesson and beat titles, details, and premises | The exchange between two townsfolk at the Tavern |
-| Which outcome a Tavern scene has | A plain line for every beat and scene, used when the model fails | Nothing that changes a fact, a number, or an outcome |
-| Whether a beat is done | Calling lines | |
+| Fondness gates, objectives, rewards, the XP share | Each person, their facts, and every line they say | Small talk when a townsperson is the evening visitor, from their fixed traits and facts |
+| When someone arrives, and who meets whom | Lesson, beat, and Tavern scenes | Strangers who visit, orders, combinations |
+| Which outcome a Tavern scene has, and which line is picked | Calling lines with the conditions they wait for | Nothing about any arc |
+| Whether a beat is done, and the slots it fills (`{thing}`) | | |
 
-A beat always plays, even with the model down: it falls back to its plain line.
+## How we write the cast
+
+These rules come from research into what makes characters, conversations, and quest givers work
+(sources at the end of this section). Every scene is checked against the list before it lands.
+
+### A person
+
+1. **A want, a need, and a contradiction.** The want is concrete and drives the arc. The need is
+   the inner change the arc delivers. The contradiction is a gap between how they seem and how
+   they are. The want should look like the fix for the need, and turn out not to be. Dunstan
+   wants every hinge perfect, needs to let a thing be imperfect, and is huge and soft-spoken.
+2. **A life apart from the player.** They want things from each other, are sometimes busy, and
+   have things happen to them off-screen. The player's sense of mattering comes from people who
+   have their own business. "Agency is an effect, not a goal" (Meg Jayanth).
+3. **Specific, not decorated.** One telling detail beats a list. Every fixed fact must pay off in
+   at least one scene, and a fact that never matters gets cut.
+4. **They change, and the town shows it.** After a beat, their calling lines change, and
+   something in the world changes too: a sign, a habit, a line in the ledger.
+5. **No two handle things the same way.** Under stress, Hester deflects, Ferris talks more,
+   Quince apologises, Tansy charges ahead, Dunstan goes quiet, Marigold feeds someone, and
+   Ignatius digresses. Each sheet below says how they meet stress, praise, and conflict.
+
+### How they talk
+
+6. **Distinct voices.** Each person has their own vocabulary, sentence length, and topics they
+   raise and avoid. The swap test: give one person's line to another, and it must read wrong.
+   Tics stay subtle, because calling lines repeat and loud quirks grate.
+7. **Subtext.** People talk about the kettle, not the grief. Ask what this person is afraid to
+   say, and let that shape the line. The sheet below names it.
+8. **Start with a verb, and leave on the beat.** Every scene opens mid-activity: what are they
+   doing when the player arrives? It ends on its last good line, with no goodbyes.
+9. **Short, with the joke last.** A scene runs three to eight lines of one or two sentences each,
+   with the joke landing in the last few words (`voice.md`).
+10. **The world notices the player.** Lines react to what the player did, through slots code
+    fills (`{thing}`: the discovery that finished the beat). Ask what this person would notice.
+    The player never speaks, so the scene carries their part by how others react to them.
+
+### Between two people
+
+11. **Pairs are built on contrast.** One plays it straight while the other is the comic engine.
+    The dislike pairs are the best engines, because each quirk feeds the other.
+12. **A status see-saw.** In every exchange status shifts at least once, kindly. Whoever starts
+    on top ends a little lower, or the other way round. Nobody wins, and nobody is put down.
+13. **Overheard from the middle.** A Tavern scene is a fragment of a longer conversation, with
+    only its most revealing lines kept. The player walks in on it.
+14. **Callbacks and running gags in threes.** Each gag escalates across three appearances, each
+    a little bigger. Scenes refer back to earlier beats, so the town builds a shared history.
+15. **Relationships change.** Two townsfolk can grow closer through their arcs, as Dunstan and
+    Quince do over the smoke, and later scenes reflect it.
+
+### Quests and beats
+
+16. **A simple ask, a personal reason.** The task can be small (make a Crown). The reason must
+    matter to them, in their own words.
+17. **Story is the reward.** Each Fondness gate pays with something revealing about the person,
+    not only an item.
+18. **The next step can be found, but is never spelled out.** While a beat is open, calling on
+    the person gives a nudge line, and the People tab gives a hint. Never the recipe.
+
+### Repetition
+
+Hand-written text needs a system, or it repeats.
+
+19. **The most specific line wins, and there is always a fallback.** Lines carry conditions:
+    Fondness, before or after a beat, a building standing, tonight's happening. Code picks the
+    most specific line that matches, and every person has lines that always match.
+20. **Unheard lines first.** No line repeats while an unheard one matches. After that, the line
+    heard longest ago comes back.
+21. **New lines with depth.** Each step of Fondness and each finished beat opens new calling
+    lines, so calling on someone keeps paying.
+
+### Cozy limits
+
+From `voice.md`. Nobody is harmed, leaves, or falls ill. Grief is remembered, gently, and never
+happens on screen. No number, game word, or exclamation mark appears in any line. Romance goes
+no further than a shy look or a shared pie.
+
+### The checklist, for every scene
+
+- Does it open on someone doing something, and end on its best line?
+- Could any line be given to someone else? If it could, rewrite it.
+- What is the speaker not saying? Is that under the line?
+- Does the status shift, even a little?
+- Does it notice the player, or call back to something earlier?
+- Is it three to eight lines, with no number, no game word, and no exclamation mark?
+- Does a fixed fact show up, or a running gag move one step on?
+
+### Sources
+
+- Meg Jayanth, "Forget Protagonists: Writing NPCs with Agency", GDC 2016 (GDC Vault; Kill
+  Screen's report): NPCs with their own drive.
+- Supergiant Games on *Hades* (Game Developer, "How Supergiant weaves narrative rewards…";
+  GameSpot, Greg Kasavin): reactivity, "what would these characters notice", story as reward.
+- Emily Short, "Beyond Branching" (emshort.blog, 2016): salience-based lines, fallbacks, weighting
+  used content down.
+- "Adding life to worlds with dialogue barks" (Game Developer): start with verbs, overheard
+  banter, subtle tics.
+- Keith Johnstone, *Impro*: status transactions and the see-saw.
+- *Stardew Valley* heart events (Stardew wiki; TheGamer): gated scenes as reward, events that
+  change the town.
+- *Animal Crossing: New Horizons* (Screen Rant; GameFAQs): repetition, shared personality lines,
+  content players cannot find.
+- *The Witcher 3* side quests (Kotaku; TheGamer): a simple task wrapped in a personal reason.
+- Want and need (K. M. Weiland, Helping Writers Become Authors; Janice Hardy, Fiction
+  University); ensembles and foils (Chris Head; Creative Screenwriting; Writer's Digest); comedy
+  craft: callbacks, heightening, the rule of three (Writing Workshops; Highbrow).
 
 ## The town thread: Crumb Lane is not on the map
 
@@ -72,12 +187,13 @@ the model invents them fresh every visit. These close that gap.
 None of the names are in the 30-name pool. `people` is unique by player and name, so a cast name
 also in the pool could be taken first by someone else.
 
-The arrival conditions are drafts for N1. "Discovery" means the person comes as soon as the job is
-discovered, as now.
+Under Hiring (`Town Guide.md`, 2026-10-19), a person comes to work the morning after their
+building stands. So each first beat has no objective: it opens once the player has called on them
+enough (the gate), and it is their first proper conversation.
 
 ### Ignatius Puddlewick, the Wizard (he)
 
-- **Home:** the Wizard's Tower. **Arrives:** on discovery.
+- **Home:** the Wizard's Tower. **Arrives:** the morning after the Wizard's Tower stands.
 - **Personality:** a retired certifier of kettles who has never once been in a hurry.
 - **Traits:** kindly, wandering, proud of paperwork.
 - **Facts:** He spent forty years at the Office of Reasonable Enchantments, certifying kettles. A
@@ -86,19 +202,27 @@ discovered, as now.
 - **Voice:** long sentences that wander off and come back carrying one exact, useful point.
 - **Sample:** "The map is perfectly good. It is only that, according to it, you and I are
   standing in a saucer."
+- **Wants** to finish his book. **Needs** to see that his useful years are not behind him: the
+  lane on the map is the chapter that matters. **Contradiction:** forty years certifying things,
+  and nothing he owns is certified.
+- **Under stress** he digresses; **praised**, he credits the kettles, then writes it down later;
+  **in conflict**, he produces a form. **Won't say:** he is afraid nobody needs him now.
+  **Raises** kettles, forms, the wren, and the Office's old ways; **avoids** why he retired.
+- **Running gag, the Magistrate and his things:** the goose takes his hat (Hester's second beat),
+  then his spectacles, then Form Nine-B on its way to the post, and delivers it.
 - **Lesson:** none. The Wizard is taught from the first day (`Town Guide.md`, "Learning a trade").
   He says so: "You already know how. I only have the hat."
 
 | Beat | Gate | Waits on | Objective (draft) | Reward kind | Premise |
 |---|---|---|---|---|---|
-| A Blank Where We Live | 2 | | `built: wizards-tower` | commission (lost cats, cold soup) | Settled in his tower, he unrolls the county map and finds the teacup ring where the lane should be. Starts the thread. |
+| A Blank Where We Live | 2 | | none: opens at the gate | commission (lost cats, cold soup) | Settled in his tower, he unrolls the county map and finds the teacup ring where the lane should be. Starts the thread. |
 | The Lapsed Licence | 4 | | `learned-schools: 2` | tier unlock (the Tower's tier 2) | The form wants a practising wizard. His licence lapsed somewhere around chapter two, and the renewal asks him to show he keeps up with more than one school. He would like to watch the player do it. |
 | Chapter Three | 6 | | `enchantments: 3` | perk | He finally starts chapter three. It is about the player, and he reads them the first line. |
 | On the Map | 8 | all six thread beats | none beyond the waits | the thread's finale (above) | The form goes off. The surveyor comes, measures, and has a slice of pie. Crumb Lane is somewhere. |
 
 ### Hester Furrow, the Farmer (she)
 
-- **Home:** the Farm. **Arrives:** on discovery.
+- **Home:** the Farm. **Arrives:** the morning after the Farm stands.
 - **Personality:** grows enormous vegetables and is embarrassed whenever anyone mentions it.
 - **Traits:** blunt, patient, weather-wise.
 - **Facts:** Her goose, the Magistrate, chases anyone carrying a clipboard. The hawthorn hedge at
@@ -107,6 +231,14 @@ discovered, as now.
 - **Voice:** short sentences, a weather report in every conversation, and every compliment passed
   on to the soil.
 - **Sample:** "Rain by teatime. Don't look at the marrow, it gets ideas."
+- **Wants** the marrow to win, though she would never say so. **Needs** to be good at something
+  out loud. **Contradiction:** blunt about everything except her own work.
+- **Under stress** she gives a weather report; **praised**, she credits the soil; **in
+  conflict**, she says one sentence and goes back to digging. **Won't say:** she is proud.
+  **Raises** the weather, the hedge, and the goose; **avoids** the prize.
+- **Running gag, her left knee:** rain by teatime, and it rains; rain for the surveyor's visit,
+  and it rains on the surveyor only; on prize day the knee says sun, for the first time anyone
+  can remember.
 - **Lesson, "Hands in the Dirt":** grow a Tree (`has-entry: tree, made`), then make Food
   (`has-entry: food, made`).
 
@@ -119,7 +251,7 @@ discovered, as now.
 
 ### Ferris Tally, the Merchant (they)
 
-- **Home:** the Market Stall. **Arrives:** on discovery.
+- **Home:** the Market Stall. **Arrives:** the morning after the Market Stall stands.
 - **Personality:** haggles for the pleasure of it, even over things they are giving away.
 - **Traits:** chatty, honest, a touch vain.
 - **Facts:** Their brass scales are "the good scales", and only friends may look at them. They
@@ -127,20 +259,27 @@ discovered, as now.
   filed by colour.
 - **Voice:** quick and warm, and nearly every sentence is an offer.
 - **Sample:** "For you, half price. For anyone else, also half price, but don't tell them."
+- **Wants** the lane to be a proper market. **Needs** to be valued for themselves, not for the
+  bargain. **Contradiction:** haggles over everything, and gives everything away to friends.
+- **Under stress** they talk faster; **praised**, they offer a discount; **in conflict**, they
+  file a form about it. **Won't say:** the stall is lonely between customers. **Raises**
+  prices, how people take their tea, and the colours of forms; **avoids** where they came from.
+- **Running gag, the colours of forms:** pale blue is for applications; then a form in heron
+  grey, a colour nobody else has seen; then the Office replies on a colour even Ferris did not
+  know existed, and they frame it.
 - **Lesson, "A Fair Weight":** make Glass (`has-entry: glass, made`), a jar to sell things from,
   then make Salt (`has-entry: salt, made`), the first thing any market weighs.
 
 | Beat | Gate | Waits on | Objective (draft) | Reward kind | Premise |
 |---|---|---|---|---|---|
-| The Good Scales | 2 | | `built: market-stall` | commission | The scales deserve a proper counter. The stall is that counter. |
+| The Good Scales | 2 | | none: opens at the gate | commission | The scales deserve a proper counter. The stall is that counter. |
 | Something for Everyone | 4 | | `bought: 3` | tier unlock (the Stall's tier 2) | Ferris wants to learn the lane's taste, so they watch what the player buys and take notes in the margin of a form. |
 | Form Nine | 6 | Ignatius, A Blank Where We Live | `has-entry: crown, made` | thread piece | Form Nine-B must carry "any reasonable seal". Ferris holds that a seal should look important, and a crown is the most important-looking thing anyone can make before lunch. |
 | A Rival, in a Friendly Way | 8 | | `regulars: 4` | perk | A travelling stall sets up at the end of the lane. Ferris is delighted and furious in equal measure, and wins the lane over by being nicer. |
 
 ### Marigold Tumble, the Innkeeper (she)
 
-- **Home:** the Tavern, the Second Kettle. **Arrives:** on discovery, once two townsfolk are in
-  town (an inn wants regulars before it wants an innkeeper).
+- **Home:** the Tavern, the Second Kettle. **Arrives:** the morning after the Tavern stands.
 - **Personality:** knows everyone's usual and most of their business, and keeps both behind the
   bar.
 - **Traits:** unflappable, nosy, generous.
@@ -149,20 +288,27 @@ discovered, as now.
   bed made up, for whoever.
 - **Voice:** brief and warm. She ends conversations by putting food in front of people.
 - **Sample:** "Sit. You look like someone who has been combining things since breakfast."
+- **Wants** everyone fed and the inn full. **Needs** to let someone look after her for once.
+  **Contradiction:** knows everyone's business, and keeps her own behind lock and key.
+- **Under stress** she puts food in front of someone; **praised**, she says "eat your stew";
+  **in conflict**, she is brisk and unbothered. **Won't say:** anything about her mother or the
+  first kettle. **Raises** who came in and what they ordered; **avoids** the high shelf.
+- **Running gag, half a cat:** someone asks where the rest of the cat is; then a painter offers
+  to finish it and she will not hear of it; then the Office's new map marks the inn with half a
+  cat.
 - **Lesson, "Last Orders":** make Food (`has-entry: food, made`), then brew Tea
   (`has-entry: tea, made`).
 
 | Beat | Gate | Waits on | Objective (draft) | Reward kind | Premise |
 |---|---|---|---|---|---|
-| Half a Cat | 2 | | `built: tavern` | commission | The sign goes up. The first customer asks where the rest of the cat is. |
+| Half a Cat | 2 | | none: opens at the gate | commission | The sign goes up. The first customer asks where the rest of the cat is. |
 | The Usual | 4 | | `evenings: 10` | tier unlock (the Tavern's tier 2) | She has never had to work out the player's usual. She means to, so she watches them across a run of evenings. |
 | A Licence to Pour | 6 | Ferris, Form Nine | `tag-count: liquid, 5` | thread piece | The form names the inn, so the inn needs a licence. Ferris has filed it, and the Office wants proof that she pours more than one thing. |
 | The First Kettle | 8 | Dunstan, The Box of Wrong Hinges | `regulars: 3` | perk | Bittersweet. She takes the cracked first kettle off the high shelf. It was her mother's. Dunstan has been mending things lately. |
 
 ### Dunstan Coals, the Blacksmith (he)
 
-- **Home:** the Smithy. **Arrives:** on discovery, once one building stands (he waits until
-  there is a town to make hinges for).
+- **Home:** the Smithy. **Arrives:** the morning after the Smithy stands.
 - **Personality:** very large, very gentle, and easier with iron than with people.
 - **Traits:** shy, careful, perfectionist.
 - **Facts:** A dragon called Mrs Cindertoe writes to him, at length, about the fit of her
@@ -170,19 +316,28 @@ discovered, as now.
   hinge that did not come out right, and cannot throw it away.
 - **Voice:** few words and long pauses. He describes metal with great tenderness.
 - **Sample:** "It's a good hinge. Listen. Doesn't say a thing."
+- **Wants** every piece of work perfect. **Needs** to let an imperfect thing be, and to be heard
+  (he hums out loud by the end). **Contradiction:** the largest person on the lane, and the
+  quietest.
+- **Under stress** he goes quiet and works; **praised**, he looks at the thing, not at you; **in
+  conflict**, he apologises to the iron. **Won't say:** he would like to belong somewhere.
+  **Raises** metal and Mrs Cindertoe; **avoids** himself and the tune.
+- **Running gag, Mrs Cindertoe's letters:** her front left shoe pinches; then she wants a
+  matching set for her niece; then she writes to say Crumb Lane is on her map now, which is a
+  dragon's map and much older than the Office's.
 - **Lesson, "Mind the Heat":** make Iron (`has-entry: iron, made`), then hold three metals
   (`tag-count: metal, 3`).
 
 | Beat | Gate | Waits on | Objective (draft) | Reward kind | Premise |
 |---|---|---|---|---|---|
-| Mrs Cindertoe's Letter | 2 | | `built: smithy` | commission (horseshoes, hinges) | A letter in singed handwriting arrives. The front left shoe pinches. |
+| Mrs Cindertoe's Letter | 2 | | none: opens at the gate | commission (horseshoes, hinges) | A letter in singed handwriting arrives. The front left shoe pinches. |
 | The Box of Wrong Hinges | 4 | | `has-entry: spell-mending` | tier unlock (the Smithy's tier 2) | The player could mend them all. He is not sure he wants that, since they are his history. He lets them mend one and keeps the rest. |
 | A Sign for the Lane | 6 | Ignatius, A Blank Where We Live | `depth: 6, made` | thread piece | A street needs a sign before it can be on a map. He has never made letters before, and the first one comes out backwards. |
 | The Name of the Tune | 8 | Tansy, Something That Hums; Marigold, The First Kettle | `evenings: 20` | perk | One of Tansy's tonics hums his tune. Marigold knows it: her mother sang it at the first kettle. |
 
 ### Quince Mallow, the Herbalist (they)
 
-- **Home:** the Herb Garden. **Arrives:** on discovery.
+- **Home:** the Herb Garden. **Arrives:** the morning after the Herb Garden stands.
 - **Personality:** labels everything in very small handwriting, and worries about all of it.
 - **Traits:** precise, anxious, kind.
 - **Facts:** Meadowsweet is their favourite flower, and it makes them sneeze. They keep a notebook
@@ -191,12 +346,20 @@ discovered, as now.
 - **Voice:** they qualify everything and apologise for it, then say one thing with total
   certainty.
 - **Sample:** "It might help. It probably won't hurt. It will definitely smell of mint."
+- **Wants** everything labelled correctly, so nobody takes the wrong leaf. **Needs** to trust
+  something that isn't written down: Tansy, and in the end meadowsweet. **Contradiction:** anxious
+  about everything except plants, about which they are never wrong.
+- **Under stress** they apologise and qualify; **praised**, they pass it on to the seedlings;
+  **in conflict**, they say nothing at all (the smoke). **Won't say:** they are tired of being
+  careful. **Raises** what each leaf is for; **avoids** what they want for themselves.
+- **Running gag, tiny labels:** nobody can read them; then Ferris lends a magnifying glass,
+  and it is not enough; then the registered remedy has to be written large, and it costs them.
 - **Lesson, "Which Leaf Is Which":** pick an Herb (`has-entry: herb, made`), then learn what not
   to pick (`has-entry: rotted-leaves, made`).
 
 | Beat | Gate | Waits on | Objective (draft) | Reward kind | Premise |
 |---|---|---|---|---|---|
-| Small Labels | 2 | | `built: herb-garden` | commission (remedies for small troubles) | The garden is in, and every bed has a label too small to read. |
+| Small Labels | 2 | | none: opens at the gate | commission (remedies for small troubles) | The garden is in, and every bed has a label too small to read. |
 | The Smoke | 4 | | `has-entry: abjuration` | tier unlock (the Herb Garden's tier 2, which also needs Tansy) | Smoke from the forge gets into the sage. Abjuration keeps the rain off, so Quince wonders whether it keeps smoke off. They are too polite to ask Dunstan. |
 | A Registered Remedy | 6 | Ignatius, A Blank Where We Live | `tag-count: healing, 3` | thread piece | The form wants one remedy registered with the Office. Quince has hundreds and cannot choose, so the player helps. |
 | Meadowsweet | 8 | Tansy, The Sneeze | `regulars: 5` | perk | Tansy has made something for the sneeze. Quince holds a meadowsweet flower for the first time. |
@@ -206,8 +369,7 @@ discovered, as now.
 The Alchemist has no building of her own. From tier 2 the Herb Garden is hers and Quince's
 together (`needsJob` in `Town Guide.md`), so she is housed when the Herb Garden stands.
 
-- **Home:** the Herb Garden, shared. **Arrives:** on discovery, from level 3. (`arrival.quest` can
-  only name a quest in `data/quests.json`, not a lesson.)
+- **Home:** the Herb Garden, shared. **Arrives:** on day 2 (Trysten, 2026-10-19; `arrival.day`).
 - **Personality:** Quince's old classmate, who never labels anything and is usually right.
 - **Traits:** bold, cheerful, untidy.
 - **Facts:** She and Quince studied together and still argue about the same jar. Her tonics hum
@@ -215,6 +377,13 @@ together (`needsJob` in `Town Guide.md`), so she is housed when the Herb Garden 
   off day, into something that sang.
 - **Voice:** fast and delighted. She explains everything backwards, starting from the result.
 - **Sample:** "It worked. Don't ask me which part."
+- **Wants** to make something that sings on purpose. **Needs** to finish one thing properly, and
+  to say she missed Quince. **Contradiction:** careless with labels, careful with people.
+- **Under stress** she speeds up; **praised**, she says it worked and not to ask which part;
+  **in conflict**, she relabels the jar. **Won't say:** she came to Crumb Lane for Quince.
+  **Raises** results and musical keys; **avoids** how things went wrong.
+- **Running gag, the jar:** two labels that disagree; then three; then the jar hums its own name,
+  and both of them write it down.
 - **Lesson, "Something That Bubbles":** find Transmutation (`has-entry: transmutation`), then make
   Sulfur (`has-entry: sulfur, made`).
 
@@ -298,58 +467,47 @@ Four or more per person, in place of today's one per job. `{name}` is the person
   tonic, starting from the end." / "{name} relabels something of Quince's while you watch." /
   "{name} lets you hear which key today's batch hums in."
 
-## Rules for the model writer (beats and scenes)
+## What the model still writes: a townsperson as the evening visitor
 
-On top of `prompts/voice.md` and the event writer's rules:
+When a townsperson is the evening's visitor, the event writer uses their fixed traits and facts
+for a little small talk. `prompts/story.md` holds its rules:
 
-- **The person is given, not invented.** The prompt carries their personality, traits, facts, and
-  voice note. Never contradict a fact or add a new one in a beat. A scene may propose a new fact,
-  and code decides whether to keep it, as for visitors.
-- **A beat says its objective in plain words** (a Crown, something six steps deep, a spell that
-  fetches things) and never adds, drops, or changes a requirement. It never says the beat is done:
-  code does that.
-- **A beat:** two to four sentences of scene, then one or two lines from the person. End on a
-  warm, wry, or quietly proud beat.
-- **A Tavern scene:** four to six short lines of dialogue, alternating, with at most one line of
-  stage direction. The last line delivers the outcome code chose: a small kindness for a
-  friendship, one sentence naming the hinted thing for a rumour, the named thing for a gift.
-- **Never mention** Fondness, likes, dislikes, takings, Cheer, quality, gold, or any number. A
-  dislike shows only as a mild, respectful irritation.
-- **The thread moves only when code moves it.** No scene says the lane is on the map before "On
-  the Map" is done.
-- **No one leaves, falls ill, or comes to harm.** Bittersweet is allowed (the first kettle);
-  grief stays in the past and off screen.
+- **The person is given, not invented.** Never contradict a fact or add a new one.
+- **Never touch an arc.** No beat, lesson, or Tavern scene is mentioned, and the thread moves
+  only when code moves it.
+- **Never mention** Fondness, likes, dislikes, takings, Cheer, quality, gold, how much of the
+  evening is left, or any number.
+- **No one leaves, falls ill, or comes to harm.**
 
-## For Rules (N3a): what this content needs from the schema
+## For Rules (N3c): the shape hand-written scenes need
 
-The schema has landed (`castMemberSchema` in `src/shared/schema.ts`, rules in
-`src/shared/cast.ts`), and the content is in `data/cast.json`. What landed differs from this
-sketch in three ways: each beat has a `level` it pays at; rewards are `gold` (with `xp`),
-`commission` (tags), `perk`, or `plan` (a tier of 2 or more, brought early); and lesson and
-beat XP share the quests' two-fifths budget. So every lesson pays 0 XP, and only two level-5
-beats carry any. The sketch below is kept for the record.
+Rules owns the final schema. The N3a shape (`castMemberSchema` in `src/shared/schema.ts`) has a
+`premise` and one `line` per beat for the model; hand-written scenes need this instead:
 
 ```
-{
-  id, name, pronoun, job, home,            // home: a building id, or shared
-  personality,                             // one line
-  traits: string[], facts: string[],       // passed to the visitor and beat writers as they are
-  voice,                                   // one line, for the prompt
-  likes: jobId[], dislikes: jobId[],
-  arrival: { level? | buildings? | townsfolk? | quest? },
-  lesson: Quest[],                         // the existing quest shape and its `done` conditions
-  beats: [{ id, title, gate, waitsOn: beatId[], done, reward: { kind, ... },
-            premise, line, thread?: true }],
-  callingLines: string[]
-}
+Line:     { who: personId | "stage", text }    // "stage": one line saying what someone does
+Beat:     { ...as now, minus premise and line,
+            scene: Line[],                     // three to eight lines, played in the evening
+            nudges: string[],                  // calling lines while the beat is open
+            after: string[],                   // calling lines the beat unlocks
+            summary }                          // one line for the ledger and the People tab
+Lesson:   { ...the quest, nudge, taught: Line[] }
+Calling:  { text, from?: fondness, after?: beatId, before?: beatId, when?: context }
+Tavern:   { pair: [personId, personId], outcome: "friendship" | "rumour" | "gift",
+            after?: beatId, lines: Line[] }
 ```
 
-- Every objective above uses an existing `done` type. Tansy's first beat uses `built` with a
-  `tier`, which Quest Bot added in N7.
-- `waitsOn` crosses people (Marigold's last beat waits on Dunstan's second), so it names beats by
-  id across the whole cast, not only within one person.
-- The finale "On the Map" has no objective of its own: it is done when its waits are done and its
-  gate is met.
+- **Slots** are a closed list that code fills: `{name}` (the speaker's), `{thing}` (the
+  discovery that finished the beat, or the rumour's or gift's thing), and `{other}` (the other
+  person in a Tavern scene). The player has no lines.
+- **`pickLine`** (pure, in `src/shared/cast.ts`) picks a calling line: the most specific unheard
+  match, then the one heard longest ago. Every person has lines with no condition, so there is
+  always a fallback.
+- **`when`** is a closed list for Rules to choose, for example: a building of a named trade
+  stands, a liked or disliked neighbour, tonight's happening, a meal eaten today.
+- **Loader checks:** every `who` is in the cast; slots are from the list; `after` and `before`
+  name real beats; every beat has a scene and at least one nudge.
+- **What each Tavern outcome does** stays code's, and is still N4's question 2.
 
 ## Open questions
 
@@ -367,3 +525,4 @@ Copied to "Questions for design" on the board.
    Quince after the smoke is dealt with)? It would be a new reward kind.
 5. **Two wizards.** The player's starter job is the Wizard, and Ignatius is the town's Wizard.
    Draft: fine. He is retired, and the player is the working one.
+6. **Tansy under Hiring.** Settled by Trysten, 2026-10-19: she comes on day 2 (`arrival.day`).

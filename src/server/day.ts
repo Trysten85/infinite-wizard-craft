@@ -103,7 +103,7 @@ export function createDay(deps: {
     const state = today(player);
     const refusal = action === "evening" ? refuseTime(state, cost, rules, extra(player)) : refuseAction(state, action, rules, extra(player), cost);
     if (refusal === "not-evening") throw new RuleError("That is for the evening. The street lights up at dusk.", refusal);
-    if (refusal === "no-time") throw new RuleError(`That takes ${cost} ⌛, and you have fewer left tonight.`, refusal);
+    if (refusal === "no-time") throw new RuleError(`That takes ${cost} ${text.timeMark}, and you have fewer left tonight.`, refusal);
   }
 
   // Spends hourglasses on an evening action. The last one brings night. An "anytime" action takes

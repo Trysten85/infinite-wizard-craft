@@ -9,6 +9,11 @@ export class GenerationError extends Error {}
 // swallowed: it goes straight up to whoever asked for the stop.
 export class StopRequested extends Error {}
 
+// Thrown by every model client while the model is turned off (`enabled: false` in
+// config/model.json). It is a reminder, not a bad answer, so it is never retried: it goes straight
+// up to the player, who sees it as it is.
+export class ModelOff extends GenerationError {}
+
 export type GenerateOptions<T> = {
   purpose: string;
   system: string;
@@ -57,7 +62,7 @@ export async function generateValidated<T>(
         value = parsed.data;
       }
     } catch (err) {
-      if (err instanceof StopRequested) throw err;
+      if (err instanceof StopRequested || err instanceof ModelOff) throw err;
       failure = err instanceof Error ? err.message : String(err);
     }
 

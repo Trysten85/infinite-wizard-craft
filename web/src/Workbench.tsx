@@ -34,12 +34,15 @@ import {
   respondToEvent,
   testEvent,
   upgradeBuilding,
+  hireStaff,
   workShift,
   type Earned,
 } from "./api";
 import { Board, type BubbleEffect } from "./Board";
 import { tonightNews, visitorCue } from "./day";
 import { visitorPlace } from "./town";
+import { Icon, Said } from "./icons";
+import { timeAmount } from "./timeMark";
 import { besideTarget, clampToBoard, newBubbleId, parseBoard, spawnPoint, type Bubble, type Size } from "./bubbles";
 import { EntryBubble } from "./EntryBubble";
 import { EventCard, type EventEnding } from "./EventCard";
@@ -49,7 +52,7 @@ import { OrderBoard, type ShiftChoice } from "./OrderBoard";
 import { Organizer } from "./Organizer";
 import { parseOrganize, serializeOrganize } from "./organize";
 import { QuestTracker } from "./QuestTracker";
-import { Shop } from "./Shop";
+import { Shop, ShopLocked } from "./Shop";
 import { Spellbook } from "./Spellbook";
 import { learnNote } from "./spells";
 import { StatusBar } from "./StatusBar";
@@ -140,7 +143,9 @@ export function Workbench({ player, onLeave }: { player: string; onLeave: () => 
   // one that refuses a second call, and this only keeps the button honest in between.
   const [called, setCalled] = useState<{ day: number; people: number[] }>({ day: 0, people: [] });
   // The shop is shut until a Market Stall stands. A server from before the town never says so.
-  const [shopShut, setShopShut] = useState(false);
+  // Why the shop is not open yet, in the server's words, or null once it is. Its bookmark stays,
+  // locked, so the player can see there is a shop to earn.
+  const [shopLock, setShopLock] = useState<string | null>(null);
   const [bubbles, setBubbles] = useState<Bubble[]>([]);
   // False until the saved board has been read, so the empty first render never overwrites it.
   const [loaded, setLoaded] = useState(false);
@@ -231,14 +236,12 @@ export function Workbench({ player, onLeave }: { player: string; onLeave: () => 
     fetchShop(player)
       .then((shelf) => {
         setShop(shelf);
-        setShopShut(false);
+        setShopLock(null);
       })
       .catch((err: Error) => {
         // No stall, no shop. That is how things stand, not something gone wrong.
-        if (err instanceof ApiError && err.code === "no-shop") {
-          setShopShut(true);
-          setTab("discovered");
-        } else setError(err.message);
+        if (err instanceof ApiError && err.code === "no-shop") setShopLock(err.message);
+        else setError(err.message);
       });
   }
 
@@ -272,7 +275,7 @@ export function Workbench({ player, onLeave }: { player: string; onLeave: () => 
           id: `dusk-${next.day.number}`,
           // The server's own line for the evening coming on, when it sends one.
           label: dusk ?? "Dusk:",
-          name: `${next.day.time} ⌛ to spend this evening`,
+          name: `${timeAmount(next.day.time)} to spend this evening`,
         });
     }
     shownDay.current = next.day ? { number: next.day.number, phase: next.day.phase } : null;
@@ -893,6 +896,16 @@ export function Workbench({ player, onLeave }: { player: string; onLeave: () => 
       <div className={`board-column ${place === "town" ? "in-town" : ""}`}>
         <header className="topbar">
           <h1>Infinite Wizard Craft</h1>
+          {/* Where the player is: the board takes the bench or the street. The book on the right is the
+              same in both, so this sits over the board and not among the book's bookmarks. */}
+          <nav className="places" aria-label="Where you are">
+            <button aria-pressed={place === "bench"} onClick={() => visit("bench")}>
+              Workbench
+            </button>
+            <button aria-pressed={place === "town"} onClick={() => visit("town")}>
+              Town
+            </button>
+          </nav>
           <p>
             {player} · {loose.length} discovered · {/* For testing: has the server write an event now, without waiting to earn one. */}
             <button className="link" disabled={eventBusy !== ""} onClick={() => showEvent("test")}>
@@ -978,6 +991,7 @@ export function Workbench({ player, onLeave }: { player: string; onLeave: () => 
               onBuyPlot={() => build(() => buyPlot(player))}
               onRaise={(plot, building) => build(() => raiseBuilding(player, plot, building))}
               onUpgrade={(plot) => build(() => upgradeBuilding(player, plot))}
+              onHire={(plot) => build(() => hireStaff(player, plot))}
               onLeave={() => visit("bench")}
               entries={byId}
               carrying={dragged ?? null}
@@ -1003,7 +1017,7 @@ export function Workbench({ player, onLeave }: { player: string; onLeave: () => 
           <div className="toasts">
             {error && (
               <p className="notice" role="alert">
-                {error}{" "}
+                <Said text={error} />{" "}
                 <button className="link" onClick={() => setError("")}>
                   dismiss
                 </button>
@@ -1011,14 +1025,16 @@ export function Workbench({ player, onLeave }: { player: string; onLeave: () => 
             )}
             {someoneWaiting &&
               (visitor && visitor.kind !== "sit" ? (
-                <p className="event-coming">{visitor.text}</p>
+                <p className="event-coming">
+                  <Said text={visitor.text} />
+                </p>
               ) : (
                 <button
                   className="event-waiting"
                   disabled={eventBusy !== ""}
                   onClick={() => (event ? setEventOpen(true) : showEvent("waiting"))}
                 >
-                  {visitor ? visitor.text : "Someone is still at your door. Go back to them."}
+                  <Said text={visitor ? visitor.text : "Someone is still at your door. Go back to them."} />
                 </button>
               ))}
             {someoneComing && !someoneWaiting && <p className="event-coming">Someone is on their way…</p>}
@@ -1029,7 +1045,10 @@ export function Workbench({ player, onLeave }: { player: string; onLeave: () => 
                   className="toast"
                   onAnimationEnd={() => setToasts((current) => current.filter((other) => other.id !== toast.id))}
                 >
-                  {toast.label} <strong>{toast.name}</strong>
+                  {toast.label}{" "}
+                  <strong>
+                    <Said text={toast.name} />
+                  </strong>
                   {toast.gold !== undefined && (
                     <>
                       {" "}
@@ -1079,14 +1098,12 @@ export function Workbench({ player, onLeave }: { player: string; onLeave: () => 
           >
             Discovered
           </button>
-          {!shopShut && (
-            <button className="bookmark mark-shop" aria-current={tab === "shop" ? "page" : undefined} onClick={() => openTab("shop")}>
-              Shop
-            </button>
-          )}
-          {/* Not a page of the book: it swaps the board for the street, and back. */}
-          <button className="bookmark mark-town" aria-pressed={place === "town"} onClick={() => visit(place === "town" ? "bench" : "town")}>
-            Town
+          <button
+            className={`bookmark mark-shop ${shopLock ? "locked" : ""}`}
+            aria-current={tab === "shop" ? "page" : undefined}
+            onClick={() => openTab("shop")}
+          >
+            {shopLock && <Icon name="padlock" label="locked" />} Shop
           </button>
         </nav>
         <div className="book-pages">
@@ -1105,6 +1122,8 @@ export function Workbench({ player, onLeave }: { player: string; onLeave: () => 
                 onSpawn={spawn}
                 onInspect={(entry) => setSelectedId(entry.id)}
               />
+            ) : shopLock ? (
+              <ShopLocked reason={shopLock} />
             ) : (
               <Shop view={shop} gold={progress.gold} buying={buying} onBuy={buyFromShop} />
             )}

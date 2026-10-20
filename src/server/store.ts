@@ -24,8 +24,8 @@ export type ModelCall = {
 
 // "perk" is the extra a building pays for a discovery of its kind. "plot" and "building" are
 // gold spent on the town, and "takings" what the town pays back at night.
-// "beat" is a townsperson's story beat played, once, with what it paid (often nothing in gold).
-export type LedgerReason = "quest" | "discovery" | "learn" | "shop" | "event" | "request" | "gift" | "shift" | "perk" | "plot" | "building" | "takings" | "meal" | "beat";
+// "test" is gold a test save gave (`npm run saves`). "beat" is a townsperson's story beat played, once, with what it paid (often nothing in gold).
+export type LedgerReason = "quest" | "discovery" | "learn" | "shop" | "event" | "request" | "gift" | "shift" | "perk" | "plot" | "building" | "takings" | "meal" | "beat" | "hire" | "test";
 
 // `bonusXp` makes up the difference when a change to the game's numbers would otherwise have
 // taken away a level the player had already reached.
@@ -135,6 +135,9 @@ export function openStore(path: string) {
   const db = new DatabaseSync(path);
   // How deep `transaction` is nested. Declared first: the migrations below already use it.
   let depth = 0;
+  // Whether this save is from before hiring (N9): it has no hires table yet. Asked before the
+  // tables below are made, so a save made from nothing is not mistaken for an old one.
+  const hadHires = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'town_hires'").get() !== undefined;
   db.exec(`
     CREATE TABLE IF NOT EXISTS entries (
       id TEXT PRIMARY KEY,
@@ -285,6 +288,12 @@ export function openStore(path: string) {
       PRIMARY KEY (player, plot, slot),
       UNIQUE (player, entry_id)
     );
+    CREATE TABLE IF NOT EXISTS town_hires (
+      player TEXT NOT NULL,
+      plot INTEGER NOT NULL,
+      tier INTEGER NOT NULL,
+      PRIMARY KEY (player, plot)
+    );
     CREATE TABLE IF NOT EXISTS beat_scenes (
       player TEXT NOT NULL,
       beat TEXT NOT NULL,
@@ -407,6 +416,15 @@ export function openStore(path: string) {
 
   // Trades are taught from N4. A save keeps the job it already had: it counts as taught. Marked
   // once, the first time this runs, from the jobs players hold then.
+  // Hiring (N9): a save from before it, with buildings standing, is left for `hireStanding` at
+  // start-up to take on the townsfolk already there. Any other save has nothing to take on, so it
+  // is marked done now; a new save's buildings are only ever hired the usual way.
+  const hasBuildings = db.prepare("SELECT 1 FROM town_plots WHERE building IS NOT NULL LIMIT 1").get() !== undefined;
+  if (!hadHires && !hasBuildings) {
+    db.exec("CREATE TABLE IF NOT EXISTS hires_seeded (at TEXT NOT NULL)");
+    db.prepare("INSERT INTO hires_seeded (at) VALUES (?)").run(new Date().toISOString());
+  }
+
   const taughtSeeded = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'taught_seeded'").get();
   if (!taughtSeeded) {
     transaction(() => {
@@ -1080,6 +1098,38 @@ export function openStore(path: string) {
     // Raises a building on a plot the player owns, or raises the one there to a new tier.
     setBuilding(player: string, plot: number, building: string, tier: number): void {
       db.prepare("UPDATE town_plots SET building = ?, tier = ? WHERE player = ? AND plot = ?").run(building, tier, player, plot);
+    },
+
+    // Removes everything saved for one player, from every table that keeps a player, so a test
+    // save can be built again from nothing. The things players have made stay: they are shared.
+    deletePlayer(player: string): void {
+      transaction(() => {
+        const tables = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all().map((row) => row.name as string);
+        for (const table of tables) {
+          const columns = db.prepare(`PRAGMA table_info(${table})`).all().map((row) => row.name as string);
+          if (columns.includes("player")) db.prepare(`DELETE FROM ${table} WHERE player = ?`).run(player);
+        }
+      });
+    },
+
+    // Who is hired to run each building: the plot, and the tier the hire has been paid up to.
+    listHires(player: string): Map<number, number> {
+      return new Map(db.prepare("SELECT plot, tier FROM town_hires WHERE player = ?").all(player).map((row) => [row.plot as number, row.tier as number]));
+    },
+    setHire(player: string, plot: number, tier: number): void {
+      db.prepare("INSERT OR REPLACE INTO town_hires (player, plot, tier) VALUES (?, ?, ?)").run(player, plot, tier);
+    },
+    // Every player with a building standing, for the one-time hire of saved games' townsfolk.
+    listPlayersWithBuildings(): string[] {
+      return db.prepare("SELECT DISTINCT player FROM town_plots WHERE building IS NOT NULL ORDER BY player").all().map((row) => row.player as string);
+    },
+    // Whether saved games' standing townsfolk have been taken on as hired. Done once.
+    hiresSeeded(): boolean {
+      return db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'hires_seeded'").get() !== undefined;
+    },
+    markHiresSeeded(): void {
+      db.exec("CREATE TABLE IF NOT EXISTS hires_seeded (at TEXT NOT NULL)");
+      db.prepare("INSERT INTO hires_seeded (at) VALUES (?)").run(new Date().toISOString());
     },
 
     // The written scene of each story beat a player has played.

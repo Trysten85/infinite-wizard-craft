@@ -1,0 +1,356 @@
+{
+ "scenarios": [
+  {
+   "player": "fresh",
+   "about": "Dawn on day 1, nothing made yet.",
+   "steps": []
+  },
+  {
+   "player": "first-plot",
+   "about": "The Wizard taken up, with the gold for the first plot.",
+   "steps": [
+    {
+     "do": "discover",
+     "ids": [
+      "wizard"
+     ]
+    },
+    {
+     "do": "takeJob",
+     "job": "wizard"
+    },
+    {
+     "do": "gold",
+     "amount": 50
+    }
+   ]
+  },
+  {
+   "player": "smithy-built",
+   "about": "A Smithy stands; the next morning Dunstan has come and waits to be hired.",
+   "steps": [
+    {
+     "do": "discover",
+     "ids": [
+      "wizard",
+      "blacksmith"
+     ]
+    },
+    {
+     "do": "takeJob",
+     "job": "wizard"
+    },
+    {
+     "do": "gold",
+     "amount": 400
+    },
+    {
+     "do": "buyPlot"
+    },
+    {
+     "do": "build",
+     "plot": 0,
+     "building": "smithy"
+    },
+    {
+     "do": "night",
+     "count": 1
+    }
+   ]
+  },
+  {
+   "player": "smithy-hired",
+   "about": "Dunstan hired and running the Smithy.",
+   "steps": [
+    {
+     "do": "discover",
+     "ids": [
+      "wizard",
+      "blacksmith"
+     ]
+    },
+    {
+     "do": "takeJob",
+     "job": "wizard"
+    },
+    {
+     "do": "gold",
+     "amount": 400
+    },
+    {
+     "do": "buyPlot"
+    },
+    {
+     "do": "build",
+     "plot": 0,
+     "building": "smithy"
+    },
+    {
+     "do": "night",
+     "count": 1
+    },
+    {
+     "do": "hire",
+     "plot": 0
+    }
+   ]
+  },
+  {
+   "player": "apprentice-ready",
+   "about": "Dunstan hired, his lesson done, one call short of teaching the trade.",
+   "steps": [
+    {
+     "do": "discover",
+     "ids": [
+      "wizard",
+      "blacksmith"
+     ]
+    },
+    {
+     "do": "takeJob",
+     "job": "wizard"
+    },
+    {
+     "do": "gold",
+     "amount": 400
+    },
+    {
+     "do": "buyPlot"
+    },
+    {
+     "do": "build",
+     "plot": 0,
+     "building": "smithy"
+    },
+    {
+     "do": "night",
+     "count": 1
+    },
+    {
+     "do": "hire",
+     "plot": 0
+    },
+    {
+     "do": "lessonDone",
+     "job": "blacksmith"
+    },
+    {
+     "do": "fondness",
+     "job": "blacksmith",
+     "to": 3
+    }
+   ]
+  },
+  {
+   "player": "dusk-visitor",
+   "about": "Dusk on day 2, a visitor waiting, all the evening's time left.",
+   "steps": [
+    {
+     "do": "night",
+     "count": 1
+    },
+    {
+     "do": "visitor"
+    },
+    {
+     "do": "setDay",
+     "sun": 10,
+     "spent": 0
+    }
+   ]
+  },
+  {
+   "player": "last-hourglass",
+   "about": "An evening with one action's time left and someone to call on: spend it and night falls.",
+   "steps": [
+    {
+     "do": "discover",
+     "ids": [
+      "wizard",
+      "blacksmith"
+     ]
+    },
+    {
+     "do": "takeJob",
+     "job": "wizard"
+    },
+    {
+     "do": "gold",
+     "amount": 400
+    },
+    {
+     "do": "buyPlot"
+    },
+    {
+     "do": "build",
+     "plot": 0,
+     "building": "smithy"
+    },
+    {
+     "do": "night",
+     "count": 1
+    },
+    {
+     "do": "hire",
+     "plot": 0
+    },
+    {
+     "do": "setDay",
+     "sun": 10,
+     "spent": 2
+    }
+   ]
+  },
+  {
+   "player": "tansy-day-two",
+   "about": "Day 2 with Quince running a Herb Garden just raised to tier 2: end the day and Tansy comes.",
+   "steps": [
+    {
+     "do": "discover",
+     "ids": [
+      "wizard",
+      "herbalist",
+      "alchemist"
+     ]
+    },
+    {
+     "do": "takeJob",
+     "job": "wizard"
+    },
+    {
+     "do": "gold",
+     "amount": 2000
+    },
+    {
+     "do": "level",
+     "level": 3
+    },
+    {
+     "do": "buyPlot"
+    },
+    {
+     "do": "build",
+     "plot": 0,
+     "building": "herb-garden"
+    },
+    {
+     "do": "night",
+     "count": 1
+    },
+    {
+     "do": "hire",
+     "plot": 0
+    },
+    {
+     "do": "upgrade",
+     "plot": 0
+    }
+   ]
+  },
+  {
+   "player": "whole-town",
+   "about": "All six buildings standing and hired, level 4, gold to spare: every person's first story beats can be reached.",
+   "steps": [
+    {
+     "do": "discover",
+     "ids": [
+      "merchant",
+      "farmer",
+      "blacksmith",
+      "herbalist",
+      "innkeeper",
+      "wizard"
+     ]
+    },
+    {
+     "do": "takeJob",
+     "job": "wizard"
+    },
+    {
+     "do": "gold",
+     "amount": 5000
+    },
+    {
+     "do": "level",
+     "level": 4
+    },
+    {
+     "do": "buyPlot"
+    },
+    {
+     "do": "build",
+     "plot": 0,
+     "building": "market-stall"
+    },
+    {
+     "do": "buyPlot"
+    },
+    {
+     "do": "build",
+     "plot": 1,
+     "building": "farm"
+    },
+    {
+     "do": "buyPlot"
+    },
+    {
+     "do": "build",
+     "plot": 2,
+     "building": "smithy"
+    },
+    {
+     "do": "buyPlot"
+    },
+    {
+     "do": "build",
+     "plot": 3,
+     "building": "herb-garden"
+    },
+    {
+     "do": "buyPlot"
+    },
+    {
+     "do": "build",
+     "plot": 4,
+     "building": "tavern"
+    },
+    {
+     "do": "buyPlot"
+    },
+    {
+     "do": "build",
+     "plot": 5,
+     "building": "wizards-tower"
+    },
+    {
+     "do": "night",
+     "count": 1
+    },
+    {
+     "do": "hire",
+     "plot": 0
+    },
+    {
+     "do": "hire",
+     "plot": 1
+    },
+    {
+     "do": "hire",
+     "plot": 2
+    },
+    {
+     "do": "hire",
+     "plot": 3
+    },
+    {
+     "do": "hire",
+     "plot": 4
+    },
+    {
+     "do": "hire",
+     "plot": 5
+    }
+   ]
+  }
+ ]
+}

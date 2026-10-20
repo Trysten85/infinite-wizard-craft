@@ -1,4 +1,5 @@
 import type { DayView, Ledger, QualityId } from "../../src/shared/schema";
+import { TIME_MARK, timeAmount as hourglasses } from "./timeMark";
 
 // The day, as the page words it. The shapes and the rules are the server's (src/shared/schema.ts
 // and src/shared/day.ts). Everything here is worked out from what the server sends and nothing
@@ -7,8 +8,6 @@ import type { DayView, Ledger, QualityId } from "../../src/shared/schema";
 export type Day = DayView;
 
 const count = (amount: number, one: string, many: string) => `${amount} ${amount === 1 ? one : many}`;
-// The evening's time, as the player sees it: hourglasses, with no word for them.
-const hourglasses = (amount: number) => `${amount} ⌛`;
 
 // How far along the meter the sun and the noon mark sit, from 0 at dawn to 1 at dusk.
 export function sunShare(day: Day): number {
@@ -17,6 +16,24 @@ export function sunShare(day: Day): number {
 
 export function noonShare(day: Day): number {
   return Math.min(1, Math.max(0, day.noon / day.length));
+}
+
+// The meter's notches, one for each step of the sun from dawn to dusk: those the sun has passed,
+// the one it is on now, and those still ahead. From dusk every notch is passed.
+export type Tick = "past" | "now" | "ahead";
+
+export function sunTicks(day: Day): Tick[] {
+  const sun = day.phase === "evening" ? day.length : day.sun;
+  return Array.from({ length: day.length }, (_, index) => (index < sun ? "past" : index === sun ? "now" : "ahead"));
+}
+
+// The line under the meter: how far along the sun is, and how far it still has to go.
+export function sunReadout(day: Day): string {
+  if (day.phase === "evening") return "Dusk has come. The sun is down.";
+  const along = `${day.sun} of ${day.length}`;
+  const toDusk = `dusk in ${count(day.length - day.sun, "discovery", "discoveries")}`;
+  if (day.sun < day.noon) return `${along} · noon in ${count(day.noon - day.sun, "discovery", "discoveries")}, ${toDusk}`;
+  return `${along} · ${toDusk.charAt(0).toUpperCase()}${toDusk.slice(1)}`;
 }
 
 const PHASES = { morning: "Morning", afternoon: "Afternoon", evening: "Evening" } as const;
@@ -56,7 +73,7 @@ export function visitorCue(day: Day, place: "door" | "tavern"): { kind: "later" 
   const at = place === "tavern" ? "at the Tavern" : "at your door";
   if (day.phase !== "evening") return { kind: "later", text: `Someone will be ${at} this evening.` };
   if (day.time < cost)
-    return { kind: "spent", text: `Someone is ${at}, but you have no ⌛ left tonight. They will be back tomorrow.` };
+    return { kind: "spent", text: `Someone is ${at}, but you have no ${TIME_MARK} left tonight. They will be back tomorrow.` };
   return { kind: "sit", text: `Someone is ${at}. Sit with them (${hourglasses(cost)}).` };
 }
 

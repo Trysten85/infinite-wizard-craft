@@ -145,6 +145,31 @@ select {
   color: var(--dim);
 }
 
+/* The bench or the street, as two halves of one switch. */
+.places {
+  display: inline-flex;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.places button {
+  padding: 4px 14px;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  color: var(--dim);
+}
+
+.places button + button {
+  border-left: 1px solid var(--line);
+}
+
+.places button[aria-pressed="true"] {
+  background: var(--ground);
+  color: var(--ink);
+}
+
 /* Gold */
 
 .gold {
@@ -317,8 +342,37 @@ select {
   text-transform: uppercase;
 }
 
+:root {
+  --icon-check: url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%270%200%207%206%27%20shape-rendering%3D%27crispEdges%27%3E%3Cpath%20d%3D%27M6%200h1v1h-1zM5%201h2v1h-2zM0%202h1v1h-1zM4%202h2v1h-2zM0%203h2v1h-2zM3%203h2v1h-2zM1%204h3v1h-3zM2%205h1v1h-1z%27%2F%3E%3C%2Fsvg%3E");
+  --icon-cross: url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%270%200%207%205%27%20shape-rendering%3D%27crispEdges%27%3E%3Cpath%20d%3D%27M0%200h2v1h-2zM5%200h2v1h-2zM1%201h2v1h-2zM4%201h2v1h-2zM2%202h3v1h-3zM1%203h2v1h-2zM4%203h2v1h-2zM0%204h2v1h-2zM5%204h2v1h-2z%27%2F%3E%3C%2Fsvg%3E");
+  --icon-diamond: url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%270%200%205%205%27%20shape-rendering%3D%27crispEdges%27%3E%3Cpath%20d%3D%27M2%200h1v1h-1zM1%201h3v1h-3zM0%202h5v1h-5zM1%203h3v1h-3zM2%204h1v1h-1z%27%2F%3E%3C%2Fsvg%3E");
+  --icon-sparkle: url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%270%200%207%207%27%20shape-rendering%3D%27crispEdges%27%3E%3Cpath%20d%3D%27M3%200h1v1h-1zM3%201h1v1h-1zM2%202h3v1h-3zM0%203h7v1h-7zM2%204h3v1h-3zM3%205h1v1h-1zM3%206h1v1h-1z%27%2F%3E%3C%2Fsvg%3E");
+  --icon-ring: url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%270%200%205%205%27%20shape-rendering%3D%27crispEdges%27%3E%3Cpath%20d%3D%27M1%200h3v1h-3zM0%201h1v1h-1zM4%201h1v1h-1zM0%202h1v1h-1zM4%202h1v1h-1zM0%203h1v1h-1zM4%203h1v1h-1zM1%204h3v1h-3z%27%2F%3E%3C%2Fsvg%3E");
+  --icon-caret-down: url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%270%200%205%203%27%20shape-rendering%3D%27crispEdges%27%3E%3Cpath%20d%3D%27M0%200h5v1h-5zM1%201h3v1h-3zM2%202h1v1h-1z%27%2F%3E%3C%2Fsvg%3E");
+  --icon-caret-up: url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%270%200%205%203%27%20shape-rendering%3D%27crispEdges%27%3E%3Cpath%20d%3D%27M2%200h1v1h-1zM1%201h3v1h-3zM0%202h5v1h-5z%27%2F%3E%3C%2Fsvg%3E");
+}
+
+/* Marks before headings and list items. Each is a pixel icon from web/src/icons.tsx, drawn as a
+   mask over the text colour so it takes the colour of its line, and looks the same everywhere.
+   A rule names its icon with --glyph. */
+.hud-head h2::before,
+.hud-more::after,
+.done .quest-mark::before,
+.job-cue.ready::before,
+.order-checks li::before,
+.town-needs li::before,
+.shelf-kind::before {
+  content: "";
+  display: inline-block;
+  width: 0.7em;
+  height: 0.7em;
+  background-color: currentColor;
+  -webkit-mask: var(--glyph) center / contain no-repeat;
+  mask: var(--glyph) center / contain no-repeat;
+}
+
 .hud-head h2::before {
-  content: "◆";
+  --glyph: var(--icon-diamond);
   margin-right: 8px;
   font-size: 0.6rem;
   vertical-align: 0.15em;
@@ -351,11 +405,12 @@ select {
 }
 
 .hud-more::after {
-  content: "▾";
+  --glyph: var(--icon-caret-down);
+  margin-left: 6px;
 }
 
 .hud-more[aria-expanded="true"]::after {
-  content: "▴";
+  --glyph: var(--icon-caret-up);
 }
 
 /* Quests */
@@ -437,7 +492,7 @@ select {
 }
 
 .done .quest-mark::before {
-  content: "✓";
+  --glyph: var(--icon-check);
   color: var(--el-life);
 }
 
@@ -751,42 +806,96 @@ select {
   color: var(--ink);
 }
 
-.sun-meter {
-  position: relative;
-  flex: 1 1 120px;
-  height: 18px;
+/* The meter, its Dawn / Noon / Dusk labels under it, and a line saying how far is left. */
+.sun-clock {
+  display: flex;
+  flex: 1 1 200px;
+  flex-direction: column;
+  gap: 2px;
   /* Room for half the sun at dawn and the moon at dusk. */
-  margin: 0 12px 0 8px;
+  margin: 0 14px 0 8px;
 }
 
-.sun-track {
+.sun-meter {
+  position: relative;
+  height: 22px;
+}
+
+/* One segment for each notch of the sun, so the day can be counted at a glance. */
+.sun-ticks {
   position: absolute;
-  inset: 7px 0;
-  overflow: hidden;
+  inset: 5px 0;
+  display: flex;
+  gap: 3px;
+}
+
+.sun-tick {
+  flex: 1;
   background: var(--ground);
   border-radius: 2px;
   box-shadow: inset 0 0 0 1px var(--line);
+  transition: background 0.6s;
 }
 
-.sun-past {
-  display: block;
-  height: 100%;
-  background: linear-gradient(90deg, #6f5a2a, var(--gold));
-  transition: width 0.6s;
+.sun-tick.past {
+  background: var(--gold);
+  box-shadow: none;
+}
+
+.sun-tick.past.before-noon {
+  background: #a8862e;
+}
+
+.sun-tick.now {
+  box-shadow: inset 0 0 0 2px var(--gold);
 }
 
 .sun-noon {
   position: absolute;
-  top: 2px;
-  bottom: 2px;
+  top: 0;
+  bottom: 0;
   width: 2px;
   margin-left: -1px;
-  background: var(--dim);
+  background: var(--ink);
+  opacity: 0.6;
+}
+
+.sun-labels {
+  position: relative;
+  height: 0.9rem;
+  color: var(--dim);
+  font-size: 0.62rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.sun-label {
+  position: absolute;
+  top: 0;
+  white-space: nowrap;
+}
+
+.sun-label.dawn {
+  left: 0;
+}
+
+.sun-label.noon {
+  transform: translateX(-50%);
+}
+
+.sun-label.dusk {
+  right: 0;
+}
+
+.sun-readout {
+  color: var(--ink);
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
 }
 
 .sun {
   position: absolute;
-  top: 2px;
+  top: 4px;
   width: 14px;
   height: 14px;
   margin-left: -7px;
@@ -803,7 +912,7 @@ select {
 /* Dusk is the end of the meter, marked with a moon that lights once the sun reaches it. */
 .sun-dusk {
   position: absolute;
-  top: 3px;
+  top: 5px;
   right: -12px;
   width: 12px;
   height: 12px;
@@ -816,8 +925,8 @@ select {
   opacity: 0;
 }
 
-.day.evening .sun-past {
-  background: linear-gradient(90deg, #2c3350, #55618f);
+.day.evening .sun-tick.past {
+  background: #55618f;
 }
 
 .day.evening .sun-dusk {
@@ -833,12 +942,11 @@ select {
   height: 20px;
 }
 
-.hourglass::before {
-  content: "⌛";
-  font-size: 0.95rem;
+.hourglasses .icon {
+  font-size: 1.1rem;
 }
 
-.hourglass.spent {
+.hourglasses .icon.spent {
   opacity: 0.3;
 }
 
@@ -897,7 +1005,7 @@ select {
 @media (prefers-reduced-motion: reduce) {
   .board::before,
   .sun,
-  .sun-past {
+  .sun-tick {
     transition: none;
   }
 }
@@ -945,7 +1053,8 @@ select {
 }
 
 .job-cue.ready::before {
-  content: "◆ ";
+  --glyph: var(--icon-diamond);
+  margin-right: 0.35em;
 }
 
 .stat.job.orders-ready {
@@ -1595,7 +1704,8 @@ select {
 }
 
 .order-checks li::before {
-  content: "○ ";
+  --glyph: var(--icon-ring);
+  margin-right: 0.4em;
 }
 
 .order-checks li.met {
@@ -1603,7 +1713,7 @@ select {
 }
 
 .order-checks li.met::before {
-  content: "✓ ";
+  --glyph: var(--icon-check);
 }
 
 .event-card .order-likely {
@@ -2027,8 +2137,7 @@ body.dragging * {
 
 .bookmark:hover,
 .bookmark:focus-visible,
-.bookmark[aria-current],
-.bookmark[aria-pressed="true"] {
+.bookmark[aria-current] {
   translate: 14px 0;
 }
 
@@ -2040,11 +2149,16 @@ body.dragging * {
   background: linear-gradient(180deg, #3b6152, #27433a);
 }
 
-.mark-town {
-  background: linear-gradient(180deg, #4a5a86, #2f3a5c);
+/* A shop not yet earned keeps its bookmark, dimmed, with a padlock on it. */
+.mark-shop.locked {
+  background: linear-gradient(180deg, #5c5a52, #3e3c36);
 }
 
-.bookmark:not([aria-current], [aria-pressed="true"]) {
+.bookmark .icon {
+  margin-right: 4px;
+}
+
+.bookmark:not([aria-current]) {
   filter: brightness(0.75);
 }
 
@@ -2282,7 +2396,7 @@ button.plot[aria-pressed="true"] {
 }
 
 .town-needs li::before {
-  content: "✗";
+  --glyph: var(--icon-cross);
   display: inline-block;
   width: 1.3em;
   margin-left: -1.3em;
@@ -2416,7 +2530,7 @@ button.plot.over {
 }
 
 .town-needs li.met::before {
-  content: "✓";
+  --glyph: var(--icon-check);
   color: var(--job);
 }
 
@@ -2475,7 +2589,8 @@ button.plot.over {
 }
 
 .shelf-kind::before {
-  content: "◆ ";
+  --glyph: var(--icon-diamond);
+  margin-right: 0.35em;
 }
 
 .shelf-kind.spell {
@@ -2483,7 +2598,7 @@ button.plot.over {
 }
 
 .shelf-kind.spell::before {
-  content: "✦ ";
+  --glyph: var(--icon-sparkle);
 }
 
 /* On the shelf a bubble is only a label. Long names wrap, since the space is narrow. */
@@ -2673,6 +2788,13 @@ button.plot.over {
   animation: none;
 }
 
+.shop-lock {
+  margin: 24px 0 8px;
+  color: var(--page-dim);
+  font-size: 2.5rem;
+  text-align: center;
+}
+
 .shop-note {
   padding: 0 var(--page-gutter) 8px 16px;
   color: var(--page-dim);
@@ -2856,4 +2978,63 @@ button.plot.visitor {
 
 .town-visitor {
   font-style: italic;
+}
+
+/* A pixel icon set in a line of text (web/src/icons.tsx). It scales with the text and keeps its
+   pixels square. */
+.icon {
+  display: inline-block;
+  vertical-align: -0.12em;
+  image-rendering: pixelated;
+}
+
+.tier-stars {
+  display: inline-flex;
+  gap: 1px;
+  margin-right: 4px;
+  font-size: 0.75em;
+}
+
+/* Test saves: the dev server's switch between the saves `npm run saves` builds. */
+
+.test-saves {
+  position: fixed;
+  left: 16px;
+  bottom: 16px;
+  z-index: 20;
+  max-width: min(420px, calc(100vw - 32px));
+  padding: 6px 10px;
+  border: 1px dashed var(--line);
+  border-radius: 4px;
+  background: var(--panel);
+  color: var(--dim);
+  font-size: 0.8rem;
+}
+
+.test-saves summary {
+  cursor: pointer;
+}
+
+.test-saves p {
+  margin: 6px 0;
+}
+
+.test-save-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.test-save-list button {
+  padding: 2px 8px;
+  font-size: 0.8rem;
+}
+
+.test-save-list button[aria-pressed="true"] {
+  border-color: var(--accent);
+  color: var(--ink);
+}
+
+.test-saves .test-save-error {
+  color: var(--warn);
 }

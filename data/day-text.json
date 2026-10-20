@@ -32,5 +32,6 @@
   ],
   "newOrders": [
     "There are new orders on the board."
-  ]
+  ],
+  "timeMark": "⌛"
 }

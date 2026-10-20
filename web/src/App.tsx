@@ -1,29 +1,36 @@
 import { useState, type FormEvent } from "react";
+import { TestSaves } from "./testSaves";
 import { Workbench } from "./Workbench";
 
 const PLAYER_KEY = "iwc-player";
 
 export function App() {
   const [player, setPlayer] = useState(() => localStorage.getItem(PLAYER_KEY) ?? "");
+  // Counts the times the open save was started over, so the workbench loads it afresh each time.
+  const [restarts, setRestarts] = useState(0);
 
-  if (!player) {
-    return (
-      <NameForm
-        onSubmit={(name) => {
-          localStorage.setItem(PLAYER_KEY, name);
-          setPlayer(name);
-        }}
-      />
-    );
+  function choose(name: string) {
+    localStorage.setItem(PLAYER_KEY, name);
+    setPlayer(name);
   }
+
   return (
-    <Workbench
-      player={player}
-      onLeave={() => {
-        localStorage.removeItem(PLAYER_KEY);
-        setPlayer("");
-      }}
-    />
+    <>
+      {player ? (
+        // Keyed by the player, so switching or starting over loads the save from scratch.
+        <Workbench
+          key={`${player}-${restarts}`}
+          player={player}
+          onLeave={() => {
+            localStorage.removeItem(PLAYER_KEY);
+            setPlayer("");
+          }}
+        />
+      ) : (
+        <NameForm onSubmit={choose} />
+      )}
+      {import.meta.env.DEV && <TestSaves current={player} onPick={choose} onRestarted={() => setRestarts((count) => count + 1)} />}
+    </>
   );
 }
 

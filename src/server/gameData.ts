@@ -110,6 +110,32 @@ function readJson<T>(path: string, schema: z.ZodType<T>): T {
   return parsed.data;
 }
 
+// Objects are merged key by key; anything else in the overlay (a number, a list) replaces what
+// is there. Used to lay a partial balance file over the real one.
+export function overlay(base: unknown, over: unknown): unknown {
+  if (typeof base !== "object" || base === null || Array.isArray(base)) return over;
+  if (typeof over !== "object" || over === null || Array.isArray(over)) return over;
+  const merged: Record<string, unknown> = { ...(base as Record<string, unknown>) };
+  for (const [key, value] of Object.entries(over)) merged[key] = key in merged ? overlay(merged[key], value) : value;
+  return merged;
+}
+
+// The balance file, with `config/balance.<name>.json` laid over it when `name` is given (the
+// server and the tools pass `BALANCE` from the environment). The result is checked as a whole.
+export function readBalance(rootDir: string, name: string | undefined = process.env.BALANCE): Balance {
+  const basePath = join(rootDir, "config/balance.json");
+  let raw: unknown = JSON.parse(readFileSync(basePath, "utf8"));
+  if (name) {
+    const overPath = join(rootDir, `config/balance.${name}.json`);
+    if (!existsSync(overPath)) throw new Error(`BALANCE=${name}, but ${overPath} does not exist.`);
+    raw = overlay(raw, JSON.parse(readFileSync(overPath, "utf8")));
+    console.warn(`Balance: config/balance.${name}.json is laid over config/balance.json. Unset BALANCE for the real numbers.`);
+  }
+  const parsed = balanceSchema.safeParse(raw);
+  if (!parsed.success) throw new Error(`${basePath}${name ? ` with balance.${name}.json` : ""} is invalid:\n${z.prettifyError(parsed.error)}`);
+  return parsed.data;
+}
+
 export const SPELL_RECIPES_FILE = "data/spell-recipes.json";
 export const SPELL_MATERIALS_FILE = "data/spell-materials.json";
 export const BAKED_FILE = "data/baked-combos.json";
@@ -636,6 +662,7 @@ export function buildGameData(raw: {
       morning: ["Morning."],
       shopRestocked: ["The shop has new stock."],
       newOrders: ["There are new orders on the board."],
+      timeMark: "⌛",
     },
     shiftText: raw.shiftText ?? { tagWords: {}, results: { meh: ["It works."], good: ["It does the job."], great: ["The customer smiles."], perfect: ["It is worth talking about."] } },
     quests,
@@ -656,7 +683,7 @@ export function buildGameData(raw: {
 // The data files as written, validated but not yet assembled into a game.
 export function readGameFiles(rootDir: string) {
   return {
-    balance: readJson(join(rootDir, "config/balance.json"), balanceSchema),
+    balance: readBalance(rootDir),
     tags: readJson(join(rootDir, "data/tags.json"), z.array(tagSchema).min(1)),
     schools: readJson(join(rootDir, "data/schools.json"), z.array(schoolSchema)),
     entries: readJson(join(rootDir, "data/entries.json"), z.array(entrySchema)),

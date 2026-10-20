@@ -10,8 +10,10 @@ import {
   handBlock,
   needText,
   planBlock,
+  staffLine,
   plotCaption,
   plotStates,
+  hasTrade,
   plotNeedsJob,
   plotText,
   stockChange,
@@ -156,27 +158,56 @@ describe("plotText", () => {
 // `buyPlot` counts; reading the job the player has taken up instead was wrong, because a job
 // discovered brings a townsperson without any job being taken up.
 describe("the first plot's gate", () => {
-  const gate = (town: TownView) => plotNeedsJob(town.plots[0]!, plotStates(town, 1)[0]!, town.townsfolk.length > 0);
+  // The page reads the gate from the discoveries it is sent, which are the server's own list.
+  const gate = (game: ReturnType<typeof newGame>, player: string) => {
+    const town = game.town.view(player);
+    return plotNeedsJob(town.plots[0]!, plotStates(town, 1)[0]!, hasTrade(game.combiner.listDiscovered(player)));
+  };
 
-  it("holds the plot shut before any job, as the server does", () => {
+  it("holds the plot shut before any trade is discovered, as the server does", () => {
     const game = newGame();
     game.store.addLedger("ann", 500, "quest", "shut");
-    const town = game.town.view("ann");
-    expect(town.townsfolk).toHaveLength(0);
-    expect(gate(town)).toBe(true);
+    expect(gate(game, "ann")).toBe(true);
     expect(() => game.town.buyPlot("ann")).toThrowError(expect.objectContaining({ code: "no-job" }));
   });
 
-  it("opens it once a job is discovered, though none has been taken up", () => {
+  it("opens it once a trade is discovered, with nobody yet in town and no job taken up", () => {
     const game = newGame();
     game.store.addLedger("ann", 500, "quest", "open");
     game.store.addDiscovery("ann", [...data.jobs.keys()][0]!);
-    const town = game.town.view("ann");
-    // No job taken up: this is what the page used to read, and why it disabled the button.
+    // Nobody comes until a building stands, and no job is taken up: neither is what counts.
+    expect(game.town.view("ann").townsfolk).toHaveLength(0);
     expect(game.progress.getProgress("ann").job).toBeNull();
-    expect(town.townsfolk).toHaveLength(1);
-    expect(gate(town)).toBe(false);
+    expect(gate(game, "ann")).toBe(false);
     expect(game.town.buyPlot("ann")).toMatchObject({ plot: 0 });
+  });
+});
+
+describe("staffLine", () => {
+  const staffed = (staff: BuildingView["staff"]) => ({ ...farm, staff });
+
+  it("says nothing for a building the server sent no staff for", () => {
+    expect(staffLine({ ...farm, staff: undefined }, 100)).toEqual({ text: "", hire: null });
+  });
+
+  it("names who runs a hired building", () => {
+    expect(staffLine(staffed({ person: { id: 1, name: "Pim" }, hired: true, hireCost: 20 }), 0)).toEqual({ text: "Pim runs it.", hire: null });
+  });
+
+  it("says nobody has come yet, and that it earns nothing until then", () => {
+    const line = staffLine(staffed({ person: null, hired: false, hireCost: 20 }), 100);
+    expect(line.hire).toBeNull();
+    expect(line.text).toContain("Someone comes the morning after a building stands");
+  });
+
+  it("offers the hire at the server's price, and says how much gold is short", () => {
+    const pim = staffed({ person: { id: 1, name: "Pim" }, hired: false, hireCost: 50 });
+    expect(staffLine(pim, 80)).toEqual({
+      text: "Pim has come to work here. Until you hire them it earns nothing.",
+      hire: { name: "Pim", cost: 50, short: 0 },
+    });
+    expect(staffLine(pim, 30).hire).toEqual({ name: "Pim", cost: 50, short: 20 });
+    expect(staffLine(pim, 30).text).toContain("You need 20 more gold.");
   });
 });
 

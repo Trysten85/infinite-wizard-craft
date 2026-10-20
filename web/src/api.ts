@@ -129,6 +129,17 @@ export function upgradeBuilding(player: string, plot: number): Promise<Earned> {
   return post(`/api/players/${player}/town/upgrade`, { plot });
 }
 
+// Hires the person who has come to work at a building. Gold, once; the price is on `staff`.
+// Dev only: rebuilds one of the test saves in `data/test-saves.json` in place, as
+// `npm run saves -- <player>` does. Everything about the player changes, so reload all of it after.
+export function resetTestSave(player: string): Promise<{ player: string; progress: PlayerProgress }> {
+  return post(`/api/test-saves/${player}/reset`, {});
+}
+
+export function hireStaff(player: string, plot: number): Promise<Earned & { cost: number }> {
+  return post(`/api/players/${player}/town/hire`, { plot });
+}
+
 // Puts a discovery on a building's shelf, or clears the shelf with `entry: null`. Free, at any
 // hour. A discovery sits on one shelf at a time, so stocking it here moves it from another.
 export function stockShelf(player: string, plot: number, slot: number, entry: string | null): Promise<Earned> {
@@ -140,7 +151,7 @@ export function lendHand(player: string, plot: number): Promise<Earned> {
   return post(`/api/players/${player}/town/hand`, { plot });
 }
 
-// Calls on a townsperson: a plain line and more fondness. One ⌛, once a person an evening.
+// Calls on a townsperson: a plain line and more fondness. One unit of time, once a person an evening.
 export function callOn(player: string, person: number): Promise<Earned & { line: string; fondness: number }> {
   return post(`/api/players/${player}/town/call`, { person });
 }

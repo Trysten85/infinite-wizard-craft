@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createApp } from "../src/server/app";
+import { xpToReach } from "../src/server/progress";
 import { comboKey, type GameEntry } from "../src/shared/schema";
 import { data, newGame } from "./helpers";
 
@@ -36,36 +37,29 @@ describe("townsfolk names", () => {
     game.store.updatePerson(old.id, { fondness: 3 });
     game.store.addDiscovery("ann", "farmer");
     game.store.addDiscovery("ann", "carpenter");
+    // A Farm standing brings its person; the carpenter's trade has no building, so brings nobody.
+    game.store.addPlot("ann", 0);
+    game.store.setBuilding("ann", 0, "farm", 1);
     game.town.arrive("ann");
     expect(who(game, "blacksmith")).toMatchObject({ id: old.id, name: cast("blacksmith").name, pronoun: cast("blacksmith").pronoun, traits: cast("blacksmith").traits, fondness: 3 });
     expect(who(game, "farmer")).toMatchObject({ name: cast("farmer").name, facts: cast("farmer").facts });
-    // The carpenter has no written person, so comes from the list of names.
-    expect(data.townsfolk.people.map((person) => person.name)).toContain(who(game, "carpenter").name);
+    expect(game.store.listPeople("ann").find((person) => person.job === "carpenter")).toBeUndefined();
     const names = game.store.listPeople("ann").map((person) => person.name);
     game.town.arrive("ann");
     expect(game.store.listPeople("ann").map((person) => person.name)).toEqual(names);
   });
 
-  it("with a written arrival condition wait for it, even once their trade is found", () => {
-    const game = newGame();
-    const smith = data.cast.people.find((person) => person.job === "blacksmith")!;
-    expect(smith.arrival.buildings).toBe(1);
-    game.store.addDiscovery("ann", "blacksmith");
-    expect(game.town.arrive("ann")).toEqual([]);
+  it("with a written arrival condition wait for it, even once their building stands", () => {
+    const alchemist = data.cast.people.find((person) => person.job === "alchemist")!;
+    // Trysten, 2026-10-19: Tansy comes on day 2 for now (data/cast.json, arrival.day).
+    expect(alchemist.arrival.day).toBe(2);
+    // The Herb Garden's second tier is the Alchemist's to run.
+    const game = street();
     game.store.addPlot("ann", 0);
-    game.store.setBuilding("ann", 0, "farm", 1);
-    expect(game.town.arrive("ann").map((person) => person.name)).toEqual([smith.name]);
-  });
-
-  it("with no home standing leave at dusk: they cannot be called on, and are back by morning", () => {
-    const game = street("farm");
-    game.store.addDiscovery("ann", "blacksmith");
-    const smith = game.town.arrive("ann")[0]!;
-    expect(game.town.view("ann").townsfolk[0]).toMatchObject({ job: "blacksmith", housed: false });
-    expect(() => game.town.call("ann", smith.id)).toThrow(/gone for the night/);
-    game.store.addPlot("ann", 1);
-    game.store.setBuilding("ann", 1, "smithy", 1);
-    expect(game.town.call("ann", smith.id).fondness).toBe(1);
+    game.store.setBuilding("ann", 0, "herb-garden", 2);
+    expect(game.town.arrive("ann").map((person) => person.job)).not.toContain("alchemist");
+    game.setDay("ann", { number: 2 });
+    expect(game.town.arrive("ann").map((person) => person.name)).toContain(alchemist.name);
   });
 });
 
@@ -122,7 +116,8 @@ describe("regulars", () => {
     game.store.setBuilding("ann", 0, "smithy", 3);
     game.store.setBuilding("ann", 1, "tavern", 3);
     game.store.addDiscovery("ann", "blacksmith");
-    const smith = game.town.arrive("ann")[0]!;
+    const smith = game.town.arrive("ann").find((person) => person.job === "blacksmith")!;
+    for (const plot of [0, 1]) game.store.setHire("ann", plot, 3);
     const before = game.town.view("ann").plots.filter((plot) => plot.building).map((plot) => plot.building!.takings);
     game.store.updatePerson(smith.id, { fondness: rules.regularAt });
     const met = game.store.addPerson("ann", { name: "Pim Kettlebrook", role: "neighbour", traits: [], facts: [] }, 1);

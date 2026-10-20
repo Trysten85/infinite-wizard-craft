@@ -1,6 +1,8 @@
 import { useEffect, useState, type RefObject } from "react";
 import type { GameEntry, PlayerProgress, RankView } from "../../src/shared/schema";
-import { bedOffer, noonShare, oilText, orderCue, phaseName, sunShare, sunText, type Day } from "./day";
+import { Icon, Said, spoken } from "./icons";
+import { timeAmount } from "./timeMark";
+import { bedOffer, noonShare, oilText, orderCue, phaseName, sunReadout, sunShare, sunText, sunTicks, type Day } from "./day";
 
 type Props = {
   progress: PlayerProgress;
@@ -121,19 +123,31 @@ function DayStrip({ day, ordersWaiting, busy, onEndDay, onShowLedger }: DayProps
         <strong>Day {day.number}</strong> {phaseName(day)}
       </p>
 
-      <div className="sun-meter" role="img" aria-label={sunText(day)} title="Each new discovery moves the sun on a notch.">
-        <span className="sun-track">
-          <span className="sun-past" style={{ width: `${sunShare(day) * 100}%` }} />
+      <div className="sun-clock">
+        <div className="sun-meter" role="img" aria-label={sunText(day)} title="Each new discovery moves the sun on a notch.">
+          <span className="sun-ticks">
+            {sunTicks(day).map((tick, index) => (
+              <span key={index} className={`sun-tick ${tick} ${index < day.noon ? "before-noon" : ""}`} />
+            ))}
+          </span>
+          <span className="sun-noon" style={{ left: `${noonShare(day) * 100}%` }} />
+          <span className="sun" style={{ left: `${sunShare(day) * 100}%` }} />
+          <span className="sun-dusk" title="Dusk: the shop and the order board close here." />
+        </div>
+        <span className="sun-labels" aria-hidden="true">
+          <span className="sun-label dawn">Dawn</span>
+          <span className="sun-label noon" style={{ left: `${noonShare(day) * 100}%` }}>
+            Noon
+          </span>
+          <span className="sun-label dusk">Dusk</span>
         </span>
-        <span className="sun-noon" style={{ left: `${noonShare(day) * 100}%` }} />
-        <span className="sun" style={{ left: `${sunShare(day) * 100}%` }} />
-        <span className="sun-dusk" title="Dusk: the shop and the order board close here." />
+        <span className="sun-readout">{sunReadout(day)}</span>
       </div>
 
       {day.phase === "evening" && (
-        <span className="hourglasses" role="img" aria-label={`You have ${day.time} of ${day.timeMax} ⌛ left`}>
+        <span className="hourglasses" role="img" aria-label={spoken(`You have ${day.time} of ${timeAmount(day.timeMax)} left`)}>
           {Array.from({ length: day.timeMax }, (_, index) => (
-            <span key={index} className={`hourglass ${index < day.time ? "full" : "spent"}`} />
+            <Icon key={index} name="hourglass" className={index < day.time ? "full" : "spent"} />
           ))}
         </span>
       )}
@@ -161,7 +175,9 @@ function DayStrip({ day, ordersWaiting, busy, onEndDay, onShowLedger }: DayProps
 
       {asking && offer && (
         <div className="day-ask" role="group" aria-label={offer.label}>
-          <p>{offer.warning}</p>
+          <p>
+            <Said text={offer.warning} />
+          </p>
           <button disabled={busy} onClick={onEndDay}>
             {busy ? "…" : offer.label}
           </button>
