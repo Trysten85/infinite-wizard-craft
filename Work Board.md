@@ -9,7 +9,7 @@ The one list of what each session is building. The design behind the tickets is 
 current: whoever finishes or starts something updates the line for it. The ticket codes in
 brackets are for the sessions; you can ignore them.
 
-**Last updated: 2026-10-19, by infinite-spell-craft-9c (the commit bot).**
+**Last updated: 2026-10-20, by infinite-spell-craft-9c (the commit bot).**
 
 ### What is done
 - The day, the street, buildings, stocking and quality, the evening's actions, and the
@@ -19,6 +19,17 @@ brackets are for the sessions; you can ignore them.
 - Everything in the tree is now committed, including the big candle-to-moon rename, the cast and
   their stories, the quests, and Backend's bake and review tooling. Most of it still needs
   reviewing, and the commits say so.
+- Hiring (the building first, the person second), the model's off-switch, the test-save builder
+  and its picker, and the ⌛ in one place: all committed on 2026-10-20, with the tests passing
+  (968) before the rework of the day began. Still unreviewed.
+
+### Next up, before N3c: test saves and the model off (Slice 7)
+- Coding rules from "Candle Gate", Tansy on day 2, timings in one place with a fast mode: **done
+  by `-1c`, waiting for review (T1)**.
+- The model switched off with a "Hey, fix the model" reminder (T2) and the test-save builder (T3):
+  **Backend, `-5c`**. The ⌛ in one place (T4): **Page, `-d2`**.
+- Buttons to swap between the test saves and start one over, shown only while developing (T5):
+  **done by the Page, waiting for review**. The box sits folded in the bottom-left corner.
 
 ### What we are building now: the all-day town and the townsfolk
 | In plain words | Who | State |
@@ -41,7 +52,7 @@ brackets are for the sessions; you can ignore them.
 | `-e5` Story Bot | The townsfolk's stories | Idle until the cast rules land |
 | `-f4` Quest Bot | The smaller quests and quest logic | Ready to start; works with Story |
 | `-1e` | Code review | Reviewing |
-| `-9c` Commit Bot | Makes every commit, and keeps the history readable | Confirmed as the commit bot, not `-97`. Committed the backlog on 2026-10-18; Q3 is next |
+| `-9c` Commit Bot | Makes every commit, and keeps the history readable | Everything in the tree is committed, 86 commits in all, the last being the green floor under the rework of the day. Nothing is waiting on it |
 
 ### Waiting on Trysten
 1. A go-ahead for `-1c` to start the two rules tickets, which unblocks everyone.
@@ -53,8 +64,9 @@ brackets are for the sessions; you can ignore them.
    2021, so the push fails no matter how often the password is changed. Make a token at
    github.com/settings/tokens (classic, tick `repo`) and paste it at the `Password:` prompt, or
    install `gh` and log in through the browser instead. Until that happens the only copies off
-   this machine are `~/iwc-history-2026-10-18.bundle` (committed history) and
-   `~/iwc-tree-snapshot-2026-10-19.tar.gz` (the whole tree, taken before the rename).
+   this machine are `~/iwc-history-2026-10-20.bundle` (every commit) and
+   `~/iwc-tree-snapshot-2026-10-19.tar.gz` (the whole tree, taken before the rename). Both are
+   on this disk, which is the thing they are meant to protect against.
 
 ## How to use this board
 
@@ -817,6 +829,11 @@ Add a line: ticket id, your session name, the question. Answers are written bene
      actions, but a beat is played by code in `settle` the moment its condition is met, at any
      hour, as quests are. As built, beats play themselves and the scene is read in the People
      tab. If watching a beat should be an evening action, it needs a `scene` row in `day.access`.
+     - **Trysten, 2026-10-19 (relayed by Story, -e5):** a beat **pays the moment it is done**, as
+       built. Its **scene waits** at the person's door and plays when the player visits that
+       evening, for ⌛. Skipping it loses nothing, and it stays readable in the People tab. So it
+       needs a `scene` row in `day.access`. Also settled: **the cast's story is hand-written,
+       with nothing left to the model**, and the player is silent. See N3c, N3d and N4c.
   2. **The Tavern pair scene** needs rules: which pairs (likes only, or dislikes rarely: Story's
      question 3), how often (every night? a chance?), what each outcome does in code (a
      friendship: Fondness for both? a rumour: a hint, like the stargazer's? a gift: a discovery?),
@@ -949,7 +966,119 @@ in `config/balance.json`. Back up `var/game.db` before any progression change.
     I did not check whether that moved with this change; the shift closing earlier is the only
     behaviour change so far. Worth a look when N2 lands, since candle costs change then.
 
-### N9 · Rules, then Backend · open (Trysten, 2026-10-19: hiring)
+## Slice 7: test saves, the model off, timings in one place (Trysten, 2026-10-19)
+
+The plan is `/home/trysten/.claude/plans/d2-1-agree-on-toasty-pebble.md`. These come before N3c.
+
+### T1 · Rules · done, unreviewed (infinite-spell-craft-1c)
+- **What:** the "Candle Gate" coding rules in `Process.md` ("Keep things swappable") with a
+  pointer in `CLAUDE.md`; `arrival.day` in the cast schema and `arrivalMet`; Tansy comes on day 2
+  (`data/cast.json`); `events.followUpDays` (2) in `config/balance.json`; `readBalance` and
+  `overlay` in `src/server/gameData.ts`, which lay `config/balance.<name>.json` over the real file
+  when `BALANCE=<name>` is set; `config/balance.fast.json` (a 4-notch day, a happening every day,
+  raises at once, follow-ups after 1 day); the test-save schema (`testSavesSchema` in
+  `src/shared/schema.ts`, `testSaveProblems` in `src/shared/testSaves.ts`) and draft scenarios in
+  `data/test-saves.json`. Tests: `tests/balance.test.ts`, `tests/cast.test.ts`, one line in
+  `tests/evening.test.ts`. 942 tests and typecheck pass (run just now; may go stale). No commit.
+  - **Added after T4:** `timeMark` ("⌛") in `data/day-text.json` (schema in `dayTextSchema`); the
+    `no-time` sentence in `src/server/day.ts` reads it; the glyph is gone from `data/quests.json`
+    and `data/test-saves.json`; a test in `tests/day.test.ts` holds it equal to the page's
+    `TIME_MARK`. 948 tests and typecheck pass (run at 23:49; may go stale).
+
+### T2 · Backend · done, unreviewed (infinite-spell-craft-5c) (the model off)
+- **What:** `config/model.json` `"enabled": false`; while off, every model client throws a
+  `GenerationError` starting "Hey, fix the model:" (with the URL and how to turn it back on);
+  `refuse` in `src/server/app.ts` passes that message to the page; the server prints it at
+  start; the visitor writer uses the canned writer while off, so evenings still work. Cached and
+  baked combos still work.
+
+- **Notes:** done 2026-10-19 by infinite-spell-craft-5c. 947 tests and typecheck pass; no commit.
+  `config/model.json` has `"enabled": false` (schema default true). `createModelClient` returns a
+  client that throws `ModelOff` (a `GenerationError`) with `modelOffMessage`: "Hey, fix the
+  model: ..." naming the model, the URL, and the flag. `generateValidated` never retries it.
+  `refuse` answers 503 with code `model-off` (added to `RuleCode`) and the message; the server
+  prints it at start. While off, `main.ts` uses the canned event writer and no order or story
+  writer (plain words). Tests in `tests/model.test.ts` and `tests/townService.test.ts` (a known
+  pair is made; a new pair answers the reminder). Files: `src/server/llm/{config,generate}.ts`,
+  `src/server/app.ts`, `src/server/main.ts`, `src/shared/schema.ts`, `config/model.json`,
+  `README.md`, those tests.
+
+### T3 · Backend · done, unreviewed (infinite-spell-craft-5c) (test saves)
+- **What:** `npm run saves` (`src/tools/saves.ts`): backs up `var/game.db`, wipes it, and plays
+  every scenario in `data/test-saves.json` into it with a fixed seed and the model off, one player
+  per scenario; `npm run saves -- <player>` rebuilds one. Check `testSaveProblems` first. Tests:
+  every scenario builds, lands where its `about` says, and builds the same twice. Also swap the
+  literal `today + 2` in `src/server/events/service.ts` for `events.followUpDays`.
+- **Note:** Trysten asked for the old saves to be wiped. The backup is kept.
+- **Notes:** done 2026-10-20 by infinite-spell-craft-5c. 960 tests and typecheck pass; no commit.
+  - **Landed:** `npm run saves` (`src/tools/saves.ts`): checks `testSaveProblems`, refuses while
+    the dev server answers on `PORT` (it holds the save open), backs up `var/game.db` to
+    `var/game.before-test-saves-<time>.db`, wipes it, and plays every scenario with its own fixed
+    seed (from the player name, so one rebuilt alone comes out the same), the model off.
+    `npm run saves -- <player>` clears and rebuilds that one; `-- --list` lists them. The steps
+    are played by `src/server/testSaves.ts` through `src/server/game.ts` (`createOfflineGame`: the
+    services as the server wires them, canned visitor, model off). `build` and `upgrade` meet the
+    tier's needs themselves: named things discovered, a needed trade discovered, and "made" needs
+    met by placeholder things (`test-<building>-<tier>-...`). Gold is ledger reason `test`.
+    `store.deletePlayer` clears one player from every table that keeps one. `events.followUpDays`
+    replaces the `+ 2`.
+  - **Tests:** `tests/testSaves.test.ts`: the file names only real things, every scenario builds
+    in one save, each builds the same twice, a check per scenario that it lands where its `about`
+    says (Dunstan unhired, one call short of teaching, night falls on the last hourglass, Tansy
+    comes after the night, six buildings hired...), and clearing one player.
+  - **Fixed 2026-10-20 after the first real run:** the server's one-time hiring of old saves
+    (`hireStanding`, N9) took the new test saves for old ones and hired smithy-built's Dunstan and
+    others. Now `openStore` marks hiring as done for any save that had no hires table and no
+    building standing (so a new save never qualifies), and the tool marks it too. Tested: a save
+    built from nothing is left alone; a real pre-hiring save is still taken on, once. Re-run
+    `npm run saves` (dev server stopped) to rebuild them clean. 961 tests pass.
+  - **Files:** `src/tools/saves.ts`, `src/server/{game,testSaves}.ts`, `src/server/store.ts`
+    (`deletePlayer`, `test` reason), `src/server/events/service.ts`, `package.json`, `README.md`,
+    `tests/testSaves.test.ts`.
+
+  - **Added 2026-10-20 (for the page's picker):** `GET /api/test-saves` lists `{ player, about }`;
+    `POST /api/test-saves/:player/reset` rebuilds that save inside the running server through the
+    same `rebuildScenario` as the tool, after the player's background writing finishes; refused
+    (400) for anyone not in `data/test-saves.json`. Wired in `main.ts` unless `TEST_SAVES=off`.
+    Tests in `tests/testSaves.test.ts` (list, reset puts it back, a real player is refused and
+    untouched, routes absent when off). Files: `src/server/testSaves.ts`, `src/server/app.ts`,
+    `src/server/main.ts`, `src/tools/saves.ts`, `README.md`, `tests/testSaves.test.ts`.
+### T4 · Page · done, unreviewed (the ⌛ in one place)
+- **What:** the ⌛ glyph is typed in several `web/src` files. Put it in one constant, or serve it
+  as a line from `data/day-text.json`, so changing it is one edit (the Candle Gate rule).
+- **Notes:** done 2026-10-19 by Front End Bot (infinite-spell-craft-ae), not committed. One
+  constant, `TIME_MARK`, and `timeAmount(n)` in `web/src/timeMark.ts`; `day.ts`, `town.ts`,
+  `icons.tsx` (`Said`, `spoken`), `StatusBar.tsx`, `Town.tsx`, `Workbench.tsx` read it, and
+  `api.ts` lost its copy in a comment. `tests/webIcons.test.ts` fails if the mark is typed in any
+  other `web/src` file. `data/day-text.json` is read by the server only, so a constant was the one
+  place the page could use. Tests keep the literal ⌛ in their expected strings.
+  - **For Rules and Backend:** the mark is still typed outside the page: the `no-time` sentence in
+    `src/server/day.ts`, `town-evening` in `data/quests.json`, and `data/test-saves.json`. `Said`
+    draws the page's `TIME_MARK` as the icon, so if the mark changes, those lines show the old one
+    as plain text until they change too. If the server read the mark from `data/day-text.json`
+    and sent it, the page could read it from there and the mark would live in one place in the
+    whole game.
+
+### T5 · Page · done, unreviewed (Front End Bot, infinite-spell-craft-ae) (Trysten, 2026-10-20: swap test saves)
+- **What:** a small "Test saves" control, shown only in the dev server, that lists the scenarios
+  in `data/test-saves.json` with each one's `about` as its tooltip. Picking one makes it the
+  player and reloads the view. The list is read straight from the data file, so a new scenario
+  shows up with no change to the page. Later, if Backend adds a route that rebuilds one save in
+  place, add a "Start over" button beside the picker.
+- **Notes:** done 2026-10-20 by Front End Bot (infinite-spell-craft-ae), not committed. 968 tests
+  and typecheck pass (run at 00:06; may go stale). A dashed "Test saves" box, folded shut, in the
+  bottom-left corner of the window, on the name form and the workbench alike, shown only when
+  `import.meta.env.DEV`. It has a button per scenario (the `about` as tooltip, the open one
+  marked) and "Start <player> over" for an open test save, which calls Backend's
+  `POST /api/test-saves/:player/reset` and reloads the workbench; a refusal shows in the box.
+  The list is a Vite JSON import of `data/test-saves.json`, so it works with the server down.
+  Backend's `GET /api/test-saves` is not used. The workbench is keyed by player and restart
+  count, so a swap or a start-over loads everything again. Not looked at in a browser.
+  Files: `web/src/testSaves.tsx` (new), `web/src/App.tsx`, `web/src/api.ts` (`resetTestSave`),
+  `web/src/vite-env.d.ts` (new, for `import.meta.env`), `web/src/styles.css` (the
+  `.test-saves` rules at the end), `tests/webTestSaves.test.ts` (new).
+
+### N9 · Rules, then Backend · Rules done, unreviewed; Backend done, unreviewed (infinite-spell-craft-5c) (Trysten, 2026-10-19: hiring)
 - **What:** the building comes first and the person second. See "Hiring" in `Town Guide.md`.
   A trade crafted gives its plan; the first plot asks for a *discovered* trade (this removes the
   blacksmith deadlock in N2 question 1); the person arrives the morning after their building
@@ -965,6 +1094,31 @@ in `config/balance.json`. Back up `var/game.db` before any progression change.
   up by the difference) and `staffedTakings` in `src/shared/town.ts`; tests in `tests/town.test.ts`.
   Backend wires them in: the hire route, `staffed` per building, and takings through
   `staffedTakings`.
+- **Backend part done, unreviewed** (2026-10-19, infinite-spell-craft-5c). 931 of 932 tests (the
+  one failure is Page's, below); typecheck clean; no commit. Save backed up
+  (`var/game.before-hiring-2026-10-19.db`); the dev server has already applied it to the real save.
+  - **Landed:** (1) `builder.jobs` is the trades discovered, so the first plot and a plan ask for
+    a discovered trade (the blacksmith deadlock is gone) and reading the town no longer writes
+    through `builder` (review A1-4). (2) `arrive` brings the person who runs each standing building
+    (`runBy` at its tier; the cast's gate still applies); a trade with no building brings nobody.
+    (3) `POST /town/hire { plot }` charges `hireCost(tier)` (ledger reason `hire`, table
+    `town_hires`); `upgrade` charges `hireTopUp` with the tier's gold, refused together as
+    `not-enough-gold`. (4) Takings go through `staffedTakings`; `BuildingView.staff` (optional,
+    like `lifts`) gives the person, `hired`, and `hireCost`. (5) The homeless state, leaving at
+    dusk, and the visitor filter are gone; `PersonView` drops `homeless`/`awayTonight` and gains
+    `hired` and `worksAt`. (6) Teaching is unchanged and optional. Old saves: `hireStanding` at
+    start-up hires, once, every building whose person already stands in it.
+  - **On the real save:** Trysten's stall and Jason's Tavern and Herb Garden are hired. Jaclyn's
+    and Test's stalls are not (Ferris had not come to them before), so they earn 0 until hired
+    for 50. Say if those two should be hired too.
+  - **One other lane's test now fails:** `tests/webTown.test.ts` "the first plot's gate" (Page):
+    the gate is now a discovered trade, and nobody arrives with it, so `town.townsfolk` is empty
+    there. The page should read the gate from the plans (a trade discovered) rather than from
+    townsfolk. 931 of 932 pass.
+  - **Files:** `src/server/town.ts`, `src/server/store.ts`, `src/server/app.ts`,
+    `src/server/main.ts`, `src/server/events/service.ts`, `src/shared/schema.ts`
+    (`BuildingView.staff`, `PersonView.hired`/`worksAt`), `README.md`, and tests
+    `tests/{townService,teaching,story,evening,townQuests,townStock}.test.ts`.
 
 ### N8 · all lanes, one pass · done, unreviewed
 - **Done 2026-10-19 by infinite-spell-craft-1c, on Trysten's word (time in code, ⌛ on the
@@ -1135,6 +1289,59 @@ in `config/balance.json`. Back up `var/game.db` before any progression change.
     - **Files:** `data/cast.json`, `prompts/story.md`, `tests/castContent.test.ts`,
       `Story Guide.md`, and `README.md` (one pointer line).
 
+### N3c · Rules · open (Trysten, 2026-10-19: the cast is hand-written)
+- **What:** the shape for hand-written scenes, as sketched in `Story Guide.md` under "For Rules
+  (N3c)":
+  - A beat gets `scene` (lines, each with a speaker), `nudges`, `after` and `summary`, which
+    replace `premise` and `line`.
+  - A lesson gets a nudge and a `taught` scene.
+  - Calling lines become conditional (`from`, `after`, `before`, and `when` from a closed list).
+  - Tavern scenes become data, by pair and outcome.
+  - A closed list of slots code fills (`{name}`, `{thing}`, `{other}`).
+  - Loader checks for all of the above.
+  - A pure `pickLine` (the most specific unheard line, then the one heard longest ago, always with
+    a fallback), with tests.
+  - A `visit` row in `day.access` and the costs, with its ⌛ cost. This is the evening visit
+    that plays a waiting scene. Backend (-5c) asks for its own row under that name, so it goes
+    through `refuseAction` the way `call` does.
+- **Why:** the rules in `Story Guide.md`, "How we write the cast" (19-21: salience, unheard lines
+  first, new lines with depth).
+
+### N3d · Story · open (infinite-spell-craft-e5, after N3c)
+- **What:** write every word the cast says, in the N3c shape in `data/cast.json`:
+  - each beat: a scene of 3 to 8 lines, 1 or 2 nudges, and 2 "after" lines;
+  - each lesson: a nudge and a taught scene;
+  - 15 to 20 conditional calling lines a person;
+  - Tavern scenes for each liked pair and outcome, and rarer dislike-pair scenes.
+- **Also:** propose a `story-<person>` scenario per cast member in `data/test-saves.json`
+  (Backend's T3), set at the Fondness of their next beat, so dialogue can be walked through (asked
+  by -1c).
+- **Then:** `prompts/story.md` shrinks to small talk for a townsperson as the evening visitor, and
+  `tests/castContent.test.ts` grows (speakers, scene lengths, word limits for each person's voice,
+  every fixed fact used).
+- **Done already (2026-10-19, unreviewed):** in `Story Guide.md`, "How we write the cast" (21
+  rules from research, the checklist, and the sources), and the inner life of each person: want,
+  need, contradiction, how they meet stress, praise and conflict, and a running gag in three
+  steps. Also the arcs fitted to Hiring in `data/cast.json`:
+  - The five first beats that waited on the person's own building now open at Fondness 2 with no
+    objective.
+  - Marigold's and Dunstan's arrival gates are gone.
+  - Files: `Story Guide.md`, `data/cast.json`, `tests/castContent.test.ts` (which beat counts as
+    the finale).
+  - `npm test`: everything passes except `tests/webTown.test.ts` "opens it once a job is
+    discovered", which is N9's arrival change in progress, not this.
+
+### N4c · Backend, then Page · open (after N3c)
+- **What, Backend:**
+  - Retire the model writer for beat scenes (`src/server/story/writer.ts`). The scene comes
+    from data with its slots filled, and is still kept in `beat_scenes` and `PersonView.scenes`.
+  - The evening visit that plays a waiting scene, for ⌛.
+  - Keep track of which lines each player has heard, for `pickLine`.
+  - Calls use `pickLine`.
+  - Tavern scenes are chosen from data once their rules are settled (N4 question 2).
+- **What, Page:** a "has something to show you" cue on a person with a waiting scene, and a scene
+  drawn as lines with the speaker's name.
+
 ### N4 · Backend · N4a and beat scenes done, unreviewed; pair scene and Villagers held for design (infinite-spell-craft-5c)
 - **Depends on:** N2, N3a, N3b.
 - **What:** refuse `chooseJob` and the shift for an untaught job (a `taught` flag per person and
@@ -1187,6 +1394,24 @@ in `config/balance.json`. Back up `var/game.db` before any progression change.
   dusk even when free), and `costBlock`, `handBlock` and `eveningOffers` go through it. Files:
   `web/src/town.ts`, `web/src/Town.tsx`, `tests/webTown.test.ts`. Rules' fixture edits in both
   web tests checked. Still to do: who lives where, and the People tab.
+  - **Trysten's ask, 2026-10-19:** the day meter is drawn as one segment per notch, with Dawn,
+    Noon and Dusk labelled under it and a readout ("3 of 10 · noon in 1 discovery, dusk in 7
+    discoveries"). `sunTicks` and `sunReadout` in `web/src/day.ts`, with tests; markup in
+    `web/src/StatusBar.tsx`, styles in `web/src/styles.css`. Not yet seen in a browser.
+  - **Trysten's ask, 2026-10-19:** no emoji or symbol characters on the page. `web/src/icons.tsx`
+    holds pixel sprites (hourglass, star, check, cross, diamond, sparkle, ring, carets, padlock);
+    `<Said>` draws each ⌛ in rule and server text as the sprite, so the text in `day.ts`,
+    `town.ts` and the server stays plain. The stylesheet's marks are the same sprites as CSS
+    masks. `tests/webIcons.test.ts` checks the two match and that no symbol is left in the CSS.
+  - **Trysten's ask, 2026-10-19:** the Discovered bookmark did nothing, because it was the only
+    page. The Shop bookmark now always shows, with a padlock and the server's `no-shop` sentence
+    until the shop opens (`ShopLocked` in `web/src/Shop.tsx`). Town is no longer a book bookmark:
+    it is a Workbench / Town switch in the top bar, since it swaps the board, not the book.
+  - **For N9 (hiring), 2026-10-19:** the first plot's gate reads `hasTrade(discoveries)`, a job
+    among the same discoveries the server counts, not `town.townsfolk`; the gate test is rewritten
+    to N9's rule. A building's panel says who runs it, or that nobody has come yet, and offers
+    "Hire <name>" at `staff.hireCost` (`staffLine` in `web/src/town.ts`, `hireStaff` in
+    `web/src/api.ts`, wired in `Town.tsx` and `Workbench.tsx`), with tests in `tests/webTown.test.ts`.
 
 ## Review
 
@@ -1437,6 +1662,21 @@ from the day rather than assuming it.
 
 ## Log
 
+- 2026-10-20: the commit bot committed the tree before T6, as `8543f46` the Candle Gate rules in
+  `Process.md` and `CLAUDE.md`, and `e199c80` the code: T1, T2, T3, T4, T5 and N9, 54 files.
+  Verified at 968 tests over 57 files with typecheck clean, on a tree nothing had written to for
+  three minutes. All of it is committed but **unreviewed**, so the tickets stay
+  `done, unreviewed` until the review bot has been through them; the SHA above is the one to
+  review against.
+  **The split by lane was tried and failed, for a reason the lanes should know.** The server half
+  was committed alone and then checked out into a throwaway worktree and tested in isolation: it
+  is red. `tests/day.test.ts` imports `../web/src/timeMark`, so a server test will not build
+  without a page file, and `tests/webTown.test.ts` fails against the new hiring rules until the
+  page lands with them. The first is T4 working as intended -- the test is what stops the ⌛
+  drifting between `data/day-text.json` and the page's constant -- but single-sourcing a
+  player-facing word across the server/page line also welds the two lanes together in history.
+  Expect more tests like it as the Candle Gate rules spread, and expect commits that cross lanes
+  because of them. Given the choice between a red commit and a wide one, the wide one wins.
 - 2026-10-19: the commit bot committed the whole tree in three commits: `ee788ef` the guides
   (`Story Guide.md`, `Combo Bake 2.md`, and the N8 vocabulary reaching the prose), `b1a3ca8` the
   code -- N8 plus N1, N3a, N3b, N7, Backend's bake and review subsystem, and Q3, 77 files -- and
